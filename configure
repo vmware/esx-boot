@@ -1,0 +1,127 @@
+#!/bin/sh
+#*******************************************************************************
+# Copyright (c) 2008-2012,2015,2017-2018 VMware, Inc.  All rights reserved.
+# SPDX-License-Identifier: GPL-2.0
+#*******************************************************************************
+
+copyright='#*******************************************************************************
+# Copyright (c) 2008-2012,2015,2017-2018 VMware, Inc.  All rights reserved.
+# SPDX-License-Identifier: GPL-2.0
+#*******************************************************************************
+'
+
+toolchain='#
+# Tool chain definitions.
+#
+
+# Delete this line once the tool chain is setup.
+$(error Please setup your toolchain in env/toolchain.mk)
+
+#
+# The host toolchain is used to build tools
+# like uefi/elf2efi and bios/relocs.
+#
+
+HOST_CC         := <Path to host gcc>
+
+#
+# Known to work with libbfd 2.17.50. libbfd
+# used should be aware of all architecture types
+# used in build.
+#
+HOST_LIBBFD     := <Path to host libbfd.a>
+HOST_LIBBFDINC  := <Path to host bfd.h>
+HOST_LIBERTY    := <Path to host libiberty.a>
+
+#
+# Target definitions.
+#
+ifeq ($(BUILDENV),uefiarm64)
+GCCROOT := <Path to aarch64 gcc sysroot>
+CC      := <Path to aarch64 gcc>
+LD      := <Path to aarch64 ld>
+AR      := <Path to aarch64 ar>
+OBJCOPY := <Path to aarch64 objcopy>
+else
+# Known to work with gcc 4.8.3.
+GCCROOT := <Path to x86/x86_64 gcc sysroot>
+CC      := <Path to x86/x86_64 gcc>
+
+# Known to work nasm 2.01
+AS      := <Path to nasm>
+
+# Known to work with binutils 2.22
+LD      := <Path to x86/x86_64 ld>
+AR      := <Path to x86/x86_64 ar>
+OBJCOPY := <Path to x86/x86_64 objcopy>
+endif'
+
+makfile='#
+# Master Makefile
+#
+
+include env/common.mk
+
+SUBDIRS := com32 uefi64 uefi32 # uefiarm64
+
+TOPDIR := $(CURDIR)
+export TOPDIR
+
+.PHONY: all clean $(SUBDIRS)
+
+all: $(SUBDIRS)
+
+com32:
+	$(MAKE) -f Makefile.main BUILDENV=$@
+
+# KEY is a list of keys that .efi binaries produced by this package
+# are signed with for UEFI Secure Boot purposes, separated by '+'
+# signs.
+#
+# EKEY may be either "test" or "official".  It selects which
+# list of public keys is embedded in mboot.  When booting in Secure Boot
+# mode, early bootbank modules must be signed with one of the embedded
+# keys. See mboot/secure.c for details.
+#
+uefi64 uefi32:
+	$(MAKE) -f Makefile.main BUILDENV=$@ \
+		KEY=elfsign_test+test_sb2017 EKEY=test
+	$(MAKE) -f Makefile.main BUILDENV=$@ \
+		KEY=elfsign_test+test_sb2017 EKEY=official
+
+clean:
+	$(MAKE) -f Makefile.main clean'
+
+write_config()
+{
+    if [ -f $2 ]; then
+        return 1
+    fi
+
+    echo "${copyright}" > $2
+    echo "$1" >> $2
+
+    return 0
+}
+
+echo "Configuring the build system"
+echo ""
+
+echo -n "     Makefile...  "
+if write_config "${makfile}" Makefile; then
+    echo "Created"
+else
+    echo "Already exists"
+fi
+
+echo -n "     Toolchain...  "
+if write_config "${toolchain}" env/toolchain.mk; then
+    config="SETUP"
+    echo "Created"
+else
+    config="VERIFY"
+    echo "Already exists"
+fi
+
+echo ""
+echo "PLEASE ${config} YOUR TOOL CHAIN IN env/toolchain.mk"

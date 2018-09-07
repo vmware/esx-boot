@@ -1,0 +1,53 @@
+#*******************************************************************************
+# Copyright (c) 2008-2016 VMware, Inc.  All rights reserved.
+# SPDX-License-Identifier: GPL-2.0
+#*******************************************************************************
+
+#
+# esx-boot master Makefile
+#
+
+TOPDIR     := .
+include env/common.mk
+
+MAKEFLAGS  += -I ../env
+
+SHAREDLIBS := bootlib       \
+              libc          \
+              libfat        \
+              libcrc        \
+              libmd5        \
+              libuart       \
+              mbedtls       \
+              zlib
+
+SUBDIRS    := $(SHAREDLIBS) \
+              $(FIRMWARE)   \
+              tests         \
+              mboot         \
+              safeboot
+
+# Building rules
+.PHONY: all clean $(SUBDIRS)
+
+all: $(SUBDIRS)
+
+$(SUBDIRS): check_env
+	@$(MAKE) -C $@
+
+# Ability to build just menu
+menu: check_env
+	@$(MAKE) -C uefi menu
+
+# Dependencies
+mboot safeboot: $(SHAREDLIBS) $(FIRMWARE)
+$(FIRMWARE): $(SHAREDLIBS)
+
+# Cleaning rules
+clean:
+	$(call RMDIR,build)
+
+check_env:
+ifndef BUILDENV
+	$(error BUILDENV must be defined)
+endif

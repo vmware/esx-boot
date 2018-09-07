@@ -1,0 +1,14 @@
+
+ File System Wrapper License
+=============================
+
+The various parts of the File System Wrapper source code come from
+different sources and may carry different licenses. Here's a quick
+account of the situation:
+
+ * The core code was written from scratch and is covered by a
+   BSD-style license.
+
+ * The EFI host driver was written from scratch, possibly using code
+   from the TianoCore project and Intel's EFI Application Toolkit. It
+   is covered by a BSD-style license.
