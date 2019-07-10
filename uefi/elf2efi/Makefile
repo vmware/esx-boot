@@ -13,14 +13,14 @@ BUILD_DIR := $(TOOLS_DIR)
 
 all: $(BUILD_DIR) $(ELF2EFI)
 
-ifeq ($(ARCH),arm64)
+ifeq ($(ARCH),ia32)
+   CFLAGS := -m32
+else
    #
    # Our private BFD is 64 bit, so the deliverable
    # needs to be 64-bit as well.
    #
    CFLAGS := -m64
-else
-   CFLAGS := -m32
 endif
 
 $(ELF2EFI): elf2efi.c $(HOST_LIBBFD) $(HOST_LIBERTY)
