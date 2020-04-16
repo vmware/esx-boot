@@ -138,6 +138,20 @@ static void set_memtop(void)
    }
 }
 
+/*-- va_is_usable_ram ----------------------------------------------------------
+ *
+ *      Check whether an address is safe to assume to be RAM when
+ *      copying page tables.  Used to avoid copying garbage page
+ *      tables from non-RAM addresses, and to avoid mapping non-RAM as
+ *      writable and executable.
+ *
+ * Parameters
+ *      IN  va:            memory address
+ *      OUT in_memory_map: true if address is in the UEFI memory map
+ *
+ * Results
+ *      true if the address is safe to assume to be RAM
+ *----------------------------------------------------------------------------*/
 static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
 {
    unsigned i;
@@ -162,7 +176,7 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
              * EFI_MEMORY_TYPE enum.
              */
          case EfiReservedMemoryType:
-            good_ram = false;
+            good_ram = false; // paranoia; this type could be anything
             break;
          case EfiLoaderCode:
          case EfiLoaderData:
@@ -187,6 +201,8 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
             break;
          case EfiACPIReclaimMemory:
          case EfiACPIMemoryNVS:
+            good_ram = true;
+            break;
          case EfiMemoryMappedIO:
                /*
                 * Okay the next two are Itanic-only, but for
@@ -380,8 +396,9 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
                 * because this will seriously impact boot times on a
                 * number of systems: e.g. Macs.
                 */
-               Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d mapping entry 0x%"PRIx64
-                   " != PA 0x%"PRIx64"", next_vaddr, level, i, entry, entry_paddr);
+               Log(LOG_DEBUG, "VA 0x%"PRIx64": Ignoring L%d E%d because PTE "
+                   "0x%"PRIx64" points to non-matching PA 0x%"PRIx64,
+                   next_vaddr, level, i, entry, entry_paddr);
             }
 
             continue;
@@ -433,8 +450,8 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
              * garbage, because it is not pointing to what we know
              * to be RAM.
              */
-            Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d "
-                "entry 0x%"PRIx64" pointing to table 0x%"PRIx64" above TOM",
+            Log(LOG_DEBUG, "VA 0x%"PRIx64": Ignoring L%d E%d because PTE "
+                "0x%"PRIx64" points to table outside RAM at PA 0x%"PRIx64,
                 next_vaddr, level, i, entry, PTR_TO_UINT(next_table));
             continue;
          }
@@ -542,7 +559,8 @@ static int allocate_page_tables(void)
                               page_table_pages, &page_table_base);
    if (EFI_ERROR(Status)) {
       int status = error_efi_to_generic(Status);
-      Log(LOG_ERR, "Page allocation error: %s", error_str[status]);
+      Log(LOG_ERR, "Error allocating %"PRIu64" pages: %s",
+          page_table_pages, error_str[status]);
       return status;
    }
 

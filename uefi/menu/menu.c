@@ -117,8 +117,6 @@
  *        program is used to continue with the current version of
  *        pxelinux in the "then" (s1) case or chainload a different
  *        version of pxelinux and restart in the "else" (s2) case.
- *
- *      * ipxe-undionly.0 is automatically changed to ipxe-snponly.efi.
  */
 
 #include <efiutils.h>
@@ -937,42 +935,6 @@ int do_item(Menu *menu, MenuItem *item)
     */
 
    /*
-    * Change ipxe-undionly.0 to ipxe-snponly.efi.  This helps when
-    * chainloading iPXE at VMware.
-    */
-   bn = basename(program);
-   if (strcmp(bn, "ipxe-undionly.0") == 0) {
-      program = strdup("ipxe-snponly.efi");
-   }
-
-   len = strlen(program);
-   if (len >= 4 && strcmp(&program[len - 4], ".c32") == 0) {
-      /*
-       * Change .c32 extension to .efi.
-       */
-      strcpy(&program[len - 4], ".efi");
-
-   } else if (len >= 2 && strcmp(&program[len - 2], ".0") == 0) {
-      /*
-       * Change .0 extension to .efi.
-       */
-      char *p = malloc(len + 3);
-      memcpy(p, program, len - 2);
-      strcpy(p + len, ".efi");
-      program = p;
-   }
-
-   /*
-    * Avoid chainloading menu.efi itself; instead, call do_menu
-    * recursively.  This is just an optimization.  We can't do it if
-    * there are options on the command line.
-    */
-   bn = basename(program);
-   if (strcmp(bn, "menu.efi") == 0 && arguments[0] != '-') {
-      return do_menu(arguments);
-   }
-
-   /*
     * ifgpxe.c32, ifvm.c32, and ifver410.c32 are programs sometimes
     * used in pxelinux menus at VMware to test conditions. The syntax
     * looks like:
@@ -983,17 +945,18 @@ int do_item(Menu *menu, MenuItem *item)
     * fsel is chosen.  Apparently tsel and fsel can be either menu
     * labels or command lines (with arguments).
     *
-    * ifgpxe   - effectively tests whether HTTP support is available.
+    * ifgpxe   - tests for gPXE/iPXE (for HTTP support)
+    * ifver410 - tests for pxelinux version 4.10 (for HTTP support)
     * ifvm     - not sure; maybe it tests if we're in a VM?
-    * ifver410 - not sure; maybe tests if this is pxelinux version 4.10.
     *
-    * The typical usage is to chain to gpxelinux.0 on the false
-    * branch.  Since we fake HTTP support and the other conditions
-    * probably don't matter to us, we always take the true branch.
+    * The typical usage is to chain to gPXE or iPXE on the false
+    * branch.  Since we either have or fake HTTP support, and "ifvm"
+    * probably doesn't matter to us, we always take the true branch.
     */
-   if (strcmp(bn, "ifgpxe.efi") == 0 ||
-       strcmp(bn, "ifvm.efi") == 0 ||
-       strcmp(bn, "ifver410.efi") == 0) {
+   bn = basename(program);
+   if (strcmp(bn, "ifgpxe.c32") == 0 ||
+       strcmp(bn, "ifver410.c32") == 0 ||
+       strcmp(bn, "ifvm.c32") == 0) {
       char *p;
       MenuItem *item2;
 
@@ -1019,6 +982,33 @@ int do_item(Menu *menu, MenuItem *item)
          item2->kernel = arguments;
       }
       return do_item(menu, item2);
+   }
+
+   /*
+    * Avoid chainloading menu.efi itself; instead, call do_menu
+    * recursively.  This is just an optimization.  We can't do it if
+    * there are options on the command line.
+    */
+   if ((strcmp(bn, "menu.efi") == 0 ||
+        strcmp(bn, "menu.c32") == 0) && arguments[0] != '-') {
+      return do_menu(arguments);
+   }
+
+   len = strlen(program);
+   if (len >= 4 && strcmp(&program[len - 4], ".c32") == 0) {
+      /*
+       * Change .c32 extension to .efi.
+       */
+      strcpy(&program[len - 4], ".efi");
+
+   } else if (len >= 2 && strcmp(&program[len - 2], ".0") == 0) {
+      /*
+       * Change .0 extension to .efi.
+       */
+      char *p = malloc(len + 3);
+      memcpy(p, program, len - 2);
+      strcpy(p + len, ".efi");
+      program = p;
    }
 
    return chain_to(program, arguments);
