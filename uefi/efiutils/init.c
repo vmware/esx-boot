@@ -113,22 +113,144 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
    return Status;
 }
 
-#if defined(only_em64t)
+#if defined(only_em64t) || defined(only_arm64)
+static EFI_MEMORY_DESCRIPTOR *pt_reloc_cached_mmap;
+static UINTN pt_reloc_cached_mmap_size;
+static UINTN pt_reloc_cached_mmap_desc_size;
+static uintptr_t pt_reloc_cached_mmap_memtop;
+
+static void set_memtop(void)
+{
+   unsigned i;
+   unsigned max_entries = pt_reloc_cached_mmap_size /
+      pt_reloc_cached_mmap_desc_size;
+   EFI_MEMORY_DESCRIPTOR *MMap = pt_reloc_cached_mmap;
+
+   pt_reloc_cached_mmap_memtop = 0;
+   for (i = 0; i < max_entries; i++) {
+      uintptr_t bottom = MMap->PhysicalStart;
+      uintptr_t top = bottom + (MMap->NumberOfPages << EFI_PAGE_SHIFT);
+
+      if (top > pt_reloc_cached_mmap_memtop) {
+         pt_reloc_cached_mmap_memtop = top;
+      }
+      MMap = NextMemoryDescriptor(MMap, pt_reloc_cached_mmap_desc_size);
+   }
+}
+
+static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
+{
+   unsigned i;
+   unsigned max_entries = pt_reloc_cached_mmap_size /
+      pt_reloc_cached_mmap_desc_size;
+   EFI_MEMORY_DESCRIPTOR *MMap = pt_reloc_cached_mmap;
+   bool good_ram = false;
+
+   if (va >= pt_reloc_cached_mmap_memtop) {
+      *in_memory_map = false;
+      return false;
+   }
+
+   for (i = 0; i < max_entries; i++) {
+      uintptr_t bottom = MMap->PhysicalStart;
+      uintptr_t top = bottom + (MMap->NumberOfPages << EFI_PAGE_SHIFT);
+
+      if (va >= bottom && va < top) {
+         switch (MMap->Type) {
+            /*
+             * This list is ordered exactly as the
+             * EFI_MEMORY_TYPE enum.
+             */
+         case EfiReservedMemoryType:
+            good_ram = false;
+            break;
+         case EfiLoaderCode:
+         case EfiLoaderData:
+         case EfiBootServicesCode:
+         case EfiBootServicesData:
+            good_ram = true;
+            break;
+         case EfiRuntimeServicesCode:
+         case EfiRuntimeServicesData:
+            /*
+             * We want to clean any RO/XN bits here, otherwise we
+             * might crash inside gRT->SetVirtualAddressMap on some
+             * implementations (e.g. AArch64 AMI Aptio).
+             */
+            good_ram = true;
+            break;
+         case EfiConventionalMemory:
+            good_ram = true;
+            break;
+         case EfiUnusableMemory:
+            good_ram = false;
+            break;
+         case EfiACPIReclaimMemory:
+         case EfiACPIMemoryNVS:
+         case EfiMemoryMappedIO:
+               /*
+                * Okay the next two are Itanic-only, but for
+                * consistency-sake I'll keep them,
+                */
+         case EfiMemoryMappedIOPortSpace:
+         case EfiPalCode:
+            good_ram = false;
+            break;
+         case EfiPersistentMemory:
+            good_ram = true;
+            break;
+         default:
+            good_ram = false;
+            break;
+         }
+
+         /*
+          * Found a matching range.
+          */
+         break;
+      }
+
+      MMap = NextMemoryDescriptor(MMap, pt_reloc_cached_mmap_desc_size);
+   }
+
+   if (i == max_entries) {
+      if (in_memory_map != NULL) {
+         *in_memory_map = false;
+      }
+
+      /*
+       * Anything not in the memory map cannot be normal RAM.
+       */
+      return false;
+   }
+
+   /*
+    * Found in memory map.
+    */
+   if (in_memory_map != NULL) {
+      *in_memory_map = true;
+   }
+   return good_ram;
+}
+
+
 /*
- * On 64-bit UEFI for x86, we create new page tables for use after
- * ExitBootServices, by copying the existing tables with modifications.  New
- * page tables are needed for four main reasons: (1) The existing tables may
- * map some memory as non-writable or non-executable that we will be reusing to
- * copy and perhaps execute boot modules (PR 1900114).  (2) The existing tables
- * may themselves be mapped as non-writable, preventing them from being
- * modified in-place (PR 1713949).  (3) The existing tables may be in
- * EfiBootServicesData memory that we will be reusing.  In particular, if any
- * boot module is linked to load at a fixed address, we must ensure the page
- * tables don't wind up at that address (PR 2170718).  On x86 the mutiboot
- * "kernel" (vmkBoot) is currently linked at a fixed address.  (That could be
- * changed in the future, but mboot needs to be backward compatible -- a newer
- * mboot must be able to boot an older system -- so we still have to handle
- * the fixed address case.)
+ * On 64-bit UEFI, we create new page tables for use after ExitBootServices,
+ * by copying the existing tables with modifications.  New page tables are
+ * needed for three main reasons:
+ *  (1) The existing tables may map some memory as non-writable or
+ *       non-executable, that we will be reusing to copy and perhaps
+ *       execute boot modules (PR 1900114).
+ *  (2) The existing tables may themselves be mapped as non-writable,
+ *      preventing them from being modified in-place (PR 1713949).
+ *  (3) The existing tables may be in EfiBootServicesData memory that we will
+ *      be reusing.  In particular, if any boot module is linked to load at
+ *      a fixed address, we must ensure the page tables don't wind up at that
+ *      address (PR 2170718).  On x86 the mutiboot "kernel" (vmkBoot) is
+ *      currently linked at a fixed address.  (That could be changed in the
+ *      future, but mboot needs to be backward compatible -- a newer mboot must
+ *      be able to boot an older system -- so we still have to handle the fixed
+ *      address case.)
  *
  * We must move the page tables twice to address all these issues.  In the
  * first phase, we move them temporarily into memory that is known to be
@@ -136,16 +258,7 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
  * second phase, we allocate "safe" memory with mboot's own allocator, after
  * space for the boot modules has been allocated and move the tables again.
  * This second move deals with the possibility that UEFI's allocator may have
- * returned memory that one of our boot modules must use.  
- *
- * On ARM, instead of copying the page tables, we currently rely on
- * blacklisting all of the UEFI boot services code and data early, so that it
- * cannot be reused for relocations.  This solution will fail if we run into an
- * ARM machine where UEFI maps some memory as read-only or no-execute, so we
- * may have to change ARM in the future to be more like x86.  On ARM, though,
- * we don't have any boot modules that are linked at a fixed address, so it
- * would work to just blacklist the memory that UEFI allocated for the first
- * table move instead of doing a second table move.
+ * returned memory that one of our boot modules must use.
  */
 
 /*-- traverse_page_tables_rec --------------------------------------------------
@@ -178,28 +291,31 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
  *      a high VA). Note: this allows mapping areas beyond RAM (e.g.
  *      MMIO like framebuffer BARs and UARTs).
  *      3. If the page table entry points to a following page table level,
- *      and the address of the next page table is above the top of memory,
- *      the entry is skipped, as it must be a garbage entry (RAM is
- *      always mapped with VA == PA, so the page table appears to be outside
- *      of valid memory).
+ *      and the address of the next page table is not covered by a RAM
+ *      entry in the UEFI memory map, the entry is skipped, as it must be a
+ *      garbage entry (RAM is always mapped with VA == PA, so the page table
+ *      appears to be outside of valid memory).
  *      4. If what whatever reason a page table corresponding to an address
  *      and level is empty (either because it was empty, or because all
  *      entries in it were considered invalid and ignored), then the
  *      page table is not copied, and the referencing page table entry
  *      to it is not copied either.
  *
- *      This code assumes 64-bit page tables (not 32-bit). It is not directly
- *      portable to Arm, as it doesn't perform the necessary PoU D-cache
- *      maintenance either, and assumes all four page table levels are used
- *      and present.
+ *      This code assumes 64-bit page tables (not 32-bit). It also assumes
+ *      that 4 page table levels are used, and that PML4 has 512 entries
+ *      like every other level. On Arm, sanitize_page_tables() is used
+ *      to meet these requirements.
  *
  * Parameters:
  *      IN table:   pointer to the source page table
  *      IN level:   hierarchy level (4 = PML4, 1 = PT)
  *      IN vaddr:   first virtual address mapped by this table
- *      IN pa_mask: bits to be masked off PTEs to compute the pa
- *      IN memtop:  ignore entries mapping this address or higher
- *      OUT buffer: pointer to the output buffer
+ *      IN pa_mask: bits to be masked off PTEs to compute the PA
+ *      IN hierarchical_attrs: bits to be OR'ed into every page or
+ *                             block entry, since they were originally
+ *                             implied by hierarchical page table attrs
+ *                             that are going to be cleaed.
+ *      OUT buffer: pointer to the output buffer, previously set to all zeroes.
  *
  * Results
  *      The number of page table visited during the traversal or 0 if
@@ -207,13 +323,15 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
  *----------------------------------------------------------------------------*/
 static size_t traverse_page_tables_rec(uint64_t *table, int level,
                                        uintptr_t vaddr, uint64_t pa_mask,
-                                       uintptr_t memtop,
+                                       uint64_t hierarchical_attrs,
                                        uint64_t *buffer, uint64_t *buffer_end)
 {
-   int i;
+   unsigned i;
    size_t table_count = 1;
    size_t valid_entries = 0;
    uint64_t pa_mask_lg = pa_mask | PG_ATTR_LARGE_MASK;
+   bool in_memory_map;
+   bool is_usable_ram;
 
    /*
     * On the second pass, we might be past the end of the buffer because we're
@@ -231,55 +349,89 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
       uint64_t next_vaddr = vaddr + PG_TABLE_LnE_SIZE(level) * i;
       size_t traverse_count;
       uint64_t entry;
+      uint64_t entry_paddr;
 
       entry = table[i];
       if (buffer != NULL) {
-         buffer[i] = 0;
+         PG_SET_ENTRY_RAW(buffer, i, 0);
       }
 
       if ((entry & PG_ATTR_PRESENT) == 0) {
           continue;
-      } else if (PG_IS_LARGE(entry) && (entry & ~pa_mask_lg) != next_vaddr) {
-         /*
-          * The large page did not have VA == PA. Must be alias or garbage. Do
-          * not log for VAs where aliases or garbage could exist, because this
-          * will seriously impact boot times on a number of systems: e.g. Macs.
-          */
-         if (vaddr < memtop) {
-            Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d "
-                "mapping entry 0x%"PRIx64" != PA 0x%"PRIx64"",
-                next_vaddr, level, i, entry, entry & ~pa_mask_lg);
-         }
-         continue;
-      } else if (level == 1 && (entry & ~pa_mask) != next_vaddr) {
-         /*
-          * The small page did not have VA == PA. Must be alias or garbage.
-          */
-         if (vaddr < memtop) {
-            Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d mapping "
-                "entry 0x%"PRIx64" != PA 0x%"PRIx64"",
-                next_vaddr, level, i, entry, entry & ~pa_mask);
-         }
-         continue;
-      } else if (PG_IS_LARGE(entry) || level == 1) {
-         if (buffer != NULL) {
+      }
+
+      if (PG_IS_LARGE(level, entry)) {
+         entry_paddr = entry & ~pa_mask_lg;
+      } else {
+         entry_paddr = entry & ~pa_mask;
+      }
+
+      is_usable_ram = va_is_usable_ram(next_vaddr, &in_memory_map);
+
+      if (PG_IS_LARGE(level, entry) || level == 1) {
+         if (entry_paddr != next_vaddr) {
             /*
-             * We may be relocating boot modules into pages that UEFI had
-             * previously used for other purposes and protected against writing
-             * or execution.  Ensure all pages are writable and executable.
+             * The large or small page did not have VA == PA. Must be an
+             * alias mapping or garbage.
              */
-            buffer[i] = (entry | PG_ATTR_W) & ~PG_ATTR_XD;
+            if (in_memory_map) {
+               /*
+                * Do not log ranges outside of the UEFI memory map,
+                * because this will seriously impact boot times on a
+                * number of systems: e.g. Macs.
+                */
+               Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d mapping entry 0x%"PRIx64
+                   " != PA 0x%"PRIx64"", next_vaddr, level, i, entry, entry_paddr);
+            }
+
+            continue;
          }
+
+         if (buffer != NULL) {
+            if (is_usable_ram) {
+               /*
+                * We may be relocating boot modules into pages that UEFI had
+                * previously used for other purposes and protected against write
+                * or execute access.  Ensure all pages are writable and
+                * executable.
+                */
+               PG_SET_ENTRY_RAW(buffer, i,
+                                PG_CLEAN_NOEXEC(
+                                   PG_CLEAN_READONLY(
+                                      /*
+                                       * Hierarchical page attributes, on
+                                       * architectures where supported, are only
+                                       * used for forcing read-only and XN, so
+                                       * we don't have to OR entry with
+                                       * hierarchical_attrs, but will anyway to
+                                       * stay correct in the general case that
+                                       * hierarchical_attrs ever includes more
+                                       * attributes.
+                                       */
+                                      (entry | hierarchical_attrs))));
+            } else {
+               /*
+                * Don't touch the mapping attributes for anything that
+                * doesn't look like normal RAM. (e.g. it could be MMIO),
+                * but apply any hierarchical attributes implied by
+                * traversed page tables (since those are going to always be
+                * cleaned out)
+                */
+               PG_SET_ENTRY_RAW(buffer, i, entry | hierarchical_attrs);
+            }
+         }
+
          valid_entries++;
       } else {
-         uint64_t *next_table = UINT_TO_PTR(entry & ~pa_mask);
+         uint64_t *next_table = UINT_TO_PTR(entry_paddr);
          uint64_t *next_buf;
 
-         if (PTR_TO_UINT(next_table) >= memtop) {
+         if (!va_is_usable_ram(PTR_TO_UINT(next_table), NULL)) {
             /*
              * We have something that looks like a pointer to
              * a page table directory, but it's obviously corrupt
-             * garbage, because it is pointing above known memory.
+             * garbage, because it is not pointing to what we know
+             * to be RAM.
              */
             Log(LOG_DEBUG, "0x%"PRIx64": Ignore L%d E%d "
                 "entry 0x%"PRIx64" pointing to table 0x%"PRIx64" above TOM",
@@ -294,11 +446,20 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
          }
 
          traverse_count = traverse_page_tables_rec(next_table, level - 1,
-                                                   next_vaddr, pa_mask, memtop,
-                                                   next_buf, buffer_end);
+            next_vaddr, pa_mask,
+            hierarchical_attrs | PG_TABLE_XD_RO_2_PAGE_ATTRS(entry),
+            next_buf, buffer_end);
+
          if (traverse_count != 0) {
             if (buffer != NULL) {
-               buffer[i] = PTR_TO_UINT(next_buf) | (entry & pa_mask);
+               /*
+                * Clean any hierarchical read-only or execute-never bits set.
+                */
+               PG_SET_ENTRY_RAW(buffer, i, PTR_TO_UINT(next_buf) |
+                                PG_CLEAN_TABLE_NOEXEC(
+                                   PG_CLEAN_TABLE_READONLY(
+                                      entry & pa_mask
+                                      )));
             }
             valid_entries++;
          }
@@ -316,7 +477,6 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
 
 static EFI_PHYSICAL_ADDRESS page_table_base;
 static size_t page_table_pages;
-static uintptr_t memory_top;
 static uint64_t page_table_mask;
 
 /*-- allocate_page_tables ------------------------------------------------------
@@ -328,55 +488,52 @@ static uint64_t page_table_mask;
  *----------------------------------------------------------------------------*/
 static int allocate_page_tables(void)
 {
-   EFI_MEMORY_DESCRIPTOR *MMap, *MMapStart;
-   UINTN MMapSize, SizeOfDesc;
    UINT32 MMapVersion;
-   unsigned i;
-   uintptr_t pml4 = 0;
+   uintptr_t pdbr = 0;
    EFI_STATUS Status;
+
+   EFI_ASSERT(is_paging_enabled());
 
    /*
     * Save a copy of the page table mask as SEV-ES VMs will have problems if
     * they try to execute cpuid after ExitBootServices.
     */
    page_table_mask = get_page_table_mask();
-   Log(LOG_DEBUG, "Getting top of memory...");
 
    /*
-    * Find top of memory.  XXX It's annoying that we have to call
-    * efi_get_memory_map an extra time for this.  We can't save the result of
-    * this call and use it again for ExitBootServices, because the call to
-    * AllocatePages will probably change the map (by changing the type of some
-    * memory).  We could compute the top of memory in an earlier call to avoid
-    * this one, but currently there is a code path where this is the first call
-    * (legacy multiboot and -D not set).
+    * Get the memory map. We need it for two reasons:
+    * 1) Know what VA ranges correspond to real RAM, so we can
+    *    properly sanitize the page tables when we copy them.
+    * 2) To be able to type existing page table mappings. The memory
+    *    map will let us figure out if a mapping is "conventional"
+    *    used or free memory, and we'll treat everything else as MMIO
+    *    (that is, never executable).
+    *
+    * Note: it doesn't matter that we use a "stale" version for typing
+    * page table mappings, because we are not concerned with the actual
+    * type of a range, but just whether it corresponds to a usable RAM type
+    * or not. The whole point of these acrobatics is to ensure we do not
+    * ever wind up mapping a reserved or MMIO physical range as executable,
+    * as that can be catastrophic on Arm.
     */
-   memory_top = 0;
-   Status = efi_get_memory_map(0, &MMap, &MMapSize, &SizeOfDesc, &MMapVersion);
+   Status = efi_get_memory_map(0, &pt_reloc_cached_mmap,
+                               &pt_reloc_cached_mmap_size,
+                               &pt_reloc_cached_mmap_desc_size,
+                               &MMapVersion);
    if (EFI_ERROR(Status)) {
       return error_efi_to_generic(Status);
    }
-   MMapStart = MMap;
-   for (i = 0; i < MMapSize / SizeOfDesc; i++) {
-      uintptr_t desctop =
-         MMap->PhysicalStart + (MMap->NumberOfPages << EFI_PAGE_SHIFT);
-      if (desctop > memory_top) {
-         memory_top = desctop;
-      }
-      MMap = NextMemoryDescriptor(MMap, SizeOfDesc);
-   }
-   sys_free(MMapStart);
 
-   Log(LOG_DEBUG, "...top of memory is 0x%"PRIx64"", memory_top);
-
+   set_memtop();
    Log(LOG_DEBUG, "Measuring existing page tables...");
 
    // Figure how much space is needed to copy the page tables over.
-   get_page_table_reg(&pml4);
-   pml4 &= ~0xfffULL;
-   page_table_pages = traverse_page_tables_rec(UINT_TO_PTR(pml4), 4, 0,
-                                               page_table_mask,
-                                               memory_top, NULL, NULL);
+   get_page_table_reg(&pdbr);
+   pdbr &= ~0xfffULL;
+   page_table_pages = traverse_page_tables_rec(UINT_TO_PTR(pdbr),
+                                               PG_TABLE_MAX_LEVELS, 0,
+                                               page_table_mask, 0,
+                                               NULL, NULL);
 
    // Allocate this space in EfiLoaderData memory
    Log(LOG_DEBUG, "...allocating new page tables...");
@@ -407,17 +564,18 @@ static int allocate_page_tables(void)
  *----------------------------------------------------------------------------*/
 static int relocate_page_tables1(void)
 {
-   uintptr_t pml4 = 0;
+   uintptr_t pdbr = 0;
    uint64_t mask = page_table_mask;
 
    Log(LOG_DEBUG, "Copying page tables...");
-   get_page_table_reg(&pml4);
-   pml4 &= ~0xfffULL;
-   traverse_page_tables_rec(UINT_TO_PTR(pml4), 4, 0, mask, memory_top,
-                            (uint64_t *)page_table_base,
+   get_page_table_reg(&pdbr);
+   pdbr &= ~0xfffULL;
+
+   traverse_page_tables_rec(UINT_TO_PTR(pdbr), PG_TABLE_MAX_LEVELS,
+                            0, mask, 0, (uint64_t *)page_table_base,
                             (uint64_t *)(page_table_base +
                                          page_table_pages * PAGE_SIZE));
-   Log(LOG_DEBUG, "...switching page tables...");
+   Log(LOG_DEBUG, "...switching page tables 1...");
    set_page_table_reg((uintptr_t *)&page_table_base);
    Log(LOG_DEBUG, "...running on new page tables");
 
@@ -437,7 +595,7 @@ static int relocate_page_tables1(void)
  *----------------------------------------------------------------------------*/
 int relocate_page_tables2(void)
 {
-   uintptr_t pml4 = 0;
+   uintptr_t pdbr = 0;
    uint64_t mask = page_table_mask;
    int status;
 
@@ -454,19 +612,20 @@ int relocate_page_tables2(void)
        page_table_pages, UINT64_TO_PTR(page_table_base));
 
    Log(LOG_DEBUG, "Copying page tables...");
-   get_page_table_reg(&pml4);
-   pml4 &= ~0xfffULL;
-   traverse_page_tables_rec(UINT_TO_PTR(pml4), 4, 0, mask, memory_top,
-                            (uint64_t *)page_table_base,
+   get_page_table_reg(&pdbr);
+   pdbr &= ~0xfffULL;
+
+   traverse_page_tables_rec(UINT_TO_PTR(pdbr), PG_TABLE_MAX_LEVELS,
+                            0, mask, 0, (uint64_t *)page_table_base,
                             (uint64_t *)(page_table_base +
                                          page_table_pages * PAGE_SIZE));
-   Log(LOG_DEBUG, "...switching page tables...");
+   Log(LOG_DEBUG, "...switching page tables 2...");
    set_page_table_reg((uintptr_t *)&page_table_base);
    Log(LOG_DEBUG, "...running on new page tables");
 
    return ERR_SUCCESS;
 }
-#endif
+#endif /* defined(only_em64t) || defined(only_arm64) */
 
 /*-- exit_boot_services --------------------------------------------------------
  *
@@ -500,12 +659,17 @@ int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
       disable_network_controllers();
    }
 
-#if defined(only_em64t)
+#if defined(only_em64t) || defined(only_arm64)
+   error = sanitize_page_tables();
+   if (error != ERR_SUCCESS) {
+      return error;
+   }
+
    error = allocate_page_tables();
    if (error != ERR_SUCCESS) {
       return error;
    }
-#endif
+#endif /* defined(only_em64t) || defined(only_arm64) */
 
    /*
     * UEFI Specification v2.3 (6.4. "Image Services", ExitBootServices()) says:
@@ -560,12 +724,12 @@ again:
    efi_info->systab_size = st->Hdr.HeaderSize;
    efi_info->valid = true;
 
-#if defined(only_em64t)
+#if defined(only_em64t) || defined(only_arm64)
    error = relocate_page_tables1();
    if (error != ERR_SUCCESS) {
       return error;
    }
-#endif
+#endif /* defined(only_em64t) || defined(only_arm64) */
 
    return ERR_SUCCESS;
 }

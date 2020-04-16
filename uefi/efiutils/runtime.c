@@ -84,17 +84,6 @@ static int can_old_and_new(UNUSED_PARAM(efi_info_t *efi_info))
    }
 
    /*
-    * Before we look at MMU tables we need to be sure that
-    * the firmware is using a configuration compatible with
-    * us manipulating page tables to keep both mappings present.
-    */
-   if (!mmu_supported_configuration()) {
-      Log(LOG_WARNING,
-          "Unsupported MMU configuration; skipping temp map quirk");
-      return ERR_UNSUPPORTED;
-   }
-
-   /*
     * Now validate that the firmware page tables don't
     * have valid-looking values for the PML4 entry
     * corresponding to the RTS region.

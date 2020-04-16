@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -153,6 +153,8 @@ EXTERN EFI_STATUS devpath_duplicate(const EFI_DEVICE_PATH *DevPath,
                                     EFI_DEVICE_PATH **Dup);
 EXTERN bool devpath_is_parent(const EFI_DEVICE_PATH *parent,
                               const EFI_DEVICE_PATH *child);
+EXTERN char *devpath_text(const EFI_DEVICE_PATH *DevPath,
+                          bool displayOnly, bool allowShortcuts);
 
 /*
  * volume.c

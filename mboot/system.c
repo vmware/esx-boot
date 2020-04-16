@@ -14,6 +14,11 @@
 
 int dump_firmware_info(void)
 {
+   const char *manufacturer;
+   const char *product;
+   const char *bios_ver;
+   const char *bios_date;
+
    firmware_t firmware;
    int status;
 
@@ -44,6 +49,16 @@ int dump_firmware_info(void)
    }
 
    sys_free(firmware.vendor);
+
+   if (smbios_get_platform_info(&manufacturer, &product, &bios_ver,
+                                &bios_date) == ERR_SUCCESS) {
+      SANITIZE_STRP(manufacturer);
+      SANITIZE_STRP(product);
+      SANITIZE_STRP(bios_ver);
+      SANITIZE_STRP(bios_date);
+      Log(LOG_DEBUG, "'%s' by '%s', firmware version '%s', built on '%s'\n",
+          product, manufacturer, bios_ver, bios_date);
+   }
 
    return ERR_SUCCESS;
 }

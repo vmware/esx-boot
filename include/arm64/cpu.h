@@ -18,9 +18,13 @@
 #define TCR_ELx_TG0_SHIFT                 (14)
 #define TCR_ELx_TG0_MASK                  (3UL)
 #define TCR_GRANULARITY_4K                (0)
-#define TCR_ELx_T0SZ_MASK                 (0x3FUL)
-#define TCR_ELx_T0SZ_MAX                  16
-#define TCR_ELx_T0SZ_MIN_WITH_PML4_LOOKUP 24
+#define TCR_ELx_TnSZ_MASK                 (0x3FUL)
+#define TCR_ELx_TnSZ_MIN_WITH_PML4_LOOKUP 16
+#define TCR_ELx_TnSZ_MAX_WITH_PML4_LOOKUP 24
+#define TCR_ELx_TnSZ_MIN_WITH_PML3_LOOKUP 25
+#define TCR_ELx_TnSZ_MAX_WITH_PML3_LOOKUP 33
+#define TCR_ELx_TnSZ_MIN_WITH_PML2_LOOKUP 34
+#define TCR_ELx_TnSZ_MAX_WITH_PML2_LOOKUP 39
 
 
 /*
@@ -87,12 +91,14 @@ static INLINE bool el_is_hyp(void)
  */
 #define PAGE_SIZE ((uint64_t)0x1000)
 #define PG_TABLE_MAX_ENTRIES 512
+#define PG_TABLE_MAX_LEVELS 4
 
 #define PG_LEVEL_SHIFT       9
 #define PG_MPN_SHIFT         12
 #define PG_LPN_SHIFT         12
 /*
- * Bytes covered by an LnPTE.
+ * Bytes covered by an LnPTE. The interface only makes sense if
+ * level n corresponds to is <= max page table used.
  */
 #define PG_TABLE_LnE_SIZE(n) ((uint64_t)1 << \
                               (PG_MPN_SHIFT + ((n) - 1) * PG_LEVEL_SHIFT))
@@ -105,7 +111,9 @@ static INLINE bool el_is_hyp(void)
 
 #define PG_SET_ENTRY_RAW(pt, n, value) do {                             \
       pt[(n)] = (value);                                                \
+      DSB();                                                            \
       __asm__ volatile("dc cvau, %0\n\t"                                \
+                       "dc cvac, %0\n\t"                                \
                        "dsb sy     \n\t"                                \
                        "isb        \n\t"                                \
                        : : "r" (&pt[(n)]) : "memory");                  \
@@ -117,17 +125,62 @@ static INLINE bool el_is_hyp(void)
 #define PG_ATTR_PRESENT    ((uint64_t)1 << 0)
 #define PG_ATTR_W          (0)          // ARM uses RO bit.
 #define PG_ATTR_RO         ((uint64_t)1 << 7)
+#define PG_ATTR_EL0        ((uint64_t)1 << 6)
+#define PG_ATTR_TABLE_RO   ((uint64_t)1 << 62)
+#define PG_ATTR_TABLE_EL0  ((uint64_t)1 << 61)
 #define PG_ATTR_A          ((uint64_t)1 << 10)
-#define PG_ATTR_TABLE      ((uint64_t)1 << 2)
-#define PG_ATTR_MASK       ((uint64_t)0xf870000000000fff)
-#define PG_FRAME_MASK      ((uint64_t)0xffffffffff000)
+#define PG_ATTR_XN         ((uint64_t)1 << 54) /* EL 2 */
+#define PG_ATTR_PXN        ((uint64_t)1 << 53) /* EL 1 */
+#define PG_ATTR_XD         (PG_ATTR_XN | PG_ATTR_PXN)
+#define PG_ATTR_TABLE_XN   ((uint64_t)1 << 60) /* EL 2 */
+#define PG_ATTR_TABLE_PXN  ((uint64_t)1 << 59) /* EL 1 */
+#define PG_ATTR_TABLE_XD   (PG_ATTR_TABLE_XN | PG_ATTR_TABLE_PXN)
+#define PG_ATTR_TYPE_MASK  0x3
+#define PG_ATTR_TYPE_BLOCK 0x1
+#define PG_ATTR_TYPE_TABLE 0x3 /* When level > 1  */
+#define PG_ATTR_TYPE_PAGE  0x3 /* When level == 1 */
+#define PG_ATTR_MASK       ((uint64_t)0xFFF0000000000FFF)
+#define PG_ATTR_LARGE_MASK PG_ATTR_MASK
+#define PG_FRAME_MASK      ((uint64_t)0xFFFFFFFFF000)
+/*
+ * 48 bits. Higher bits are RES0 in EL2 and ASID in EL1.
+ */
+#define PG_ROOT_ADDR_MASK  ((uint64_t)0xFFFFFFFFFFFF)
 
 #define PG_DIR_CACHING_FLAGS(ttbr0) (0)
-#define PG_IS_LARGE(entry) ((entry & PG_ATTR_TABLE) == 0)
+#define PG_IS_LARGE(level, entry) ((level) != 1 && \
+                                   (((entry) & PG_ATTR_TYPE_MASK) == \
+                                    PG_ATTR_TYPE_BLOCK))
 #define PG_IS_READONLY(entry) ((entry & PG_ATTR_RO) != 0)
 #define PG_ENTRY_TO_PG(entry) ((uint64_t *) (entry & PG_FRAME_MASK))
+/*
+ * Arm ARM says:
+ *
+ *    For a translation regime that applies to EL0 and a
+ *    higher Exception level, if the value of the AP[2:1] bits is
+ *    0b01, permitting write access from EL0, then the PXN bit is
+ *    treated as if it has the value 1, regardless of its actual
+ *    value.
+ *
+ * Basically: if you clear RO, EL0 bit better be clear too, unless
+ * you really like taking instruction aborts.
+ */
+#define PG_CLEAN_READONLY(entry) ((entry) & ~(PG_ATTR_RO | PG_ATTR_EL0))
+#define PG_CLEAN_TABLE_READONLY(entry) ((entry) & ~(PG_ATTR_TABLE_RO | PG_ATTR_TABLE_EL0))
+#define PG_CLEAN_NOEXEC(entry) ((entry) & ~PG_ATTR_XD)
+#define PG_CLEAN_TABLE_NOEXEC(entry) ((entry) & ~PG_ATTR_TABLE_XD)
+/*
+ * Convert hierarchical table RO and XN bits into page
+ * mapping (small or large) bits.
+ */
+#define PG_TABLE_XD_RO_2_PAGE_ATTRS(entry)               \
+   ((((entry) & PG_ATTR_TABLE_XN) ? PG_ATTR_XN : 0)    | \
+    (((entry) & PG_ATTR_TABLE_PXN) ? PG_ATTR_PXN : 0)  | \
+    (((entry) & PG_ATTR_TABLE_RO) ? PG_ATTR_RO : 0)    | \
+    (((entry) & PG_ATTR_TABLE_EL0) ? PG_ATTR_EL0 : 0))
 
-static inline uint64_t PG_ENTRY_TO_PAGE_FLAGS(uint64_t entry)
+static inline uint64_t PG_ENTRY_TO_PAGE_FLAGS(UNUSED_PARAM(unsigned level),
+                                              uint64_t entry)
 {
    return entry & PG_ATTR_MASK;
 }
@@ -149,7 +202,7 @@ static INLINE void *get_page_table_root(void)
    uintptr_t reg;
 
    get_page_table_reg(&reg);
-   return (void *) reg;
+   return (void *)(reg & PG_ROOT_ADDR_MASK);
 }
 
 static INLINE void tlbi_all(void)
@@ -166,11 +219,15 @@ static INLINE void tlbi_all(void)
 
 static INLINE void set_page_table_reg(uintptr_t *reg)
 {
+   DSB();
+   ISB();
+
    if (el_is_hyp()) {
       MSR(ttbr0_el2, *reg);
    } else {
       MSR(ttbr0_el1, *reg);
    }
+
    ISB();
    tlbi_all();
 }
@@ -180,7 +237,20 @@ static INLINE uint64_t get_page_table_mask(void)
    return PG_ATTR_MASK;
 }
 
-static INLINE bool is_paging_enabled(void)
+static INLINE uint64_t get_mair(void)
+{
+   uint64_t mair;
+
+   if (el_is_hyp()) {
+      MRS(mair, mair_el2);
+   } else {
+      MRS(mair, mair_el1);
+   }
+
+   return mair;
+}
+
+static INLINE uint64_t get_sctlr(void)
 {
    uintptr_t sctlr;
 
@@ -189,12 +259,19 @@ static INLINE bool is_paging_enabled(void)
    } else {
       MRS(sctlr, sctlr_el1);
    }
+
+   return sctlr;
+}
+
+static INLINE bool is_paging_enabled(void)
+{
+   uintptr_t sctlr = get_sctlr();
+
    return sctlr & SCTLR_MMU;
 }
 
-static INLINE int mmu_t0sz(void)
+static INLINE uint64_t get_tcr(void)
 {
-   int t0sz;
    uint64_t tcr;
 
    if (el_is_hyp()) {
@@ -202,32 +279,112 @@ static INLINE int mmu_t0sz(void)
    } else {
       MRS(tcr, tcr_el1);
    }
-   t0sz = tcr & TCR_ELx_T0SZ_MASK;
-   if (t0sz < TCR_ELx_T0SZ_MAX) {
-      t0sz = TCR_ELx_T0SZ_MAX;
+
+   return tcr;
+}
+
+static INLINE unsigned mmu_t0sz(void)
+{
+   unsigned t0sz;
+   uint64_t tcr = get_tcr();
+
+   t0sz = tcr & TCR_ELx_TnSZ_MASK;
+   if (t0sz < TCR_ELx_TnSZ_MIN_WITH_PML4_LOOKUP) {
+      t0sz = TCR_ELx_TnSZ_MIN_WITH_PML4_LOOKUP;
    }
 
    return t0sz;
 }
 
+static INLINE unsigned mmu_max_levels(void)
+{
+   unsigned t0sz;
+
+   t0sz = mmu_t0sz();
+   if (t0sz >= TCR_ELx_TnSZ_MIN_WITH_PML4_LOOKUP &&
+       t0sz <= TCR_ELx_TnSZ_MAX_WITH_PML4_LOOKUP) {
+      return 4;
+   } else if (t0sz >= TCR_ELx_TnSZ_MIN_WITH_PML3_LOOKUP &&
+              t0sz <= TCR_ELx_TnSZ_MAX_WITH_PML3_LOOKUP) {
+      return 3;
+   } else if (t0sz >= TCR_ELx_TnSZ_MIN_WITH_PML2_LOOKUP &&
+              t0sz <= TCR_ELx_TnSZ_MAX_WITH_PML2_LOOKUP) {
+      return 2;
+   }
+
+   return 0;
+}
+
+static INLINE unsigned mmu_max_entries(int level)
+{
+   int x;
+   int y;
+   int bits;
+   int t0sz;
+   int max_level;
+
+   max_level = mmu_max_levels();
+   if (level > max_level || level == 0) {
+     return 0;
+   }
+
+   /*
+    * This follows the logic from Table D4-25 "Translation table
+    * entry addresses when using the 4KB translation granule" from
+    * ARM DDI 0487A.k.
+    *
+    * It looks weird, because you may have used less than 4 page table
+    * levels, depending on the size of the input (VA) address range. The size
+    * of the input address range used by UEFI depends on how much RAM
+    * is being seen by UEFI.
+    */
+   t0sz = mmu_t0sz();
+   switch (level) {
+   case 4:
+      /*
+       * Can only get here if max_level is 4.
+       */
+      x = 28 - t0sz;
+      y = x + 35;
+      bits = y - 39 + 1;
+      break;
+   case 3:
+      if (level == max_level) {
+         x = 37 - t0sz;
+      } else {
+         x = 12;
+      }
+      y = x + 26;
+      bits = y - 30 + 1;
+      break;
+   case 2:
+      if (level == max_level) {
+         x = 46 - t0sz;
+      } else {
+         x = 12;
+      }
+      y = x + 17;
+      bits = y - 21 + 1;
+      break;
+   case 1:
+   default:
+      bits = 9;
+      break;
+   }
+
+   return 1 << bits;
+}
+
 static INLINE bool mmu_supported_configuration(void)
 {
-   int i;
    int gran;
-   int t0sz;
-   uint64_t *l4pt;
    uint64_t tcr;
-   uint64_t cur_max_va;
 
    if (!is_paging_enabled()) {
       return false;
    }
 
-   if (el_is_hyp()) {
-      MRS(tcr, tcr_el2);
-   } else {
-      MRS(tcr, tcr_el1);
-   }
+   tcr = get_tcr();
    gran = (tcr >> TCR_ELx_TG0_SHIFT) & TCR_ELx_TG0_MASK;
    if (gran != TCR_GRANULARITY_4K) {
       /*
@@ -236,59 +393,6 @@ static INLINE bool mmu_supported_configuration(void)
        */
       return false;
    }
-
-   t0sz = mmu_t0sz();
-   if (t0sz > TCR_ELx_T0SZ_MIN_WITH_PML4_LOOKUP) {
-      /*
-       * The VA region is so small we don't even *have*
-       * a PML4.
-       */
-      return false;
-   }
-
-   if (t0sz == TCR_ELx_T0SZ_MAX) {
-      return true;
-   }
-
-   /*
-    * Firmware set a limited VA range, but fortunately
-    * this is pretty easy to work around: make sure
-    * the PML4 doesn't contain garbage for the missing
-    * entries and increase the VA range. This only works
-    * because UEFI allocates *pages*, so even though
-    * a reduced VA range also implies the PML4 is
-    * smaller, we can treat it as a full table
-    * without fear of clobbering something important.
-    * (This really isn't as hacky as it seems... all the
-    * other levels need to be page aligned).
-    */
-   cur_max_va = 1UL << (64 - t0sz);
-   l4pt = get_page_table_root();
-   if (((uintptr_t) l4pt & PG_OFF_MASK) != 0) {
-      /*
-       * Well the firmware tried to be too smart and
-       * the PML4 doesn't have 4K alignment (and
-       * allocation size, then).
-       */
-      return false;
-   }
-
-   for (i = PG_LPN_2_LnOFF(cur_max_va >> PG_LPN_SHIFT, 4);
-        i < PG_TABLE_MAX_ENTRIES;
-        i++) {
-      PG_SET_ENTRY_RAW(l4pt, i, 0);
-   }
-
-   DSB();
-   tcr &= ~TCR_ELx_T0SZ_MASK;
-   tcr |= TCR_ELx_T0SZ_MAX;
-   if (el_is_hyp()) {
-      MSR(tcr_el2, tcr);
-   } else {
-      MSR(tcr_el1, tcr);
-   }
-   ISB();
-   tlbi_all();
 
    return true;
 }

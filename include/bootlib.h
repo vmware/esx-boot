@@ -279,6 +279,10 @@ EXTERN int smbios_get_struct(smbios_entry ptr, smbios_entry end,
                              uint8_t type, smbios_entry *entry);
 EXTERN char *smbios_get_string(smbios_entry ptr, smbios_entry end,
                                unsigned index);
+EXTERN int smbios_get_platform_info(const char **manufacturer,
+                                    const char **product,
+                                    const char **bios_ver,
+                                    const char **bios_date);
 
 /*-- is_valid_firmware_table ---------------------------------------------------
  *
@@ -340,6 +344,8 @@ static INLINE uint64_t roundup64(uint64_t n, uint64_t unit)
 
    return u * unit;
 }
+
+#define SANITIZE_STRP(x) (x = (x == NULL) ? "" : x)
 
 /*
  *  For casting safely between 32-bit and 64-bit values

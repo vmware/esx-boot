@@ -14,8 +14,6 @@
 #include <libgen.h>
 #include "efi_private.h"
 
-#define SANITIZE_STRP(x) (x = (x == NULL) ? "" : x)
-
 static struct quirk {
    const char *manufacturer;
    const char *product;
@@ -54,14 +52,6 @@ static struct quirk {
  * ---------------------------------------------------------------------------*/
 void check_efi_quirks(efi_info_t *efi_info)
 {
-   void *eps_start;
-   size_t eps_length;
-   void *table_start;
-   size_t table_length;
-   smbios_entry smbios_start;
-   smbios_entry smbios_end;
-   smbios_entry type0;
-   smbios_entry type1;
    const char *manufacturer;
    const char *product;
    const char *bios_ver;
@@ -79,49 +69,18 @@ void check_efi_quirks(efi_info_t *efi_info)
       efi_info->quirks |= EFI_NET_DEV_DISABLE;
    }
 
-   if (smbios_get_v3_info(&eps_start, &eps_length,
-                          &table_start, &table_length) != ERR_SUCCESS) {
-      if (smbios_get_info(&eps_start, &eps_length,
-                          &table_start, &table_length) != ERR_SUCCESS) {
-         Log(LOG_DEBUG, "No SMBIOS to match quirks on\n");
-         return;
-      }
+   if (smbios_get_platform_info(&manufacturer, &product, &bios_ver,
+                                &bios_date) != ERR_SUCCESS) {
+     Log(LOG_DEBUG, "No SMBIOS to match quirks on\n");
+     return;
    }
 
-   smbios_start.raw_bytes = table_start;
-   smbios_end.raw_bytes = smbios_start.raw_bytes + table_length;
-
-   if (smbios_get_struct(smbios_start, smbios_end, 1, &type1) != ERR_SUCCESS) {
-      /*
-       * No type 1?
-       */
-      return;
-   }
-
-   manufacturer = smbios_get_string(type1, smbios_end,
-                             type1.type1->manufacturer);
-   product = smbios_get_string(type1, smbios_end,
-                               type1.type1->product_name);
    SANITIZE_STRP(manufacturer);
    SANITIZE_STRP(product);
-
-   /*
-    * Treat type 0 data as optional.
-    */
-   type0.raw_bytes = NULL;
-   bios_ver = NULL;
-   bios_date = NULL;
-   smbios_get_struct(smbios_start, smbios_end, 0, &type0);
-   if (type0.raw_bytes != NULL) {
-      bios_ver = smbios_get_string(type0, smbios_end,
-                                   type0.type0->bios_ver);
-      bios_date = smbios_get_string(type0, smbios_end,
-                                    type0.type0->bios_date);
-   }
    SANITIZE_STRP(bios_ver);
    SANITIZE_STRP(bios_date);
 
-   Log(LOG_DEBUG, "Looking up quirks for %s %s %s %s\n",
+   Log(LOG_DEBUG, "Looking up quirks for '%s' '%s' '%s' '%s'\n",
        manufacturer, product, bios_ver, bios_date);
 
    for (; !last_quirk(q); q++) {

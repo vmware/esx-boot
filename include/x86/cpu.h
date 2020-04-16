@@ -50,6 +50,7 @@ static INLINE void get_cr0(uintptr_t *cr0)
  */
 #define PAGE_SIZE  0x1000ULL
 #define PG_TABLE_MAX_ENTRIES 512
+#define PG_TABLE_MAX_LEVELS 4
 
 #define PG_LEVEL_SHIFT       9
 #define PG_MPN_SHIFT         12
@@ -88,15 +89,25 @@ static INLINE void get_cr0(uintptr_t *cr0)
 
 #define PG_DIR_CACHING_FLAGS(cr3) (cr3 & (PG_ATTR_PWT | PG_ATTR_PCD))
 
-#define PG_IS_LARGE(entry) ((entry & PG_ATTR_PAGE_SIZE) != 0)
+#define PG_IS_LARGE(level, entry) ((entry & PG_ATTR_PAGE_SIZE) != 0)
 #define PG_IS_READONLY(entry) ((entry & PG_ATTR_W) == 0)
 #define PG_ENTRY_TO_PG(entry) ((uint64_t *) (entry & PG_FRAME_MASK))
+#define PG_CLEAN_READONLY(entry) ((entry) | PG_ATTR_W)
+#define PG_CLEAN_TABLE_READONLY(entry) (entry)
+#define PG_CLEAN_NOEXEC(entry) ((entry) & ~PG_ATTR_XD)
+#define PG_CLEAN_TABLE_NOEXEC(entry) (entry)
+/*
+ * x86 has no concept of hierarchical attributes in entries pointing
+ * to page tables.
+ */
+#define PG_TABLE_XD_RO_2_PAGE_ATTRS(entry) 0
 
-static inline uint64_t PG_ENTRY_TO_PAGE_FLAGS(uint64_t entry)
+static inline uint64_t PG_ENTRY_TO_PAGE_FLAGS(UNUSED_PARAM(unsigned level),
+                                              uint64_t entry)
 {
    uint64_t flags;
 
-   if (PG_IS_LARGE(entry)) {
+   if (PG_IS_LARGE(level, entry)) {
       /*
        * Need to convert large to small page flags. As per
        * Intel Vol. 3A 4-28 the only difference is the
@@ -164,11 +175,6 @@ static INLINE bool is_paging_enabled(void)
 
    get_cr0(&cr0);
    return ((cr0 & CR0_ATTR_PG) != 0);
-}
-
-static INLINE bool mmu_supported_configuration(void)
-{
-   return true;
 }
 
 /*-- cpu_code_update -----------------------------------------------------------

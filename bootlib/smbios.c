@@ -172,3 +172,76 @@ int smbios_get_v3_info(void **eps_start, size_t *eps_length,
 
    return ERR_NOT_FOUND;
 }
+
+
+/*-- smbios_get_platform_info -----------------------------------------------------
+ *
+ *      Get the most useful DMI data out: vendor, product and BIOS info.
+ *
+ * Parameters
+ *      OUT manufacturer: pointer to store pointer to manufacturer string,
+ *                        if found, or NULL.
+ *      OUT product: pointer to store pointer to product string, if found,
+ *                   or NULL.
+ *      OUT bios_ver: pointer to store pointer to firmware verstion, if found,
+ *                    or NULL.
+ *      OUT bios_date: pointer to store pointer to firmware build date, if
+ *                     found, or NULL.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+
+int smbios_get_platform_info(const char **manufacturer,
+                             const char **product,
+                             const char **bios_ver,
+                             const char **bios_date)
+{
+   void *eps_start;
+   size_t eps_length;
+   void *table_start;
+   size_t table_length;
+   smbios_entry smbios_start;
+   smbios_entry smbios_end;
+   smbios_entry type0;
+   smbios_entry type1;
+
+   *manufacturer = *product = *bios_ver = *bios_date = NULL;
+   if (smbios_get_v3_info(&eps_start, &eps_length,
+                          &table_start, &table_length) != ERR_SUCCESS) {
+      if (smbios_get_info(&eps_start, &eps_length,
+                          &table_start, &table_length) != ERR_SUCCESS) {
+         return ERR_UNSUPPORTED;
+      }
+   }
+
+   smbios_start.raw_bytes = table_start;
+   smbios_end.raw_bytes = smbios_start.raw_bytes + table_length;
+
+   if (smbios_get_struct(smbios_start, smbios_end, 1, &type1) !=
+       ERR_SUCCESS) {
+      /*
+       * No type 1?
+       */
+      return ERR_NOT_FOUND;
+   }
+
+   *manufacturer = smbios_get_string(type1, smbios_end,
+                                     type1.type1->manufacturer);
+   *product = smbios_get_string(type1, smbios_end,
+                                type1.type1->product_name);
+
+   /*
+    * Treat type 0 data as optional.
+    */
+   type0.raw_bytes = NULL;
+   smbios_get_struct(smbios_start, smbios_end, 0, &type0);
+   if (type0.raw_bytes != NULL) {
+      *bios_ver = smbios_get_string(type0, smbios_end,
+                                    type0.type0->bios_ver);
+      *bios_date = smbios_get_string(type0, smbios_end,
+                                     type0.type0->bios_date);
+   }
+
+   return ERR_SUCCESS;
+}

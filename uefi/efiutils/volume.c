@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2014,2016,2019 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -172,11 +173,28 @@ EFI_STATUS get_boot_volume(EFI_HANDLE *Volume)
 
 /*-- get_boot_device -----------------------------------------------------------
  *
- *      Get a handle for the hardware device (hard drive, USB stick, CDROM
- *      drive, network device...) we were booted from.
+ *      Get a handle for the hardware device or virtual hardware device (hard
+ *      drive, USB stick, CDROM drive, network device, ramdisk...) we were
+ *      booted from.
  *
- *      It is found with the remaining part of the boot volume device path, once
- *      the trailing MEDIA_DEVICE_PATH nodes have been stripped off.
+ *      It is found with the remaining part of the boot volume device path,
+ *      once the trailing MEDIA_DEVICE_PATH nodes (other than ramdisks!)
+ *      have been stripped off.
+ *
+ *      Ramdisks are special because even though they have type
+ *      MEDIA_DEVICE_PATH, they act as virtual hardware, not media.  The device
+ *      path for an ISO image ramdisk models the ramdisk as a VirtualCD drive
+ *      with a CDROM mounted in it.  Example:
+ *
+ *      PciRoot(0x0)/Pci(0x1C,0x0)/Pci(0x0,0x1)/MAC(D06726D151E9,0x1)/
+ *       IPv4(0.0.0.0,TCP,DHCP,192.168.53.128,192.168.53.1,255.255.255.0)/
+ *       Uri(http://...)/VirtualCD(0x7A8BD000,0x86411FFF,0)/
+ *       CDROM(0x1,0x106C,0x5CA3C)
+ *
+ *      For isobounce to work with a path like the above, get_boot_device must
+ *      strip the CDROM node from the path but leave the VirtualCD node in
+ *      place.  The ISO9660 driver can be connected to the VirtualCD node, but
+ *      not to the Uri node above it.  See PR 2173724.
  *
  * Parameters
  *      OUT Device: the boot device handle
@@ -206,7 +224,8 @@ EFI_STATUS get_boot_device(EFI_HANDLE *Device)
    }
 
    FOREACH_DEVPATH_NODE(DevPath, node) {
-      if (node->Type == MEDIA_DEVICE_PATH) {
+      if (node->Type == MEDIA_DEVICE_PATH &&
+          node->SubType != MEDIA_RAM_DISK_DP) {
          SetDevPathEndNode(node);
          break;
       }

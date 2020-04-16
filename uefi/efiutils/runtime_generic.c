@@ -35,7 +35,7 @@ uint64_t get_l1e_flags(uint64_t *l4pt, uint64_t lpn)
    for (level = 4; level != 1; level--) {
       entry = PG_GET_ENTRY(pt, level, lpn);
       EFI_ASSERT((entry & PG_ATTR_PRESENT) != 0);
-      if (PG_IS_LARGE(entry)) {
+      if (PG_IS_LARGE(level, entry)) {
          /*
           * 1GB or 2MB page.
           *
@@ -54,7 +54,7 @@ uint64_t get_l1e_flags(uint64_t *l4pt, uint64_t lpn)
    EFI_ASSERT((entry & PG_ATTR_PRESENT) != 0);
 
 large_entry:
-   flags = PG_ENTRY_TO_PAGE_FLAGS(entry);
+   flags = PG_ENTRY_TO_PAGE_FLAGS(level, entry);
    return flags;
 }
 
@@ -139,7 +139,7 @@ static int get_l1pt(uint64_t *l4pt, uint64_t lpn,
  *      A firmware bug may exist where SetVirtualAddressMap expects both
  *      the old identity and the new  mappings to exist. This behavior
  *      violates the UEFI spec and means the only way we can make
- *      RTS relocation work is to  create new PT mappings based on the virtual
+ *      RTS relocation work is to create new PT mappings based on the virtual
  *      map. Fortunately the offset used by ESX is large enough
  *      that physical and virtual ranges will not overlap.
  *

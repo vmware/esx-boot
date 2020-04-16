@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013,2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -30,6 +30,7 @@
 
 #include <efiutils.h>
 #include <bootlib.h>
+#include <boot_services.h>
 
 #ifndef ISO9660_DRIVER
    #if defined(only_arm64)
@@ -51,6 +52,33 @@
    #endif
 #endif
 
+/*-- LogHandleDevpath ----------------------------------------------------------
+ *
+ *      Get the device path associated with an EFI handle, convert it to text,
+ *      and log it.
+ *
+ * Parameters
+ *      IN  level:  log level
+ *      IN  prefix: string to prefix the device path with
+ *      IN  handle: EFI handle
+ *----------------------------------------------------------------------------*/
+static void LogHandleDevpath(int level, const char *prefix, EFI_HANDLE handle)
+{
+   EFI_STATUS Status;
+   EFI_DEVICE_PATH *DevPath;
+   char *text;
+
+   Status = devpath_get(handle, &DevPath);
+   if (EFI_ERROR(Status)) {
+      Log(level, "%s: error getting devpath: %zx", prefix, Status);
+      return;
+   }
+
+   text = devpath_text(DevPath, false, false);
+   Log(level, "%s: %s", prefix, text);
+   sys_free(text);
+}
+
 int main(int argc, char **argv)
 {
    EFI_HANDLE BootVolume, CdromDevice;
@@ -58,6 +86,12 @@ int main(int argc, char **argv)
    EFI_STATUS Status, ChildStatus;
    CHAR16 *LoadOptions;
    UINT32 LoadOptionsSize;
+
+#if DEBUG
+   log_init(true);
+#else
+   log_init(false);
+#endif
 
    EFI_ASSERT(bs != NULL);
    EFI_ASSERT_FIRMWARE(bs->ConnectController != NULL);
@@ -69,31 +103,39 @@ int main(int argc, char **argv)
    /* Locate and load the ISO9660 driver */
    Status = get_boot_volume(&BootVolume);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "get_boot_volume: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
+   LogHandleDevpath(LOG_DEBUG, "BootVolume", BootVolume);
 
    Status = image_load(BootVolume, ISO9660_DRIVER, NULL, 0,
                        &DriverImageHandle[0], &ChildStatus);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "image_load: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
    if (EFI_ERROR(ChildStatus)) {
+      Log(LOG_ERR, "image_load: ChildStatus %zx", ChildStatus);
       return error_efi_to_generic(ChildStatus);
    }
 
    /* Disconnect all drivers from the CDROM, then connect the ISO9660 driver. */
    Status = get_boot_device(&CdromDevice);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "get_boot_device: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
+   LogHandleDevpath(LOG_DEBUG, "CdromDevice", CdromDevice);
 
    Status = bs->DisconnectController(CdromDevice, NULL, NULL);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "DisconnectController: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
 
    Status = bs->ConnectController(CdromDevice, DriverImageHandle, NULL, FALSE);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "ConnectController: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
 
@@ -102,6 +144,7 @@ int main(int argc, char **argv)
       /* The first argument i.e. argv[0] has the executable name */
       Status = argv_to_ucs2(argc - 1, argv + 1, &LoadOptions);
       if (EFI_ERROR(Status)) {
+         Log(LOG_ERR, "argv_to_ucs2: Status %zx", Status);
          return error_efi_to_generic(Status);
       }
 
@@ -112,9 +155,11 @@ int main(int argc, char **argv)
    Status = image_load(CdromDevice, NEXT_LOADER, LoadOptions, LoadOptionsSize,
                        NULL, &ChildStatus);
    if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "image_load: Status %zx", Status);
       return error_efi_to_generic(Status);
    }
    if (EFI_ERROR(ChildStatus)) {
+      Log(LOG_ERR, "image_load: ChildStatus %zx", Status);
       return error_efi_to_generic(ChildStatus);
    }
 

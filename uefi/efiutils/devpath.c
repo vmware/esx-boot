@@ -1,26 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * devpath.c -- EFI device path handling routines
- *
- *   XXX: Recent UEFI Specification defines three protocols which facilitate
- *        manipulating device paths:
- *
- *          - EFI_DEVICE_PATH_UTILITIES_PROTOCOL
- *          - EFI_DEVICE_PATH_FROM_TEXT_PROTOCOL
- *          - EFI_DEVICE_PATH_TO_TEXT_PROTOCOL
- *
- *        Functions below should take advantage of these protocols when they are
- *        available.
  */
 
 #include <string.h>
 #include "efi_private.h"
+#include "DevicePathToText.h"
 
 static EFI_GUID DevicePathProto = DEVICE_PATH_PROTOCOL;
+static EFI_GUID DevicePathToTextProto = EFI_DEVICE_PATH_TO_TEXT_PROTOCOL_GUID;
 
 /*-- devpath_get ---------------------------------------------------------------
  *
@@ -440,4 +432,50 @@ bool devpath_is_parent(const EFI_DEVICE_PATH *parent,
    }
 
    return true;
+}
+
+/*-- devpath_text --------------------------------------------------------------
+ *
+ *      Convert a devpath to ASCII text.
+ *
+ * Parameters
+ *      IN  DevPath:        pointer to the device path
+ *      IN  displayOnly:    use shorter non-parseable text representation
+ *      IN  allowShortcuts: use shortcut forms in text representation
+ *
+ * Results
+ *      pointer to freshly allocated ASCII string, or NULL on error
+ *----------------------------------------------------------------------------*/
+char *devpath_text(const EFI_DEVICE_PATH *DevPath,
+                   bool displayOnly, bool allowShortcuts)
+{
+   EFI_STATUS Status;
+   EFI_DEVICE_PATH_TO_TEXT_PROTOCOL *dptt;
+   CHAR16 *ws;
+
+   Status = LocateProtocol(&DevicePathToTextProto, (void **)&dptt);
+   if (EFI_ERROR(Status)) {
+      /*
+       * No DevicePathToTextProto.  Show as a byte string in hex instead.
+       */
+      size_t size, i;
+      char *s;
+      uint8_t *p = (uint8_t *)DevPath;
+
+      devpath_size(DevPath, &size, NULL);
+      s = sys_malloc(2 * size + 1);
+
+      for (i = 0; i < size; i++) {
+         snprintf(&s[2 * i], 3, "%02x", p[i]);
+      }
+
+      return s;
+   }
+
+   ws = dptt->ConvertDevicePathToText(DevPath, displayOnly, allowShortcuts);
+   if (ws == NULL) {
+      return NULL;
+   }
+   ucs2_to_ascii(ws, (char **)&ws, false);
+   return (char *)ws;
 }

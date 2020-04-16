@@ -30,6 +30,11 @@
 #define WATCHDOG_DEFAULT_TIMEOUT 300   /* 5 minutes, in seconds */
 
 /*
+ * init_arch.c
+ */
+int sanitize_page_tables(void);
+
+/*
  * memory.c
  */
 EXTERN UINTN MapKey;

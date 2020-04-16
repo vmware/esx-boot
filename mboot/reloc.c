@@ -690,12 +690,12 @@ int install_trampoline(trampoline_t *run_trampo, handoff_t **run_handoff)
    data->size -= data_size;
    do_reloc(data);
 
-#if defined(only_em64t)
+#if defined(only_em64t) || defined(only_arm64)
    status = relocate_page_tables2();
    if (status != ERR_SUCCESS) {
       return status;
    }
-#endif
+#endif /* defined(only_em64t) || defined(only_arm64) */
 
    return ERR_SUCCESS;
 }

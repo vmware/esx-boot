@@ -40,7 +40,8 @@ SRC         := console.c    \
                vbe.c        \
                volume.c     \
                quirks.c     \
-               $(IARCH)/console_arch.c
+               $(IARCH)/console_arch.c \
+               $(IARCH)/init_arch.c \
 
 BASENAME    := $(FIRMWARE)$(ARCH)
 TARGETTYPE  := lib

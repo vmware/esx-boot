@@ -211,10 +211,6 @@ int main(int argc, char **argv)
 
    status = serial_log_init(serial_com, serial_speed);
    have_serial = status == ERR_SUCCESS;
-   if (status != ERR_SUCCESS) {
-      Log(LOG_WARNING, "serial_log_init failed: %s\n", error_str[status]);
-      return status;
-   }
 
    if (!no_fb) {
       status = video_set_mode(&fb, DEFAULT_WIDTH, DEFAULT_HEIGHT,
