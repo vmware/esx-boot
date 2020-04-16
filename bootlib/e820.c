@@ -225,9 +225,6 @@ static int e820_sanity_check(e820_range_t *mmap, size_t count)
  *        - memory that is not reported as 'available' in the memory map
  *          (bootloader's memory is considered as 'available').
  *
- *      N.B.: Ranges of type E820_TYPE_BLACKLISTED_FIRMWARE_BS are considered
- *      to be unavailable for runtime allocations.
- *
  * Parameters
  *      IN mmap:  pointer to the system memory map
  *      IN count: number of entries in the memory map

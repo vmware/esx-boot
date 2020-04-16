@@ -108,12 +108,7 @@ static int get_module_size(unsigned int n, size_t *size)
 
    status = file_get_size_hint(boot.volid, filepath, &filesize);
    if (status != ERR_SUCCESS) {
-      if (status == ERR_NOT_FOUND) {
-         Log(LOG_DEBUG, "%s: file not found.\n", filepath);
-      } else {
-         Log(LOG_DEBUG, "%s: unknown file size.\n", filepath);
-      }
-
+      Log(LOG_DEBUG, "%s: %s", filepath, error_str[status]);
       return status;
    }
 

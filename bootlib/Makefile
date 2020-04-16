@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2016,2018 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2016,2018-2019 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -20,14 +20,15 @@ SRC         := alloc.c       \
                gzip.c        \
                log.c         \
                mbr.c         \
-	       net.c         \
+               net.c         \
                parse.c       \
                serial.c      \
                sort.c        \
                string.c      \
                video.c       \
                volume.c      \
-               smbios.c
+               smbios.c      \
+               acpi.c
 
 BASENAME    := boot
 TARGETTYPE  := lib

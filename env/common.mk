@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2015,2019 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -88,7 +88,7 @@ ifeq ($(ARCH),arm64)
 else ifeq ($(ARCH),em64t)
    IARCH      := x86
    AFLAGS     := -f elf64
-   CFLAGS     := -m64 -mno-red-zone -msoft-float
+   CFLAGS     := -m64 -mno-red-zone -msoft-float -DNO_MSABI_VA_FUNCS
    LDFLAGS    := -m elf_x86_64
 else ifeq ($(ARCH),ia32)
    IARCH      := x86

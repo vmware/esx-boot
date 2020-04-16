@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -191,4 +191,21 @@ int get_smbios_v3_eps(void **eps_start)
 
    *eps_start = eps;
    return ERR_SUCCESS;
+}
+
+
+/*-- get_acpi_rsdp -------------------------------------------------------------
+ *
+ *      Get the ACPI RSDP.
+ *
+ * Parameters
+ *      OUT rsdp: pointer to the RSDP
+ *
+ * Results
+ *      ERR_NOT_SUPPORTED, as ACPI info is not used or checked in BIOS mode
+ *      on x86 systems.
+ *----------------------------------------------------------------------------*/
+int get_acpi_rsdp(UNUSED_PARAM(void **rsdp))
+{
+   return ERR_UNSUPPORTED;
 }

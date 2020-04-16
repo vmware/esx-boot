@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2011,2014-2015 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2011,2014-2015,2019 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -20,7 +20,7 @@ ifeq ($(ARCH),arm64)
    #
    CFLAGS := -m64
 else
-   CFLAGS := -m32
+   CFLAGS := -m32 -DNO_MSABI_VA_FUNCS
 endif
 
 $(ELF2EFI): elf2efi.c $(HOST_LIBBFD) $(HOST_LIBERTY)

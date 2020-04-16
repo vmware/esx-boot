@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -23,6 +23,7 @@
 #include <md5.h>
 #include <cpu.h>
 #include <sm_bios.h>
+#include <acpi.h>
 
 #define ceil(x,y)                (((x) + (y) - 1) / (y))
 #define MILLISECS_IN_ONE_SEC     1000
@@ -198,6 +199,12 @@ typedef int (*log_callback_t)(const char *msg);
 EXTERN void Log(int level, const char *fmt, ...)
    __attribute__ ((format (__printf__, 2, 3)));
 
+#ifdef DEBUG
+#define LOG(level, ...) Log(level, ## __VA_ARGS__)
+#else
+#define LOG(level, ...)
+#endif /* DEBUG */
+
 EXTERN int log_subscribe(log_callback_t callback, int maxlevel);
 EXTERN void log_unsubscribe(log_callback_t callback);
 EXTERN const char *log_buffer_addr(void);
@@ -267,6 +274,13 @@ EXTERN int video_set_mode(framebuffer_t *fb, unsigned int width,
                           unsigned int min_width, unsigned int min_height,
                           unsigned int min_depth, bool debug);
 EXTERN int video_set_text_mode(void);
+
+/*
+ * acpi.c
+ */
+EXTERN void acpi_init(void);
+EXTERN int acpi_is_present(void);
+EXTERN acpi_sdt *acpi_find_sdt(const char *sig);
 
 /*
  * smbios.c

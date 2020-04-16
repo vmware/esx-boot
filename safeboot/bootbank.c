@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -48,9 +48,10 @@
 #include "safeboot.h"
 
 /*
- * Safeboot assumes the ESXi image contains at most two bootbank partitions.
+ * Assume the ESXi image contains at most three bootbank partitions.  Two is
+ * normal, but upgrade scenarios can temporarily have three (PR 2449652).
  */
-#define BOOTBANKS_NR 2
+#define BOOTBANKS_NR 3
 
 static bootbank_t banks[BOOTBANKS_NR];
 
@@ -90,9 +91,11 @@ static void bank_dump(const bootbank_t *bank)
       uuid = NULL;
    }
 
-   Log(LOG_DEBUG, "BANK%d: state=%s build=%s updated=%u UUID=%s\n",
+   Log(LOG_DEBUG,
+       "BANK%d: state=%s build=%s updated=%u quickboot=%u UUID=%s\n",
        bank->volid, bootstate_to_str(bank->bootstate), bank->build,
-       bank->updated, (uuid != NULL) ? uuid : "(Failed to get UUID)");
+       bank->updated, bank->quickboot,
+       (uuid != NULL) ? uuid : "(Failed to get UUID)");
 
    sys_free(uuid);
 }
@@ -144,7 +147,7 @@ static int bank_scan(int volid, bootbank_t *bank)
       is_valid_bootbank = false;
       Log(LOG_ERR, "BANK%d: invalid update counter.\n", volid);
    }
-   if (bank->build[0] == '\0') {
+   if (bank->build == NULL || bank->build[0] == '\0') {
       is_valid_bootbank = false;
       Log(LOG_ERR, "BANK%d: invalid build number.\n", volid);
    }
@@ -169,6 +172,14 @@ static int bank_scan(int volid, bootbank_t *bank)
          is_valid_bootbank = false;
          bank->upgrading = false;
          new_state = BANK_STATE_INVALID;
+         break;
+   }
+
+   if (bank->quickboot) {
+      /* This bootbank was only for one-time use by QuickBoot */
+      is_valid_bootbank = false;
+      bank->upgrading = false;
+      new_state = BANK_STATE_INVALID;
    }
 
    if (bank->upgrading && !is_valid_bootbank) {

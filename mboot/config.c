@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2014,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2014,2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -19,6 +19,11 @@
 
 /*
  * mboot configuration file options.
+ *
+ * Note: If you add more options, esximage should be updated to know about
+ * them.  Otherwise it will print warnings when upgrading from a boot.cfg file
+ * that contains the new options, though it will still copy the options to the
+ * new boot.cfg.  See bora/apps/pythonroot/vmware/esximage/Utils/BootCfg.py.
  */
 static option_t mboot_options[] = {
    {"kernel", "=", {NULL}, OPT_STRING},
@@ -40,47 +45,29 @@ static option_t mboot_options[] = {
 static void config_usage(void)
 {
    Log(LOG_INFO, "Configuration file syntax:\n"
-       "\n"
        "   kernel=<FILEPATH>\n"
-       "   kernelopt=<OPTIONS_STRING>\n"
-       "   modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>\n"
-       "   title=<TITLE>\n"
-       "   prefix=<DIRECTORY>\n"
-       "   nobootif=<0...1>\n"
-       "   timeout=<SECONDS>"
-       "\n"
-       "   kernel=<FILEPATH>\n"
-       "      Set the kernel path.\n"
-       "\n"
+       "      Set the kernel filename.\n"
        "   kernelopt=<OPTION_STRING>\n"
        "      Append OPTION_STRING to the kernel command line.\n"
-       "\n"
        "   modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>\n"
-       "      List of modules separated by \"---\" (three hyphens).\n"
-       "\n"
+       "      List of modules separated by \"---\".\n"
        "   title=<TITLE>\n"
        "      Set the bootloader banner title.\n"
-       "\n"
        "   prefix=<DIRECTORY>\n"
-       "      Set the default directory from which the kernel and modules are\n"
-       "      loaded (if their paths are relative). By default, prefix is set\n"
-       "      to directory where the configuration file is located.\n"
-       "\n"
+       "      Set default directory from which kernel and modules are loaded\n"
+       "      (if their filenames are relative). Default: the directory\n"
+       "      containing the configuration file.\n"
        "   nobootif=<0...1>\n"
-       "      If N is set to 1, do not force to append the BOOTIF=<MAC_addr>\n"
-       "      option to the kernel command line. By default, nobootif=0.\n"
-       "\n"
+       "      If N is 1, do not add BOOTIF=<MAC_addr> to the kernel command\n"
+       "      line. Default: 0.\n"
        "   timeout=<SECONDS>\n"
-       "      Set the bootloader autoboot timeout, in units of seconds.\n"
-       "      By default, timeout=5.\n"
-       "\n"
+       "      Set the bootloader autoboot timeout, in seconds. Default: 5.\n"
        "   noquirks=<0...1>\n"
-       "      If N is set to 1, disable workarounds for platform quirks. By\n"
-       "      default, noquirks=0 unless -Q is on the command line."
-       "\n"
+       "      If N is 1, disable workarounds for platform quirks. Default:\n"
+       "      if -Q is on the command line, 1; otherwise 0.\n"
        "   norts=<0...1>\n"
-       "      If N is set to 1, disable support for UEFI Runtime Services. By\n"
-       "      default, norts=0 unless -U is on the command line."
+       "      If N is 1, disable support for UEFI Runtime Services. Default:\n"
+       "      if -U is on the command line, 1; otherwise 0.\n"
        );
 }
 

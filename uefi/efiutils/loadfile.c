@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -17,16 +17,17 @@ static EFI_GUID LoadFileProto = LOAD_FILE_PROTOCOL;
  *
  * Parameters
  *      IN  Volume:   handle to the volume on which the file is located.
- *      IN  FilePath: absolute path to the file.
+ *      IN  filepath: absolute path to the file.
  *      OUT FileSize: the 64-bit file size, in bytes.
  *
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const char *filepath,
                               UINTN *FileSize)
 {
    EFI_LOAD_FILE_INTERFACE *LoadFile;
+   CHAR16 *FilePath;
    EFI_DEVICE_PATH *DevicePath;
    UINTN BufferSize;
    EFI_STATUS Status;
@@ -36,20 +37,22 @@ EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
       return Status;
    }
 
+   Status = filepath_unix_to_efi(filepath, &FilePath);
+   if (EFI_ERROR(Status)) {
+      return Status;
+   }
+
    Status = file_devpath(Volume, FilePath, &DevicePath);
+   sys_free(FilePath);
    if (EFI_ERROR(Status)) {
       return Status;
    }
 
    BufferSize = 0;
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
-
    Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &BufferSize, NULL);
-
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
-
    sys_free(DevicePath);
-
    if (EFI_ERROR(Status) && Status != EFI_BUFFER_TOO_SMALL) {
       return Status;
    }
@@ -66,7 +69,7 @@ EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
  *
  * Parameters
  *      IN  Volume:   handle to the volume from which to load the file
- *      IN  FilePath: absolute path to the file
+ *      IN  filepath: absolute path to the file
  *      IN  callback: routine to be called periodically while the file is being
  *                    loaded
  *      IN  Buffer:   pointer to where to load the file
@@ -76,29 +79,40 @@ EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS load_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
                           int (*callback)(size_t), VOID **Buffer,
                           UINTN *BufSize)
 {
    EFI_LOAD_FILE_INTERFACE *LoadFile;
+   CHAR16 *FilePath;
    EFI_DEVICE_PATH *DevicePath;
    VOID *Data;
    UINTN Size;
    EFI_STATUS Status;
    int error;
 
-   Status = load_file_get_size(Volume, FilePath, &Size);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
    Status = get_protocol_interface(Volume, &LoadFileProto, (void **)&LoadFile);
    if (EFI_ERROR(Status)) {
       return Status;
    }
 
-   Status = file_devpath(Volume, FilePath, &DevicePath);
+   Status = filepath_unix_to_efi(filepath, &FilePath);
    if (EFI_ERROR(Status)) {
+      return Status;
+   }
+
+   Status = file_devpath(Volume, FilePath, &DevicePath);
+   sys_free(FilePath);
+   if (EFI_ERROR(Status)) {
+      return Status;
+   }
+
+   efi_set_watchdog_timer(WATCHDOG_DISABLE);
+   Size = 0;
+   Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &Size, NULL);
+   efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
+   if (EFI_ERROR(Status)) {
+      sys_free(DevicePath);
       return Status;
    }
 
@@ -109,19 +123,18 @@ EFI_STATUS load_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
    }
 
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
-
    Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &Size, Data);
-
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
-
    sys_free(DevicePath);
-
    if (EFI_ERROR(Status)) {
       sys_free(Data);
       return Status;
    }
 
-   /* XXX: Callback should be called for every received packed. */
+   /*
+    * The progress callback should be called for every received packet, but the
+    * Load File protocol does not support that, so just call once at the end.
+    */
    if (callback != NULL) {
       error = callback(Size);
       if (error != 0) {

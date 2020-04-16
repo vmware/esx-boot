@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -20,6 +20,7 @@ static option_t opts[] = {
    {"build", "=", {NULL}, OPT_STRING},
    {"updated", "=", {NULL}, OPT_INTEGER},
    {"bootstate", "=", {NULL}, OPT_INTEGER},
+   {"quickboot", "=", {NULL}, OPT_INTEGER},
    {NULL, NULL, {NULL}, OPT_INVAL}
 };
 
@@ -48,6 +49,7 @@ int bank_get_config(bootbank_t *bank)
    bank->build = opts[0].value.str;
    bank->updated = opts[1].value.integer;
    bank->bootstate = opts[2].value.integer;
+   bank->quickboot = opts[3].value.integer;
 
    return ERR_SUCCESS;
 }

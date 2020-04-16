@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -28,6 +28,8 @@
  *                        2: Fail with a syntax error on unrecognized keywords.
  *                        4: Wait for keypress before parsing menu.
  *                        8: Wait for keypress before displaying menu.
+ *                        16: Wait for keypress before reading menu.
+ *                        32: Wait for keypress before trying each location.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -58,7 +60,7 @@
  *          <HOMEDIR>/menuefi.d/basename(filename)
  *          <HOMEDIR>/pxelinux.cfg/basename(filename)
  *
- *      XXX Some of the above searching is probably overkill.
+ *      Some of the above searching is probably overkill.
  *
  *      The following syntax subset is supported, where n is a numeric
  *      argument, s is a string argument to end of line, and ... is one or more
@@ -88,8 +90,13 @@
  *      KERNEL s       - The EFI app (possibly with arguments) to chain to.
  *      APPEND s       - Command line arguments (added after any in KERNEL).
  *      IPAPPEND n     - Ignored.
- *      LOCALBOOT n    - This item will exit back to the EFI boot manager.
- *      CONFIG s       - This item will restart with s as the menu.
+ *      LOCALBOOT n    - Return from the menu program, with failure if
+ *                         n = -1, success if n = -2.  Other values of n are
+ *                         reserved but treated as -1 for now.  If menu.efi
+ *                         was invoked directly by the UEFI boot manager, -1
+ *                         should go on to the next boot option in the UEFI
+ *                         boot order, while -2 should stop in the UEFI UI.
+ *      CONFIG s       - Restart with s as the menu.
  *      MENU HIDE      - Don't display this item.
  *      MENU LABEL s   - Display this string instead of the item's label.
  *      MENU DEFAULT   - Make this item the default.
@@ -117,8 +124,6 @@
  *        program is used to continue with the current version of
  *        pxelinux in the "then" (s1) case or chainload a different
  *        version of pxelinux and restart in the "else" (s2) case.
- *
- *      * ipxe-undionly.0 is automatically changed to ipxe-snponly.efi.
  */
 
 #include <efiutils.h>
@@ -171,6 +176,8 @@ typedef struct {
 
 int volid = 0;
 char *homedir;
+char *menuefi_d;
+char *pxelinux_cfg;
 Menu *rootmenu;
 EFI_HANDLE Volume;
 
@@ -181,6 +188,8 @@ EFI_HANDLE Volume;
 #define DEBUG_STRICT_SYNTAX            2
 #define DEBUG_PAUSE_BEFORE_PARSE       4
 #define DEBUG_PAUSE_BEFORE_DISPLAY     8
+#define DEBUG_PAUSE_BEFORE_READ       16
+#define DEBUG_PAUSE_BEFORE_READ_TRY   32
 unsigned debug = 0;
 bool verbose = false;
 
@@ -192,6 +201,79 @@ int do_item(Menu *menu, MenuItem *item);
 int chain_to(const char *program, const char *arguments);
 void set_verbose(bool verbose);
 
+/*-- set_homedir ---------------------------------------------------------------
+ *
+ *      Set home directory.
+ *
+ * Results
+ *      ERR_SUCCESS or generic error.
+ *----------------------------------------------------------------------------*/
+int set_homedir(const char *dir)
+{
+   int status;
+   char *h, *m, *p;
+
+   h = strdup(dir);
+   if (h == NULL) {
+      return ERR_OUT_OF_RESOURCES;
+   }
+   file_sanitize_path(h);
+
+   status = make_path(h, "menuefi.d", &m);
+   if (status != ERR_SUCCESS) {
+      free(h);
+      return status;
+   }
+
+   status = make_path(h, "pxelinux.cfg", &p);
+   if (status != ERR_SUCCESS) {
+      free(h);
+      free(m);
+      return status;
+   }
+
+   if (homedir != NULL) {
+      free(homedir);
+   }
+   if (menuefi_d != NULL) {
+      free(menuefi_d);
+   }
+   if (pxelinux_cfg != NULL) {
+      free(pxelinux_cfg);
+   }
+
+   homedir = h;
+   menuefi_d = m;
+   pxelinux_cfg = p;
+
+   return ERR_SUCCESS;
+}
+
+/*-- await_keypress ------------------------------------------------------------
+ *
+ *      Prompt and wait for a keypress
+ *
+ * Results
+ *      ERR_SUCCESS, ERR_ABORTED, or ERR_TIMEOUT
+ *----------------------------------------------------------------------------*/
+int await_keypress(void)
+{
+   key_code_t key;
+
+   Log(LOG_NOTICE, "Press Enter to continue or Backspace to abort...");
+   for (;;) {
+      kbd_waitkey_timeout(&key, 300);
+      if (key.sym == KEYSYM_NONE) {
+         return ERR_TIMEOUT;
+      } else if (key.sym == KEYSYM_ASCII) {
+         if (key.ascii == '\b' || key.ascii == '\177') {
+            return ERR_ABORTED;
+         } else if (key.ascii == '\r' || key.ascii == '\n') {
+            return ERR_SUCCESS;
+         }
+      }
+   }
+}
 
 /*-- log_syntax_error ----------------------------------------------------------
  *
@@ -411,10 +493,10 @@ int parse_menu_subcommand(Menu *menu)
       menu->title = parse_str(menu);
 
    } else if (match_token(menu, "HIDDEN")) {
-      menu->hidden = TRUE;
+      menu->hidden = true;
 
    } else if (inItem && match_token(menu, "HIDE")) {
-      menu->last->hide = TRUE;
+      menu->last->hide = true;
 
    } else if (inItem && match_token(menu, "LABEL")) {
       menu->last->display = parse_str(menu);
@@ -423,7 +505,7 @@ int parse_menu_subcommand(Menu *menu)
       menu->defitem = menu->last;
 
    } else if (inItem && match_token(menu, "SEPARATOR")) {
-      menu->last->spaceAfter = TRUE;
+      menu->last->spaceAfter = true;
 
    } else {
       log_syntax_error(menu, "unexpected MENU subcommand", parse_str(menu));
@@ -468,21 +550,26 @@ bool parse_efi_subcommand(Menu *menu)
       set_verbose(parse_int(menu));
 
    } else if (match_token(menu, "HTTP")) {
-      if (has_gpxe_download_proto(Volume)) {
+      if (is_http_boot() || has_gpxe_download_proto(Volume)) {
          return false;
       } else {
          skip_line(menu);
       }
 
    } else if (match_token(menu, "NOHTTP")) {
-      if (has_gpxe_download_proto(Volume)) {
+      if (is_http_boot() || has_gpxe_download_proto(Volume)) {
          skip_line(menu);
       } else {
          return false;
       }
 
    } else if (inItem && match_token(menu, "HOMEDIR")) {
-      homedir = parse_str(menu);
+      char *str = parse_str(menu);
+      int status = set_homedir(str);
+      if (status != ERR_SUCCESS) {
+         Log(LOG_WARNING, "Failed to set homedir to %s: %s",
+             str, error_str[status]);
+      }
 
    } else {
       // This "EFI" is just hiding a command from pxelinux
@@ -503,7 +590,7 @@ bool parse_efi_subcommand(Menu *menu)
  *      OUT menuOut: result of parse.
  *
  * Results
- *      ERR_SUCCESS or ERR_SYNTAX.
+ *      ERR_SUCCESS, ERR_SYNTAX, or ERR_ABORTED.
  *----------------------------------------------------------------------------*/
 int parse_menu(const char *filename, char *buffer, size_t bufsize,
                Menu **menuOut)
@@ -515,9 +602,9 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
    Log(LOG_DEBUG, "parse_menu filename=%s", filename);
 
    if (debug & DEBUG_PAUSE_BEFORE_PARSE) {
-      key_code_t key;
-      Log(LOG_NOTICE, "Press a key to continue...");
-      kbd_waitkey_timeout(&key, 300);
+      if (await_keypress() == ERR_ABORTED) {
+         return ERR_ABORTED;
+      }
    }
 
    *menuOut = menu;
@@ -544,7 +631,7 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
 
       } else if (match_token(menu, "TIMEOUT")) {
          // rounded up to whole seconds; could fix this if desired
-         menu->timeout = parse_int(menu);
+         menu->timeout = (parse_int(menu) + 9) / 10;
 
       } else if (match_token(menu, "NOHALT")) {
          // ignored
@@ -585,7 +672,7 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
          menu->last->ipappend = parse_int(menu);
 
       } else if (menu->last && match_token(menu, "LOCALBOOT")) {
-         // argument (type of localboot) ignored
+         // argument (type of localboot) 
          menu->last->localboot = parse_int(menu);
 
       } else if (menu->last && match_token(menu, "CONFIG")) {
@@ -654,6 +741,31 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
    return ERR_SUCCESS;
 }
 
+/*-- file_load_wrapper ---------------------------------------------------------
+ *
+ *      Call file_load, with debug logs and optional await_keypress
+ *
+ * Parameters
+ *      See file_load
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int file_load_wrapper(int volid, const char *filename, int (*callback)(size_t),
+                      void **buffer, size_t *bufsize)
+{
+   int status;
+   Log(LOG_DEBUG, "file_load %s", filename);
+   if (debug & DEBUG_PAUSE_BEFORE_READ_TRY) {
+      if (await_keypress() == ERR_ABORTED) {
+         return ERR_ABORTED;
+      }
+   }
+   status = file_load(volid, filename, callback, buffer, bufsize);
+   Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
+   return status;
+}
+
 /*-- read_file -----------------------------------------------------------------
  *
  *      Read a file into newly allocated memory.
@@ -677,20 +789,19 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
    Log(LOG_DEBUG, "read_file %s", f);
    /*
     * Interpret relative names relative to the directory that menu.efi
-    * was loaded from.  Note that is_absolute() considers URLs to be
+    * was loaded from.  Note that make_path() considers URLs to be
     * absolute.
     */
    if (is_absolute(f)) {
       filename = f;
    } else {
-      if (asprintf(&absname, "%s/%s", homedir, f) == -1) {
-         return ERR_OUT_OF_RESOURCES;
+      status = make_path(homedir, f, &absname);
+      if (status != ERR_SUCCESS) {
+         return status;
       }
       filename = absname;
    }
-   Log(LOG_DEBUG, "file_load %s", filename);
-   status = file_load(volid, filename, NULL, bufOut, sizeOut);
-   Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
+   status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
 
    /*
     * If file is not found, try its basename relative to the
@@ -711,26 +822,24 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       if (absname != NULL) {
          free(absname);
       }
-      if (asprintf(&absname, "%s/menuefi.d/%s", homedir, bname) == -1) {
-         return ERR_OUT_OF_RESOURCES;
+      status = make_path(menuefi_d, bname, &absname);
+      if (status != ERR_SUCCESS) {
+         return status;
       }
       filename = absname;
-      Log(LOG_DEBUG, "file_load %s", filename);
-      status = file_load(volid, filename, NULL, bufOut, sizeOut);
-      Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
+      status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
    }
 
    if (status != ERR_SUCCESS) {
       if (absname != NULL) {
          free(absname);
       }
-      if (asprintf(&absname, "%s/pxelinux.cfg/%s", homedir, bname) == -1) {
-         return ERR_OUT_OF_RESOURCES;
+      status = make_path(pxelinux_cfg, bname, &absname);
+      if (status != ERR_SUCCESS) {
+         return status;
       }
       filename = absname;
-      Log(LOG_DEBUG, "file_load %s", filename);
-      status = file_load(volid, filename, NULL, bufOut, sizeOut);
-      Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
+      status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
    }
 
    if (status != ERR_SUCCESS) {
@@ -758,7 +867,8 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
- *      ERR_SUCCESS if the user selected a LOCALBOOT item.
+ *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
+ *      ERR_ABORTED on LOCALBOOT -1.
  *      Generic error code on error.
  *----------------------------------------------------------------------------*/
 int run_menu(Menu *menu)
@@ -772,12 +882,12 @@ int run_menu(Menu *menu)
 
    hidden = menu->hidden;
    selection = menu->defitem;
-   timeout = (menu->timeout + 9) / 10;
+   timeout = menu->timeout;
 
    if (debug & DEBUG_PAUSE_BEFORE_DISPLAY) {
-      key_code_t key;
-      Log(LOG_NOTICE, "Press a key to continue...");
-      kbd_waitkey_timeout(&key, 300);
+      if (await_keypress() == ERR_ABORTED) {
+         return ERR_ABORTED;
+      }
    }
 
  redraw:
@@ -857,7 +967,7 @@ int run_menu(Menu *menu)
          item = selection;
 
       } else if (key.sym == KEYSYM_ASCII &&
-                 key.ascii == '\b') {
+                 (key.ascii == '\b' || key.ascii == '\177')) {
          return ERR_SUCCESS;
 
       } else if (key.sym == KEYSYM_ASCII &&
@@ -897,7 +1007,8 @@ int run_menu(Menu *menu)
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
- *      ERR_SUCCESS if the user selected a LOCALBOOT item.
+ *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
+ *      ERR_ABORTED on LOCALBOOT -1.
  *      Generic error code on error.
  *----------------------------------------------------------------------------*/
 int do_item(Menu *menu, MenuItem *item)
@@ -908,8 +1019,11 @@ int do_item(Menu *menu, MenuItem *item)
    Log(LOG_DEBUG, "do_item label=%s display=%s kernel=%s append=%s",
        item->label, item->display, item->kernel, item->append);
 
-   if (item->localboot != LOCALBOOT_NONE) {
+   if (item->localboot == -2) {
       return ERR_SUCCESS;
+
+   } else if (item->localboot != LOCALBOOT_NONE) {
+      return ERR_ABORTED;
 
    } else if (item->recurse) {
       return do_menu(item->kernel);
@@ -937,12 +1051,63 @@ int do_item(Menu *menu, MenuItem *item)
     */
 
    /*
-    * Change ipxe-undionly.0 to ipxe-snponly.efi.  This helps when
-    * chainloading iPXE at VMware.
+    * ifgpxe.c32, ifvm.c32, and ifver410.c32 are programs sometimes
+    * used in pxelinux menus at VMware to test conditions. The syntax
+    * looks like:
+    *
+    *    ifgpxe.c32 tsel -- fsel
+    *
+    * Here tsel is chosen if the condition being tested is true; else
+    * fsel is chosen.  Apparently tsel and fsel can be either menu
+    * labels or command lines (with arguments).
+    *
+    * ifgpxe   - tests for gPXE/iPXE (for HTTP support)
+    * ifver410 - tests for pxelinux version 4.10 (for HTTP support)
+    * ifvm     - not sure; maybe it tests if we're in a VM?
+    *
+    * The typical usage is to chain to gPXE or iPXE on the false
+    * branch.  Since we either have or fake HTTP support, and "ifvm"
+    * probably doesn't matter to us, we always take the true branch.
     */
    bn = basename(program);
-   if (strcmp(bn, "ipxe-undionly.0") == 0) {
-      program = strdup("ipxe-snponly.efi");
+   if (strcmp(bn, "ifgpxe.c32") == 0 ||
+       strcmp(bn, "ifver410.c32") == 0 ||
+       strcmp(bn, "ifvm.c32") == 0) {
+      char *p;
+      MenuItem *item2;
+
+      p = strstr(arguments, "--");
+      if (p != NULL) {
+         do {
+            p--;
+         } while (p >= arguments && *p == ' ');
+         p++;
+         *p = '\0';
+      }
+
+      item2 = lookup_label(menu, arguments);
+
+      /*
+       * Create a fake item if this is a command line.  This is a
+       * bit ugly.  Maybe both this and the DEFAULT handling could be
+       * unified and cleaned up.
+       */
+      if (item2 == NULL) {
+         item2 = calloc(1, sizeof(MenuItem));
+         item2->localboot = LOCALBOOT_NONE;
+         item2->kernel = arguments;
+      }
+      return do_item(menu, item2);
+   }
+
+   /*
+    * Avoid chainloading menu.efi itself; instead, call do_menu
+    * recursively.  This is just an optimization.  We can't do it if
+    * there are options on the command line.
+    */
+   if ((strcmp(bn, "menu.efi") == 0 ||
+        strcmp(bn, "menu.c32") == 0) && arguments[0] != '-') {
+      return do_menu(arguments);
    }
 
    len = strlen(program);
@@ -960,65 +1125,6 @@ int do_item(Menu *menu, MenuItem *item)
       memcpy(p, program, len - 2);
       strcpy(p + len, ".efi");
       program = p;
-   }
-
-   /*
-    * Avoid chainloading menu.efi itself; instead, call do_menu
-    * recursively.  This is just an optimization.  We can't do it if
-    * there are options on the command line.
-    */
-   bn = basename(program);
-   if (strcmp(bn, "menu.efi") == 0 && arguments[0] != '-') {
-      return do_menu(arguments);
-   }
-
-   /*
-    * ifgpxe.c32, ifvm.c32, and ifver410.c32 are programs sometimes
-    * used in pxelinux menus at VMware to test conditions. The syntax
-    * looks like:
-    *
-    *    ifgpxe.c32 tsel -- fsel
-    *
-    * Here tsel is chosen if the condition being tested is true; else
-    * fsel is chosen.  Apparently tsel and fsel can be either menu
-    * labels or command lines (with arguments).
-    *
-    * ifgpxe   - effectively tests whether HTTP support is available.
-    * ifvm     - not sure; maybe it tests if we're in a VM?
-    * ifver410 - not sure; maybe tests if this is pxelinux version 4.10.
-    *
-    * The typical usage is to chain to gpxelinux.0 on the false
-    * branch.  Since we fake HTTP support and the other conditions
-    * probably don't matter to us, we always take the true branch.
-    */
-   if (strcmp(bn, "ifgpxe.efi") == 0 ||
-       strcmp(bn, "ifvm.efi") == 0 ||
-       strcmp(bn, "ifver410.efi") == 0) {
-      char *p;
-      MenuItem *item2;
-
-      p = strstr(arguments, "--");
-      if (p != NULL) {
-         do {
-            p--;
-         } while (p >= arguments && *p == ' ');
-         p++;
-         *p = '\0';
-      }
-
-      item2 = lookup_label(menu, arguments);
-
-      /*
-       * Create a fake item if this is a command line.  XXX This is a
-       * bit ugly.  Maybe both this and the DEFAULT handling can be
-       * unified and cleaned up?
-       */
-      if (item2 == NULL) {
-         item2 = calloc(1, sizeof(MenuItem));
-         item2->localboot = LOCALBOOT_NONE;
-         item2->kernel = arguments;
-      }
-      return do_item(menu, item2);
    }
 
    return chain_to(program, arguments);
@@ -1041,13 +1147,13 @@ int chain_to(const char *program, const char *arguments)
    void *image;
    size_t imgsize;
    EFI_HANDLE ChildHandle;
+   EFI_DEVICE_PATH *ChildPath;
+   EFI_HANDLE ChildDH;
    EFI_LOADED_IMAGE *Child;
    EFI_STATUS Status;
    CHAR16 *LoadOptions;
    UINTN ExitDataSize;
    CHAR16 *ExitData;
-   CHAR16 *Program;
-   EFI_DEVICE_PATH *ProgramPath;
 
    Log(LOG_DEBUG, "chain_to program=%s arguments=%s", program, arguments);
 
@@ -1056,37 +1162,52 @@ int chain_to(const char *program, const char *arguments)
     * read the file into memory using our own function, then invoke
     * bs->LoadImage on that.
     */
+
+   /* Convert arguments to UCS2 LoadOptions */
    LoadOptions = NULL;
    Status = ascii_to_ucs2(arguments, &LoadOptions);
    if (EFI_ERROR(Status)) {
       return error_efi_to_generic(Status);
    }
 
-   /* Read the image into memory */
+   /*
+    * Search for and read the image into memory.  Sets "program" to the
+    * filepath where the image was actually found.
+    */
    status = read_file(program, &program, &image, &imgsize);
    if (status != ERR_SUCCESS) {
       return status;
    }
 
    /*
-    * The 3rd argument to LoadImage (IN EFI_DEVICE_PATH_PROTOCOL
-    * *DevicePath) is not marked OPTIONAL, and trying to pass NULL has
-    * been observed to cause a hang later in bs->StartImage in some
-    * cases.  So generate something to put there.
+    * Compute values to pass in the DevicePath argument to LoadImage
+    * (ChildPath) and in ChildHandle->DeviceHandle (ChildDH).
     */
-   Program = NULL;
-   Status = ascii_to_ucs2(program, &Program);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
-   }
-   Status = file_devpath(Volume, Program, &ProgramPath);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
+   if (is_http_boot()) {
+      Status = make_http_child_dh(program, &ChildDH);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+      Status = devpath_get(ChildDH, &ChildPath);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+   } else {
+      CHAR16 *Program = NULL;
+      Status = ascii_to_ucs2(program, &Program);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+      Status = file_devpath(Volume, Program, &ChildPath);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+      ChildDH = Volume;
    }
 
    /* Use the form of LoadImage that takes a memory buffer */
    ChildHandle = NULL;
-   Status = bs->LoadImage(FALSE, ImageHandle, ProgramPath,
+   Status = bs->LoadImage(FALSE, ImageHandle, ChildPath,
                           image, imgsize, &ChildHandle);
    if (EFI_ERROR(Status)) {
       if (ChildHandle != NULL) {
@@ -1105,15 +1226,15 @@ int chain_to(const char *program, const char *arguments)
    Child->LoadOptions = LoadOptions;
    Child->LoadOptionsSize = UCS2SIZE(LoadOptions);
    Child->SystemTable = st;
-   Child->DeviceHandle = Volume;
+   Child->DeviceHandle = ChildDH;
 
    Log(LOG_DEBUG, "Image loaded at %p (size 0x%"PRIx64")",
        Child->ImageBase, Child->ImageSize);
 
    if (debug & DEBUG_PAUSE_BEFORE_START_IMAGE) {
-      key_code_t key;
-      Log(LOG_NOTICE, "Press a key to continue...");
-      kbd_waitkey_timeout(&key, 300);
+      if (await_keypress() == ERR_ABORTED) {
+         return ERR_ABORTED;
+      }
    }
 
    /* Transfer control to the Child */
@@ -1122,7 +1243,7 @@ int chain_to(const char *program, const char *arguments)
       Log(LOG_ERR, "StartImage returned Status 0x%zx", Status);
       st->ConOut->OutputString(st->ConOut, ExitData);
    }
-   efi_free(ExitData);
+   free(ExitData);
 
    /*
     * Typically the child is a bootloader, in which case we won't get
@@ -1141,7 +1262,8 @@ int chain_to(const char *program, const char *arguments)
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
- *      ERR_SUCCESS if the user selected a LOCALBOOT item.
+ *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
+ *      ERR_ABORTED on LOCALBOOT -1.
  *      Generic error code on error.
  *----------------------------------------------------------------------------*/
 int do_menu(const char *filename)
@@ -1152,6 +1274,12 @@ int do_menu(const char *filename)
    size_t bufsize;
 
    Log(LOG_DEBUG, "do_menu filename=%s", filename);
+
+   if (debug & DEBUG_PAUSE_BEFORE_READ) {
+      if (await_keypress() == ERR_ABORTED) {
+         return ERR_ABORTED;
+      }
+   }
 
    if (filename == NULL) {
       /* No menu filename given; search for one */
@@ -1211,7 +1339,8 @@ void set_verbose(bool state)
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
- *      ERR_SUCCESS if the user selected a LOCALBOOT item.
+ *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
+ *      ERR_ABORTED on LOCALBOOT -1.
  *      Generic error code on error.
  *----------------------------------------------------------------------------*/
 int main(int argc, char **argv)
@@ -1224,29 +1353,16 @@ int main(int argc, char **argv)
    int baud = DEFAULT_SERIAL_BAUDRATE;
    int i;
    EFI_STATUS Status;
-   
-   /*
-    * Uncomment/modify the following when needed to debug issues prior
-    * to option parsing or when options can't be given.
-    */
-   //verbose = TRUE;
-   //debug = DEBUG_PAUSE_BEFORE_PARSE;
 
-   status = log_init(verbose);
-   if (status != ERR_SUCCESS) {
-      goto out;
-   }
-
-   status = get_boot_file(&bootfile);
-   if (status != ERR_SUCCESS) {
-      goto out;
-   }
-   homedir = dirname(strdup(bootfile));
-
-   Status = get_boot_volume(&Volume);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
-   }
+#ifdef DEBUG
+  /*
+   * Uncomment/modify the following when needed to debug issues prior
+   * to option parsing or when options can't be given.
+   */
+   verbose = true;
+   serial = true;
+   debug = DEBUG_STRICT_SYNTAX;
+#endif /* DEBUG */
 
    if (argc > 0) {
       int opt;
@@ -1267,10 +1383,14 @@ int main(int argc, char **argv)
             baud = atoi(optarg);
             break;
          case 'V': /* verbose */
-            set_verbose(true);
+            verbose = true;
             break;
          case 'H': /* homedir */
-            homedir = optarg;
+            status = set_homedir(optarg);
+            if (status != ERR_SUCCESS) {
+               Log(LOG_WARNING, "Failed to set homedir to %s: %s",
+                   optarg, error_str[status]);
+            }
             break;
          case -1:
             break;
@@ -1282,8 +1402,46 @@ int main(int argc, char **argv)
       } while (opt != -1);
    }
 
+   status = log_init(verbose);
+   if (status != ERR_SUCCESS) {
+      goto out;
+   }
    if (serial) {
       serial_log_init(port, baud);
+   }
+
+   /*
+    * Log a message to show where menu.efi has been relocated to and
+    * loaded, for use in debugging.  Currently the unrelocated value
+    * of __executable_start is 0 for COM32, but is 0x1000 for UEFI
+    * because of HEADERS_SIZE is uefi/uefi.lds.  Check the symbol
+    * table in the .elf binary to be sure.
+    */
+   Log(LOG_DEBUG, "menu.efi __executable_start is at %p\n",
+       __executable_start);
+
+   status = get_boot_file(&bootfile);
+   if (status != ERR_SUCCESS) {
+      goto out;
+   }
+
+   if (homedir == NULL) {
+      char *bootdir;
+      status = get_boot_dir(&bootdir);
+      if (status != ERR_SUCCESS) {
+         goto out;
+      }
+      status = set_homedir(bootdir);
+      if (status != ERR_SUCCESS) {
+         Log(LOG_WARNING, "Failed to set homedir to %s: %s",
+             bootdir, error_str[status]);
+      }
+      free(bootdir);
+   }
+
+   Status = get_boot_volume(&Volume);
+   if (EFI_ERROR(Status)) {
+      return error_efi_to_generic(Status);
    }
 
    Log(LOG_DEBUG, "main bootfile=%s homedir=%s argc=%d",
@@ -1295,8 +1453,12 @@ int main(int argc, char **argv)
    status = do_menu(optind < argc ? argv[optind] : NULL);
 
  out:
-   if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Error %d (%s); press a key to continue...",
+   if (status == ERR_SUCCESS || status == ERR_ABORTED) {
+      Log(LOG_DEBUG, "Returning %d (%s)", status, error_str[status]);
+   } else if (status != ERR_SUCCESS) {
+      Log(LOG_ERR,
+          "Error %d (%s)\n"
+          "Press a key to continue UEFI boot sequence...",
           status, error_str[status]);
       kbd_waitkey_timeout(&key, 300);
    }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015-2017,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -324,6 +324,14 @@ int com32_main(void)
    if (status != ERR_SUCCESS) {
       return status;
    }
+
+   /*
+    * esxboot on x86 does not rely on any ACPI tables (e.g. SPCR),
+    * so don't bother initializing ACPI yet. When a need arises,
+    * don't forget to provide a non-dummy get_acpi_rsdp implementation.
+    *
+    * acpi_init().
+    */
 
    status = main(argc, argv);
 

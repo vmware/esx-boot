@@ -479,3 +479,46 @@ char *devpath_text(const EFI_DEVICE_PATH *DevPath,
    ucs2_to_ascii(ws, (char **)&ws, false);
    return (char *)ws;
 }
+
+/*-- log_devpath ---------------------------------------------------------------
+ *
+ *      Convert a device path to text and log it.
+ *
+ * Parameters
+ *      IN  level:   log level
+ *      IN  prefix:  string to prefix the device path with
+ *      IN  DevPath: device path
+ *----------------------------------------------------------------------------*/
+void log_devpath(int level, const char *prefix, const EFI_DEVICE_PATH *DevPath)
+{
+   char *text;
+
+   text = devpath_text(DevPath, false, false);
+   Log(level, "%s: %s", prefix, text);
+   sys_free(text);
+}
+
+/*-- log_handle_devpath --------------------------------------------------------
+ *
+ *      Get the device path associated with an EFI handle, convert it to text,
+ *      and log it.
+ *
+ * Parameters
+ *      IN  level:  log level
+ *      IN  prefix: string to prefix the device path with
+ *      IN  handle: EFI handle
+ *----------------------------------------------------------------------------*/
+void log_handle_devpath(int level, const char *prefix, EFI_HANDLE handle)
+{
+   EFI_STATUS Status;
+   EFI_DEVICE_PATH *DevPath;
+
+   Status = devpath_get(handle, &DevPath);
+   if (EFI_ERROR(Status)) {
+      Log(level, "%s: error getting devpath: %s",
+          prefix, error_str[error_efi_to_generic(Status)]);
+      return;
+   }
+
+   log_devpath(level, prefix, DevPath);
+}

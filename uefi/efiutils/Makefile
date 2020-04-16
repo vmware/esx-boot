@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2015-2016 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2015-2016,2019 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -12,12 +12,14 @@ include common.mk
 
 SRC         := console.c    \
                devpath.c    \
+               dhcpv4.c     \
                disk.c       \
                efi_secure.c \
                error.c      \
                file.c       \
                gop.c        \
                gpxefile.c   \
+               httpfile.c   \
                image.c      \
                init.c       \
                keyboard.c   \

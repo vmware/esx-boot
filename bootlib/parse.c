@@ -150,10 +150,25 @@ int parse_config_file(int volid, const char *filename, option_t *options)
    void *buffer;
    size_t size, len;
    int status;
+   option_t *opt;
 
    status = file_load(volid, filename, NULL, &buffer, &size);
    if (status != ERR_SUCCESS) {
       return status;
+   }
+
+   for (opt = options; opt->type != OPT_INVAL; opt++) {
+      switch (opt->type) {
+      case OPT_STRING:
+         opt->value.str = NULL;
+         break;
+      case OPT_INTEGER:
+         opt->value.integer = 0;
+         break;
+      case OPT_INVAL:
+         // not reached
+         break;
+      }
    }
 
    status = 0;

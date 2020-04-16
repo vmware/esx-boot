@@ -36,6 +36,10 @@ int elf_arch_supported(void *buffer)
       return ERR_BAD_ARCH;
    }
 
+   if (Elf_CommonEhdrGetType(ehdr) != ET_EXEC) {
+      return WARNING(ERR_NOT_EXECUTABLE);
+   }
+
    return ERR_SUCCESS;
 }
 
@@ -45,7 +49,7 @@ int elf_arch_supported(void *buffer)
  *      post relocation.
  *
  *      x86 binaries must be loaded at the linked address, thus reported
- *      address is always zero.
+ *      addend is always zero.
  *
  * Parameters
  *      IN  link_base:  image base address.

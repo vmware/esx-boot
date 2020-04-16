@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -13,6 +13,108 @@
 #include <compat.h>
 #include <sys/types.h>
 #include <stdbool.h>
+
+/*
+ * PC compatibles have BIOS and option card ROMs here,
+ * "low" RAM, partially used by BIOS, VGA RAM.
+ */
+#define LOW_IBM_PC_MEGABYTE 0x100000ULL
+
+/*
+ * Work around Intel erratum "Processor May Hang When Executing
+ * Code In an HLE Transaction Region" CFL106, SKL170, KBL121,
+ * SKW159, KBW114, SKZ63.  See PR 2140637.
+ */
+#define SKYLAKE_HLE_BLACKLIST_MA_LOW 0x40000000
+#define SKYLAKE_HLE_BLACKLIST_MA_HIGH 0x40400000
+
+#define CPUID_INTEL_VENDOR_STRING "GenuntelineI"
+
+typedef struct CPUIDRegs {
+   unsigned int eax, ebx, ecx, edx;
+} CPUIDRegs;
+
+CPUIDRegs cpuid0;
+CPUIDRegs cpuid1;
+
+#define CPUID_FAMILY_P6 6
+#define CPUID_FAMILY_EXTENDED 15
+
+#define CPUID_MODEL_SKYLAKE_4E 0x4e    // Skylake-Y / Kaby Lake U/Y ES macro
+#define CPUID_MODEL_SKYLAKE_55 0x55    // Skylake EP/EN/EX macro
+#define CPUID_MODEL_SKYLAKE_5E 0x5e    // Skylake-S / Kaby Lake S/H ES
+#define CPUID_MODEL_CANNONLAKE_66 0x66 // Cannon Lake
+#define CPUID_MODEL_KABYLAKE_8E 0x8e   // Kaby Lake U/Y QS
+#define CPUID_MODEL_KABYLAKE_9E 0x9e   // Kaby Lake S/H QS
+
+#define BIT_MASK(shift) (0xffffffffu >> (32 - shift))
+
+/*
+ * CPUID result registers
+ */
+
+#define CPUID_REGS                                                             \
+   CPUIDREG(EAX, eax)                                                          \
+   CPUIDREG(EBX, ebx)                                                          \
+   CPUIDREG(ECX, ecx)                                                          \
+   CPUIDREG(EDX, edx)
+
+typedef enum {
+#define CPUIDREG(uc, lc) CPUID_REG_##uc,
+   CPUID_REGS
+#undef CPUIDREG
+      CPUID_NUM_REGS
+} CpuidReg;
+
+#define CPUID_LEVELS                                                           \
+   CPUIDLEVEL(TRUE, 0, 0, 0, 0)                                                \
+   CPUIDLEVEL(TRUE, 1, 1, 0, 0)
+
+/* Define  CPUID levels in the form: CPUID_LEVEL_<ShortName> */
+typedef enum {
+#define CPUIDLEVEL(t, s, v, c, h) CPUID_LEVEL_##s,
+   CPUID_LEVELS
+#undef CPUIDLEVEL
+      CPUID_NUM_LEVELS
+} CpuidCachedLevel;
+
+/* Enum to translate between shorthand name and actual CPUID level value. */
+enum {
+#define CPUIDLEVEL(t, s, v, c, h) CPUID_LEVEL_VAL_##s = v,
+   CPUID_LEVELS
+#undef CPUIDLEVEL
+};
+
+#define FIELD(lvl, ecxIn, reg, bitpos, size, name, s, hwv)                     \
+   CPUID_##name##_SHIFT = bitpos,                                              \
+   CPUID_##name##_MASK = BIT_MASK(size) << bitpos,                             \
+   CPUID_INTERNAL_SHIFT_##name = bitpos,                                       \
+   CPUID_INTERNAL_MASK_##name = BIT_MASK(size) << bitpos,                      \
+   CPUID_INTERNAL_REG_##name = CPUID_REG_##reg,                                \
+   CPUID_INTERNAL_EAXIN_##name = CPUID_LEVEL_VAL_##lvl,                        \
+   CPUID_INTERNAL_ECXIN_##name = ecxIn,
+
+/*    LEVEL, SUB-LEVEL, REG, POS, SIZE, NAME,               MON SUPP, HWV  */
+#define CPUID_FIELD_DATA_LEVEL_1                                               \
+   FIELD(1, 0, EAX, 0, 4, STEPPING, ANY, 4)                                    \
+   FIELD(1, 0, EAX, 4, 4, MODEL, ANY, 4)                                       \
+   FIELD(1, 0, EAX, 8, 4, FAMILY, YES, 4)                                      \
+   FIELD(1, 0, EAX, 12, 2, TYPE, ANY, 4)                                       \
+   FIELD(1, 0, EAX, 16, 4, EXTENDED_MODEL, ANY, 4)                             \
+   FIELD(1, 0, EAX, 20, 8, EXTENDED_FAMILY, YES, 4)
+
+#define CPUID_FIELD_DATA CPUID_FIELD_DATA_LEVEL_1
+
+enum {
+   /* Define data for every CPUID field we have */
+   CPUID_FIELD_DATA
+};
+
+#define CPUID_GET(eaxIn, reg, field, data)                                     \
+   ({                                                                          \
+      (((unsigned int)(data)&CPUID_INTERNAL_MASK_##field) >>                   \
+       CPUID_INTERNAL_SHIFT_##field);                                          \
+   })
 
 /*
  * Interrupts

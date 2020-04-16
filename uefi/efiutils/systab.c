@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,10 +11,6 @@
 #include <sm_bios.h>
 
 #include "efi_private.h"
-static EFI_ACPI_5_0_ROOT_SYSTEM_DESCRIPTION_POINTER *acpi_rsdp;
-static EFI_ACPI_DESCRIPTION_HEADER *acpi_rsdt;
-static EFI_ACPI_DESCRIPTION_HEADER *acpi_xsdt;
-EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *acpi_spcr;
 
 /*-- efi_guid_cmp --------------------------------------------------------------
  *
@@ -72,9 +68,11 @@ static EFI_STATUS efi_get_system_config_table(EFI_GUID *guid, void **table)
  *      OUT rsdp: pointer to the RSDP
  *
  * Results
- *      ERR_SUCCESS, or a generic error status.
- *----------------------------------------------------------------------------*/
-static int get_acpi_rsdp(void **rsdp)
+ *      ERR_SUCCESS: ACPI RSDP found.
+ *      ERR_NOT_FOUND: ACPI RSDP not found (but expected).
+ *      ERR_UNSUPPORTED: ACPI RSDP not found (but not required).
+  *----------------------------------------------------------------------------*/
+int get_acpi_rsdp(void **rsdp)
 {
    EFI_STATUS Status;
    int i;
@@ -97,68 +95,25 @@ static int get_acpi_rsdp(void **rsdp)
       }
    }
 
-   return error_efi_to_generic(Status);
-}
-
-/*-- acpi_tab_init -------------------------------------------------------------
- *
- *      Find ACPI tables, storing pointers to interesting tables if they exist.
- *
- * Parameters
- *      None
- *
- * Results
- *      None
- *----------------------------------------------------------------------------*/
-void acpi_tab_init(void)
-{
-   int status;
-   void *entry;
-   uintptr_t tab;
-   uintptr_t tab_end;
-   uintptr_t entry_size;
-   EFI_ACPI_DESCRIPTION_HEADER *header;
-
-   status = get_acpi_rsdp((void **) &acpi_rsdp);
-   if (status != ERR_SUCCESS) {
-      return;
-   }
-
-   if (acpi_rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION) {
-      acpi_xsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (uintptr_t) acpi_rsdp->XsdtAddress;
-   }
-
-   acpi_rsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (uintptr_t) acpi_rsdp->RsdtAddress;
-   if (acpi_xsdt != 0) {
-      tab = (uintptr_t) acpi_xsdt;
-      entry_size = sizeof(uint64_t);
-      tab_end = tab + acpi_xsdt->Length;
-   } else {
-      tab = (uintptr_t) acpi_rsdt;
-      entry_size = sizeof(uint32_t);
-      tab_end = tab + acpi_rsdt->Length;
-   }
-
-   for (tab += sizeof(EFI_ACPI_DESCRIPTION_HEADER);
-        tab < tab_end;
-        tab += entry_size) {
-      entry = (void *) tab;
-
-      if (entry_size == sizeof(uint32_t)) {
-         header = (EFI_ACPI_DESCRIPTION_HEADER *) (uintptr_t) *(uint32_t *) entry;
+   if (error_efi_to_generic(Status) != ERR_SUCCESS) {
+      if (arch_is_arm64) {
+         /*
+          * On Arm this is a problem, since we rely on ACPI to locate
+          * the serial port for console.
+          */
+         Log(LOG_CRIT, "ACPI expected, but not found, good luck!");
+         return ERR_NOT_FOUND;
       } else {
-         header = (EFI_ACPI_DESCRIPTION_HEADER *) (uintptr_t) *(uint64_t *) entry;
-      }
-
-      if (header == NULL) {
-         Log(LOG_DEBUG, "NULL SDT entry detected\n");
-         continue;
-      }
-
-      if (header->Signature == EFI_ACPI_5_0_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_SIGNATURE) {
-         acpi_spcr = (EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *) header;
+         /*
+          * On x86 this is not a problem. While ESXi itself needs ACPI,
+          * esxboot doesn't query any tables and will not enforce any
+          * checks.
+          */
+         return ERR_UNSUPPORTED;
       }
    }
+
+   return ERR_SUCCESS;
 }
 
 /*-- get_smbios_eps ------------------------------------------------------------

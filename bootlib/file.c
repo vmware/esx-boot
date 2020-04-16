@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -488,9 +488,10 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
 
 /*-- file_sanitize_path --------------------------------------------------------
  *
- *      Sanitize a UNIX-style or Protocol-style path
- *        - multiple-separator '/' occurences are merged
- *        - considers protocol paths with separator "://"
+ *      Sanitize a UNIX-style or URL-style path
+ *        - the first :// sequence, if any, keeps its //
+ *        - other multiple-separator / occurrences are merged
+ *        - whitespace characters are removed (XXX why?)
  *
  * Parameters
  *      IN  filepath: pointer to the UNIX/Protocol path

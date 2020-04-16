@@ -45,6 +45,9 @@
  *      be an early module. mboot obtains the schema number from the 0th
  *      module and checks that all other modules that the schema identifies
  *      as early have this same version number.
+ *
+ *      NOTE: Any future additions or changes to schema validation will also
+ *            need to be made in the QuickBoot secure boot implementation.
  */
 
 #include "mboot.h"
@@ -78,6 +81,8 @@ typedef struct {
  * extension removed is significant.  Each is required to be signed if present
  * and may be present only once.  Any changes to the list require moving to a
  * new schema version number.
+ *
+ * NOTE! Any schema change requires QuickBoot changes, too!
  */
 NamedModule v1Named[] = {
    {"s",  0},

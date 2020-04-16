@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -29,8 +29,6 @@
 char *dirname(char *path)
 {
    static char slashdot[4] = {'/', '\0', '.', '\0'};
-   bool slash;
-   size_t len;
    char *p;
 
    /* Return "." for NULL or empty strings */
@@ -43,8 +41,14 @@ char *dirname(char *path)
    while (p > path && *p == '/') {
       p--;
    }
-   /* Discard the basename */
+
+   /* Remove the basename */
    while (p > path && *p != '/') {
+      p--;
+   }
+
+   /* Remove trailing slashes */
+   while (p > path && *p == '/') {
       p--;
    }
 
@@ -52,31 +56,8 @@ char *dirname(char *path)
       /* Either the dir is "/" or there are no slashes */
       return &slashdot[(*p == '/') ? 0 : 2];
    }
-   *p = '\0';
 
-   /* Merge repetitive slashes */
-   slash = false;
-   len = 0;
-   for (p = path; *p != '\0'; p++) {
-      if (*p == '/') {
-         if (slash) {
-            continue;
-         }
-         slash = true;
-      } else {
-         if (slash) {
-            slash = false;
-         }
-      }
-      path[len++] = *p;
-   }
-
-   /* Remove final '/' if any */
-   if (len > 1 && path[len - 1] == '/') {
-      len--;
-   }
-   path[len] = '\0';
-
+   *++p = '\0';
    return path;
 }
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -39,17 +39,20 @@
 int get_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
                     io_channel_t *io, uint32_t *original_baudrate)
 {
-   if (acpi_spcr == NULL) {
+   EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *spcr =
+      (void *) acpi_find_sdt("SPCR");
+
+   if (spcr == NULL) {
       return ERR_NOT_FOUND;
    }
 
-   if (acpi_spcr->BaseAddress.AddressSpaceId != EFI_ACPI_5_0_SYSTEM_MEMORY) {
+   if (spcr->BaseAddress.AddressSpaceId != EFI_ACPI_5_0_SYSTEM_MEMORY) {
       return ERR_INVALID_PARAMETER;
    }
    io->type = IO_MEMORY_MAPPED;
 
-   io->channel.addr = acpi_spcr->BaseAddress.Address;
-   switch (acpi_spcr->InterfaceType) {
+   io->channel.addr = spcr->BaseAddress.Address;
+   switch (spcr->InterfaceType) {
    case SPCR_TYPE_BCM2835:
      /*
       * Just skip the weird stuff, and we get an almost-16550 like UART.
@@ -64,7 +67,7 @@ int get_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       /*
        * Regs are 8-bit wide, but are likely on a 32-bit boundary.
        */
-      io->offset_scaling = acpi_spcr->BaseAddress.RegisterBitWidth / 8;
+      io->offset_scaling = spcr->BaseAddress.RegisterBitWidth / 8;
       break;
    case SPCR_TYPE_PL011:
    case SPCR_TYPE_SBSA_32BIT:
@@ -73,7 +76,7 @@ int get_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       /*
        * Regs are 32-bit wide, and are likely on a 32-bit boundary.
        */
-      io->offset_scaling = acpi_spcr->BaseAddress.RegisterBitWidth / 32;
+      io->offset_scaling = spcr->BaseAddress.RegisterBitWidth / 32;
       if (io->offset_scaling == 0) {
          io->offset_scaling = 1;
       }
@@ -82,7 +85,7 @@ int get_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       return ERR_UNSUPPORTED;
    }
 
-   switch (acpi_spcr->BaudRate) {
+   switch (spcr->BaudRate) {
    case EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_BAUD_RATE_115200:
       *original_baudrate = 115200;
       break;

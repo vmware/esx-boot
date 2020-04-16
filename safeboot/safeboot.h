@@ -54,6 +54,7 @@ typedef struct {
    unsigned char uuid[VMWARE_FAT_UUID_LEN];
    bool upgrading;
    bool valid;
+   bool quickboot;
 } bootbank_t;
 
 const char *bootstate_to_str(int bootstate);

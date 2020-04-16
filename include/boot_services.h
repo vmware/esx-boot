@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -59,6 +59,7 @@ EXTERN int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_
 /*
  * System information
  */
+EXTERN int get_acpi_rsdp(void **rsdp);
 EXTERN int get_smbios_eps(void **eps_start);
 EXTERN int get_smbios_v3_eps(void **eps_start);
 

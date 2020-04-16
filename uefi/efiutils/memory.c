@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -43,7 +43,7 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
                               UINTN *Size, UINTN *SizeOfDesc,
                               UINT32 *MMapVersion)
 {
-   EFI_MEMORY_DESCRIPTOR *Buffer;
+   EFI_MEMORY_DESCRIPTOR *Buffer = NULL;
    UINTN BufLen, DescSize;
    UINT32 Version;
    EFI_STATUS Status;
@@ -54,20 +54,69 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
    EFI_ASSERT_PARAM(Size != NULL);
    EFI_ASSERT_PARAM(SizeOfDesc != NULL);
 
-   DescSize = 0;
-   Buffer = NULL;
-   BufLen = 0;
-
    do {
-      if (BufLen > 0) {
+      if (Buffer != NULL) {
          sys_free(Buffer);
+      }
+      BufLen = 0;
+      Buffer = NULL;
+      DescSize = 0;
 
-         EFI_ASSERT_FIRMWARE(DescSize > 0);
+      Status = bs->GetMemoryMap(&BufLen, NULL, &MapKey, &DescSize, &Version);
+      if (Status != EFI_BUFFER_TOO_SMALL) {
+         return Status;
+      }
 
-         Buffer = sys_malloc(BufLen + (BufLen / DescSize) * desc_extra_mem);
-         if (Buffer == NULL) {
-            return EFI_OUT_OF_RESOURCES;
-         }
+      /*
+       * At this point we know the desired size, but are not guaranteed
+       * DescSize. The specification says nothing about returning
+       * a valid DescSize on EFI_BUFFER_TOO_SMALL, and U-Boot doesn't.
+       *
+       * What's even more exciting, is that the spec tells you to allocate
+       * more than the reported memory map size, but provides no guidance
+       * on what "more" is supposed to constitute (remember, you don't
+       * know the descriptor size, and have no idea about how many
+       * separate new descriptors could be created due to the
+       * sys_malloc below). So just double it.
+       */
+      BufLen *= 2;
+
+      Buffer = sys_malloc(BufLen);
+      if (Buffer == NULL) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+      Status = bs->GetMemoryMap(&BufLen, Buffer, &MapKey, &DescSize, &Version);
+      if (Status != EFI_SUCCESS) {
+         /*
+          * If we got EFI_BUFFER_TOO_SMALL, retry else fail on everything else.
+          *
+          * Yes, this is possible, if allocation happened in a DPC somewhere
+          * between the two GetMemoryMap calls (e.g. bus enumeration, but could
+          * be anything).
+          */
+         continue;
+      }
+
+      /*
+       * Now we know DescSize and can allocate Buffer for real.
+       */
+      EFI_ASSERT_FIRMWARE(DescSize > 0);
+      sys_free(Buffer);
+      /*
+       * We know DescSize, but it's unclear by how many descriptors the
+       * memory map could grow as a result of the allocation below.
+       * You'd hope that it can at most result in splitting an entry
+       * into two entries, but this is implementation specific - what if someone
+       * decided to create guard allocations? Again, just double it.
+       */
+      BufLen *= 2;
+      /*
+       * Now adjust by desc_extra_mem.
+       */
+      BufLen += (BufLen / DescSize) * desc_extra_mem;
+      Buffer = sys_malloc(BufLen);
+      if (Buffer == NULL) {
+         return EFI_OUT_OF_RESOURCES;
       }
 
       Status = bs->GetMemoryMap(&BufLen, Buffer, &MapKey, &DescSize, &Version);
@@ -96,13 +145,6 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
  *      as available. Therefore, it is the bootloader's responsibility to
  *      convert any E820_TYPE_BOOTLOADER entry to the E820_TYPE_AVAILABLE type
  *      before passing the system memory map to the kernel.
- *
- *      E820_TYPE_BLACKLISTED_FIRMWARE_BS memory is also internal to the
- *      bootloader's internal environment and should never be known by the
- *      kernel, which always considers such memory as available. Therefore, it
- *      is the boot-loader's responsibility to convert any such entries to the
- *      E820_TYPE_AVAILABLE type before passing the system memory map to the
- *      kernel.
  *
  *   The 'desc_extra_mem' parameter
  *      Depending on the dynamic memory allocator implementation, the system
@@ -187,11 +229,7 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
             type = E820_TYPE_BOOTLOADER;
             break;
          case EfiBootServicesCode:
-            if (arch_is_arm64) {
-               type = E820_TYPE_BLACKLISTED_FIRMWARE_BS;
-            } else {
-               type = E820_TYPE_AVAILABLE;
-            }
+            type = E820_TYPE_AVAILABLE;
             break;
          case EfiBootServicesData:
             /*
@@ -200,13 +238,9 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
              * are likely also there, though that doesn't matter so much.)  So
              * we blacklist such memory along with EfiLoaderCode and Data, to
              * prevent alloc() from handing it out for immediate use while we
-             * are still running in C code.  PR 2162215 update #28.
+             * are still running in C code. PR 2162215 update #28.
              */
-            if (arch_is_arm64) {
-               type = E820_TYPE_BLACKLISTED_FIRMWARE_BS;
-            } else {
-               type = E820_TYPE_BOOTLOADER;
-            }
+            type = E820_TYPE_BOOTLOADER;
             break;
          case EfiConventionalMemory:
             if ((MMap->Attribute & EFI_MEMORY_NV) == 0) {

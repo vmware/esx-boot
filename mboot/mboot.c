@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2018,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <boot_services.h>
+#include <system_int.h>
 #include "mboot.h"
 
 /* Bootloader main info structure */
@@ -357,6 +358,9 @@ int main(int argc, char **argv)
       boot.headless = true;
    }
 #endif
+
+   Log(LOG_DEBUG, "Processing CPU quirks...\n");
+   check_cpu_quirks();
 
    if (!boot.headless &&
        gui_init() != ERR_SUCCESS) {

@@ -84,21 +84,6 @@ typedef struct {
 #define E820_TYPE_BOOTLOADER  0xffffffff
 
 /*
- * E820_TYPE_BLACKLISTED_FIRMWARE_BS is only used by the AArch64 efiboot.
- *
- * E820_TYPE_BLACKLISTED_FIRMWARE_BS contains the discardable, non-runtime
- * resident portions of firmware code and data. Ranges of this type are
- * converted to E820_TYPE_AVAILABLE prior to passing the memory map to the
- * operating system. Ranges of this type are not fair game for relocating
- * loaded objects and allocated bootloader structures into as part of handing
- * off to the loaded OS, because they may contain the still-in-use page table
- * data structures, which must be preserved until the loaded OS initializes its
- * own. So they are blacklisted by system_blacklist_memory prior to the first
- * allocation by alloc.
- */
-#define E820_TYPE_BLACKLISTED_FIRMWARE_BS 0xfffffffe
-
-/*
  * E820 extended attributes that we care about
  */
 #define E820_ATTR_ENABLED 0x1

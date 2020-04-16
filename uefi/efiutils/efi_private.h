@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015-2018 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -99,11 +99,6 @@ typedef struct {
 void set_pixel_format(pixel32_t *pxl, uint32_t red, uint32_t green,
                       uint32_t blue, uint32_t reserved);
 void efi_clean_vbe(void);
-
-/*
- * systab.c
- */
-void acpi_tab_init(void);
 
 /*
  * gop.c

@@ -505,10 +505,9 @@ static int set_efi_info(uint64_t systab,
  *      ERR_SUCCESS, or a generic error status.
  *
  * Side effects
- *      The E820 map is modified in place, with E820_TYPE_BOOTLOADER and
- *      E820_TYPE_BLACKLISTED_FIRMWARE_BS entries changed to the
- *      E820_TYPE_AVAILABLE type and coalesced (merged). The modified
- *      E820 map is used to generate the converted memory map.
+ *      The E820 map is modified in place, with E820_TYPE_BOOTLOADER entries
+ *      changed to the E820_TYPE_AVAILABLE type and coalesced (merged).
+ *      The modified E820 map is used to generate the converted memory map.
  *----------------------------------------------------------------------------*/
 static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
 {
@@ -520,8 +519,7 @@ static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
    }
 
    while (range < last) {
-      if (range->type == E820_TYPE_BOOTLOADER ||
-          range->type == E820_TYPE_BLACKLISTED_FIRMWARE_BS) {
+      if (range->type == E820_TYPE_BOOTLOADER) {
          range->type = E820_TYPE_AVAILABLE;
       }
       range++;

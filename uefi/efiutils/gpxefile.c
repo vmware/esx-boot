@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -125,6 +125,13 @@ static void EFIAPI gpxe_download_finished(VOID *Context, EFI_STATUS Status)
  *
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
+ *
+ * Warning
+ *      The filepath must not contain unnecessary consecutive slashes.  Of
+ *      course a URL can begin with http:// or the like, but the name of a file
+ *      to be loaded via TFTP must not begin with //.  iPXE has been observed
+ *      to load the wrong file (in particular, the host's default bootfile) if
+ *      passed such a name.
  *----------------------------------------------------------------------------*/
 EFI_STATUS gpxe_file_load(EFI_HANDLE Volume, const char *filepath,
                           int (*callback)(size_t), VOID **Buffer,

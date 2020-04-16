@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -58,27 +58,24 @@ static EFI_STATUS simple_file_volume_open(EFI_HANDLE Handle, EFI_FILE **Volume)
  *
  *      Open a file using the Simple File Protocol.
  *
- *      NOTE: FilePath is duplicated here because the UEFI Specification does
- *            not define EFI_FILE_PROTCOL.Open() with const parameters.
- *
  *      NOTE: UEFI Specification v2.3 (12.5 "File Protocol") says:
  *            "The only valid combinations that the file may be opened with are:
  *             Read, Read/Write, or Create/Read/Write."
  *
  * Parameters
  *      IN  Volume:   handle to the volume on which the file is located
- *      IN  FilePath: absolute path to the file
+ *      IN  filepath: absolute path to the file
  *      IN  mode:     access mode
  *      OUT File:     handle to the file
  *
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-static EFI_STATUS simple_file_open(EFI_HANDLE Volume, const CHAR16 *FilePath,
+static EFI_STATUS simple_file_open(EFI_HANDLE Volume, const char *filepath,
                                    UINT64 mode, EFI_FILE_HANDLE *File)
 {
-   CHAR16 *FilePathRW;
-   EFI_FILE *vol, *fd;
+   CHAR16 *FilePath;
+   EFI_FILE *vol = NULL, *fd;
    EFI_STATUS Status;
 
    Status = simple_file_volume_open(Volume, &vol);
@@ -86,15 +83,14 @@ static EFI_STATUS simple_file_open(EFI_HANDLE Volume, const CHAR16 *FilePath,
       return Status;
    }
 
-   Status = ucs2_strdup(FilePath, &FilePathRW);
+   Status = filepath_unix_to_efi(filepath, &FilePath);
    if (EFI_ERROR(Status)) {
-      vol->Close(vol);
       return Status;
    }
 
-   Status = vol->Open(vol, &fd, FilePathRW, mode, 0);
+   Status = vol->Open(vol, &fd, FilePath, mode, 0);
    vol->Close(vol);
-   sys_free(FilePathRW);
+   sys_free(FilePath);
 
    if (EFI_ERROR(Status)) {
       return Status;
@@ -161,55 +157,26 @@ static EFI_STATUS simple_file_get_info(EFI_FILE_HANDLE File, EFI_GUID *InfoType,
    return Status;
 }
 
-/*-- simple_file_get_volume_info -----------------------------------------------
- *
- *      Get file system information for the specified volume.
- *
- * Parameters
- *      IN  Volume: handle of the volume to query
- *      OUT Info:   freshly allocated buffer which contains the volume info
- *
- * Results
- *      EFI_SUCCESS, or an UEFI error status.
- *----------------------------------------------------------------------------*/
-EFI_STATUS simple_file_get_volume_info(EFI_HANDLE Volume,
-                                       EFI_FILE_SYSTEM_INFO **Info)
-{
-   EFI_FILE *vol;
-   EFI_STATUS Status;
-
-   Status = simple_file_volume_open(Volume, &vol);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
-   Status = simple_file_get_info(vol, &FileSystemInfoId, (void **)Info);
-
-   vol->Close(vol);
-
-   return Status;
-}
-
 /*-- simple_file_get_size ------------------------------------------------------
  *
  *      Get the size of a file using the Simple File Protocol.
  *
  * Parameters
  *      IN  Volume:   handle to the volume on which the file is located
- *      IN  FilePath: absolute path to the file
+ *      IN  filepath: absolute path to the file
  *      OUT FileSize: the 64-bit file size, in bytes
  *
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const char *filepath,
                                 UINTN *FileSize)
 {
    EFI_FILE_INFO *FileInfo;
    EFI_FILE *File;
    EFI_STATUS Status;
 
-   Status = simple_file_open(Volume, FilePath, EFI_FILE_MODE_READ, &File);
+   Status = simple_file_open(Volume, filepath, EFI_FILE_MODE_READ, &File);
    if (EFI_ERROR(Status)) {
       return Status;
    }
@@ -234,7 +201,7 @@ EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
  *
  * Parameters
  *      IN  Volume:   handle to the volume on which the file is located
- *      IN  FilePath: absolute path to the file
+ *      IN  filepath: absolute path to the file
  *      IN  callback: routine to be called periodically while the file is being
  *                    loaded
  *      IN  Buffer:   pointer to where to load the file
@@ -244,7 +211,7 @@ EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
  * Results
  *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS simple_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
                             int (*callback)(size_t), VOID **Buffer,
                             UINTN *BufSize)
 {
@@ -255,7 +222,7 @@ EFI_STATUS simple_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
    VOID *Data, *DataStart;
    int error;
 
-   Status = simple_file_open(Volume, FilePath, EFI_FILE_MODE_READ, &File);
+   Status = simple_file_open(Volume, filepath, EFI_FILE_MODE_READ, &File);
    if (EFI_ERROR(Status)) {
       return Status;
    }
@@ -308,52 +275,6 @@ EFI_STATUS simple_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
       *Buffer = DataStart;
       *BufSize = total_size;
    }
-
-   return Status;
-}
-
-/*-- simple_file_overwrite -----------------------------------------------------
- *
- *      Overwrite a file which already exists with the new data contained in the
- *      given buffer. There may be a way to truncate a file with SetInfo(); but
- *      it is not really documented. So we first delete the original file, and
- *      then re-create it.
- *
- * Parameters
- *      IN Volume:   handle to the volume on which the file is located
- *      IN FilePath: absolute path to the file
- *      IN Buffer:   data buffer to read from
- *      IN BufSize:  size of the data buffer, in bytes
- *
- * Results
- *      EFI_SUCCESS, or an UEFI error status.
- *----------------------------------------------------------------------------*/
-EFI_STATUS simple_file_overwrite(EFI_HANDLE Volume, const CHAR16 *FilePath,
-                                 VOID *Buffer, UINTN BufSize)
-{
-   EFI_FILE *File;
-   UINT64 OpenMode;
-   EFI_STATUS Status;
-
-   OpenMode = EFI_FILE_MODE_READ;
-   Status = simple_file_open(Volume, FilePath, OpenMode, &File);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
-   Status = File->Delete(File);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
-   OpenMode |= EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE;
-   Status = simple_file_open(Volume, FilePath, OpenMode, &File);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
-   Status = File->Write(File, &BufSize, Buffer);
-   File->Close(File);
 
    return Status;
 }

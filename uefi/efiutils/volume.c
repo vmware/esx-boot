@@ -53,6 +53,10 @@ int get_boot_file(char **buffer)
    char *path;
    int i;
 
+   if (is_http_boot()) {
+      return get_http_boot_url(buffer);
+   }
+
    Pxe = NULL;
 
    Status = image_get_info(ImageHandle, &Image);
@@ -160,6 +164,10 @@ EFI_STATUS get_boot_volume(EFI_HANDLE *Volume)
 {
    EFI_LOADED_IMAGE *Image;
    EFI_STATUS Status;
+
+   if (is_http_boot()) {
+      return get_http_boot_volume(Volume);
+   }
 
    Status = image_get_info(ImageHandle, &Image);
    if (EFI_ERROR(Status)) {

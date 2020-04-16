@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -24,7 +24,7 @@ static char ipappend[BOOTIF_OPTION_SIZE];
 /*-- is_network_boot -----------------------------------------------------------
  *
  *      Check whether we are booted from the network:
- *        1. Check if we have been PXE booted
+ *        1. Check if we have been PXE or HTTP booted
  *        2. Check if we have been gPXE booted
  *
  * Results
@@ -59,11 +59,6 @@ bool is_network_boot(void)
  *      The result is a string of the form "BOOTIF=xx-aa-bb-cc-dd-ee-ff", where
  *      xx is the Hardware Type Number of the boot interface (see RFC 1700), and
  *      aa:bb:cc:dd:ee:ff is its MAC address.
- *
- *      NOTE: Unfortunately, gPXE does not support providing the boot interface
- *            mac address. As a result, the BOOTIF= option still has to be
- *            passed manually (via <SHIFT+O>, or by editing the boot.cfg
- *            configuration file) when booting from gPXE.
  *
  * Parameters
  *      OUT bootif: a pointer to the statical BOOTIF string.

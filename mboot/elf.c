@@ -113,10 +113,6 @@ static int is_valid_elf(void *buffer, size_t buflen)
       return WARNING(ERR_INCOMPATIBLE_VERSION);
    }
 
-   if (Elf_CommonEhdrGetType(ehdr) != ET_EXEC) {
-      return WARNING(ERR_NOT_EXECUTABLE);
-   }
-
    if (Elf_CommonEhdrGetPhEntSize(ehdr) != Elf_CommonPhdrSize(is64)) {
       return WARNING(ERR_BAD_HEADER);
    }

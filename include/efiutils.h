@@ -155,6 +155,10 @@ EXTERN bool devpath_is_parent(const EFI_DEVICE_PATH *parent,
                               const EFI_DEVICE_PATH *child);
 EXTERN char *devpath_text(const EFI_DEVICE_PATH *DevPath,
                           bool displayOnly, bool allowShortcuts);
+EXTERN void log_devpath(int level, const char *prefix,
+                        const EFI_DEVICE_PATH *DevPath);
+EXTERN void log_handle_devpath(int level, const char *prefix,
+                               EFI_HANDLE handle);
 
 /*
  * volume.c
@@ -181,15 +185,11 @@ EXTERN EFI_GUID GenericFileInfoId;
 EXTERN EFI_GUID FileSystemInfoId;
 EXTERN EFI_GUID FileSystemVolumeLabelInfoId;
 
-EXTERN EFI_STATUS simple_file_get_volume_info(EFI_HANDLE Volume,
-                                              EFI_FILE_SYSTEM_INFO **Info);
 EXTERN EFI_STATUS simple_file_get_size(EFI_HANDLE Volume,
-                                       const CHAR16 *FilePath, UINTN *FileSize);
-EXTERN EFI_STATUS simple_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
+                                       const char *filepath, UINTN *FileSize);
+EXTERN EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
                                    int (*callback)(size_t), VOID **Buffer,
                                    UINTN *BufSize);
-EFI_STATUS simple_file_overwrite(EFI_HANDLE Volume, const CHAR16 *FilePath,
-                                 VOID *Buffer, UINTN BufSize);
 
 /*
  * gpxefile.c
@@ -197,17 +197,37 @@ EFI_STATUS simple_file_overwrite(EFI_HANDLE Volume, const CHAR16 *FilePath,
 EXTERN EFI_STATUS gpxe_file_load(EFI_HANDLE Volume, const char *filepath,
                                  int (*callback)(size_t), VOID **Buffer,
                                  UINTN *BufSize);
+EXTERN EFI_STATUS gpxe_file_get_size(EFI_HANDLE Volume, const char *filepath,
+                                     UINTN *FileSize);
 EXTERN bool has_gpxe_download_proto(EFI_HANDLE Volume);
+
+/*
+ * httpfile.c
+ */
+EXTERN bool is_http_boot(void);
+EXTERN int get_http_boot_url(char **buffer);
+EXTERN EFI_STATUS get_http_boot_volume(EFI_HANDLE *Volume);
+EXTERN EFI_STATUS make_http_child_dh(const char *url, EFI_HANDLE *ChildDH);
+EXTERN EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
+                                 int (*callback)(size_t), VOID **Buffer,
+                                 UINTN *BufSize);
+EXTERN EFI_STATUS http_file_get_size(EFI_HANDLE Volume, const char *filepath,
+                                     UINTN *FileSize);
+EXTERN void http_cleanup(void);
+
+/*
+ * dhcpv4.c
+ */
+EXTERN EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle);
 
 /*
  * loadfile.c
  */
-EXTERN EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EXTERN EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const char *filepath,
                                      UINTN *FileSize);
-EXTERN EFI_STATUS load_file_load(EFI_HANDLE Volume, const CHAR16 *FilePath,
+EXTERN EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
                                  int (*callback)(size_t), VOID **Buffer,
                                  UINTN *BufSize);
-
 /*
  * tftpfile.c
  */
@@ -222,9 +242,8 @@ EXTERN bool is_pxe_boot(EFI_PXE_BASE_CODE **Pxe);
 /*
  * file.c
  */
-EXTERN EFI_STATUS efi_file_read(EFI_HANDLE Volume, const CHAR16 *FilePath,
-                                int (*callback)(size_t), VOID **Buffer,
-                                UINTN *BufLen);
+EXTERN EFI_STATUS filepath_unix_to_efi(const char *unix_path,
+                                       CHAR16 **uefi_path);
 
 /*
  * image.c
