@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -85,7 +85,8 @@ static int mbr_to_partinfo(mbr_part_t *part, int part_id, uint32_t ebr_lba,
 static int mbr_get_logical_info(disk_t *disk, mbr_part_t *extended, int part_id,
                                 partition_t *partition)
 {
-   mbr_part_t *ebr, *part;
+   char *ebr;
+   mbr_part_t *part;
    uint32_t next_ebr_lba;
    int partnum, status;
 
@@ -166,4 +167,83 @@ int mbr_get_part_info(disk_t *disk, char *mbr, int part_id,
    }
 
    return ERR_NOT_FOUND;
+}
+
+/*-- mbr_get_max_part ---------------------------------------------------------
+ *
+ *      Scan the MBR partition table and find the max partition number.  The
+ *      returned value is not necessarily a valid partition, but certainly no
+ *      higher numbered partitions exist.
+ *
+ * Parameters
+ *      IN disk:      pointer to the disk info structure
+ *      IN mbr:       the contents of the MBR
+ *      OUT max:      highest partition number (1-origin)
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *
+ *      Even if an error occurred, *max is set to the max partition detected
+ *      before the error.
+ *----------------------------------------------------------------------------*/
+int mbr_get_max_part(disk_t *disk, char *mbr, int *max)
+{
+   char *ebr;
+   mbr_part_t *extended, *part;
+   uint32_t next_ebr_lba;
+   int i, status;
+
+   /*
+    * Assume at least standard 4 primary partitions exist.
+    */
+   *max = 4;
+
+   /*
+    * Look for an extended partition.  (Only one is supported.)
+    */
+   for (i = 1; i < 5; i++) {
+      extended = MBR_PART_ENTRY(mbr, i);
+
+      if (PART_IS_EXTENDED(extended)) {
+         /*
+          * Found extended partition. Count the logical partitions in it.
+          */
+         ebr = sys_malloc(disk->bytes_per_sector);
+         if (ebr == NULL) {
+            return ERR_OUT_OF_RESOURCES;
+         }
+
+         next_ebr_lba = 0;
+
+         do {
+            next_ebr_lba += extended->start_lba;
+
+            status = disk_read(disk, ebr, next_ebr_lba, 1);
+            if (status != ERR_SUCCESS) {
+               break;
+            }
+
+            if (!IS_BOOT_RECORD(ebr)) {
+               status = ERR_VOLUME_CORRUPTED;
+               break;
+            }
+
+            part = MBR_PART_ENTRY(ebr, 1);
+            if (PART_IS_EXTENDED(part)) {
+               status = ERR_UNSUPPORTED;
+               break;
+            }
+
+            (*max)++;
+
+            part = MBR_PART_ENTRY(ebr, 2);
+            next_ebr_lba = part->start_lba;
+         } while (next_ebr_lba > 0);
+
+         sys_free(ebr);
+         break;
+      }
+   }
+
+   return ERR_SUCCESS;
 }

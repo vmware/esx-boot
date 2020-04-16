@@ -113,7 +113,7 @@ else:
 for key in keys:
    vmware = key.find('vmware') >= 0
    uefi = key.find('uefi') >= 0
-   if not official and (vmware or uefi):
+   if not official and vmware:
       print('Skipped signing with %s; developer build' % key)
       cleanup(iname, keys)
       exit(0)

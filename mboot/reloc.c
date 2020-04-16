@@ -186,7 +186,8 @@ static void reloc_sanity_check(reloc_t *objs, size_t count)
 
       if (msg != NULL) {
          error = true;
-         Log(LOG_ERR, "[%c] %llx - %llx -> %llx - %llx (%llu bytes): %s.\n",
+         Log(LOG_ERR, "[%c] %"PRIx64" - %"PRIx64
+             " -> %"PRIx64" - %"PRIx64" (%"PRIu64" bytes): %s.\n",
              objs[i].type, PTR_TO_UINT64(src), PTR_TO_UINT64(src) + size - 1,
              dest, dest + size - 1, size, msg);
       }
@@ -403,8 +404,9 @@ static int set_runtime_addr(reloc_t *objs, size_t count,
          contig_mem += o->size;
       }
       if (boot.debug) {
-         Log(LOG_DEBUG, "[%c] %llx - %llx -> %llx - %llx (%llu bytes)",
-             o->type, PTR_TO_UINT64(o->src), PTR_TO_UINT64(o->src) + size - 1,
+         Log(LOG_DEBUG, "[%c] %"PRIx64" - %"PRIx64
+             " -> %"PRIx64" - %"PRIx64" (%"PRIu64" bytes)", o->type,
+             PTR_TO_UINT64(o->src), PTR_TO_UINT64(o->src) + o->size - 1,
              o->dest, o->dest + o->size - 1, o->size);
       }
    }
@@ -527,7 +529,7 @@ static int break_reloc_deadlock(reloc_t *rel)
       return status;
    }
    if (boot.debug) {
-      Log(LOG_DEBUG, "...moving %p (size 0x%llx) temporarily to %p\n",
+      Log(LOG_DEBUG, "...moving %p (size 0x%"PRIx64") temporarily to %p\n",
           rel[smallest].src, size, UINT64_TO_PTR(addr));
    }
 
@@ -602,148 +604,6 @@ static int reloc_resolve(void)
 
    return ERR_SUCCESS;
 }
-
-#if defined(only_em64t)
-/*-- traverse_page_tables_rec --------------------------------------------------
- *
- *      Traverse the page tables recursively. If a buffer is provided, re-create
- *      the visited tables in this buffer (and adjust all internal pointers).
- *
- *      This function must first be called with buffer == NULL, in order to
- *      retrieve the amount of memory that is needed to hold all the page tables
- *      (assuming they will be written contiguously in memory).
- *
- *      Once this memory is allocated, the function can be called a second time
- *      with a pointer to the allocated buffer.
- *
- *      This function assumes that the page tables are identity mapped.  In
- *      other words, the physical addresses contained in the page tables being
- *      copied, and the physical addresses of the destination buffers, can
- *      simply be used as pointers.  There is no need to map these physical
- *      addresses in order to convert them to pointers.
- *
- *      This function does the following sanity checks:
- *      1. If the page table entry being copied does not have the Present bit
- *      set, it is not copied. (The physical address contained in the entry,
- *      which could be pointing to the page table one level down, or could be
- *      pointing to data, is not validated.)
- *      2. If the virtual address being mapped by the entry (called next_vaddr
- *      below) is above the top of memory, skip the entry.  The E820 memory map
- *      reports physical memory ranges, however since at this time an identity
- *      map is in effect, the top of physical memory equals the top of virtual
- *      memory.
- *
- *      This code assumes 64-bit page tables (not 32-bit). It is not directly
- *      portable to Arm, as it doesn't perform the necessary PoU D-cache
- *      maintenance either, and assumes all four page table levels are used
- *      and present.
- *
- * Parameters:
- *      IN table:   pointer to the source page table
- *      IN level:   hierarchy level (4 = PML4, 1 = PT)
- *      IN vaddr:   first virtual address mapped by this table
- *      IN mask:    bits to be masked off PTEs before mapping
- *      OUT buffer: pointer to the output buffer
- *
- * Results
- *      The number of page table visited during the traversal.
- *----------------------------------------------------------------------------*/
-static size_t traverse_page_tables_rec(uint64_t *table, int level,
-                                       uint64_t vaddr, uint64_t mask,
-                                       uint64_t *buffer)
-{
-   size_t table_count = 1;
-   int i;
-
-   for (i = 0; i < PG_TABLE_MAX_ENTRIES; i++) {
-      uint64_t entry = table[i];
-      uint64_t next_vaddr = vaddr + PG_TABLE_LnE_SIZE(level) * i;
-
-      if (buffer != NULL) {
-         buffer[i] = 0;
-      }
-
-      if ((entry & PG_ATTR_PRESENT) == 0) {
-         continue;
-      } else if (next_vaddr >= boot.mmap_top) {
-         /*
-          * Ignore any entries pointing beyond top of memory map.
-          * Works around garbage in page tables; see PR 1463443.
-          */
-         Log(LOG_DEBUG, "Break out at L%d E%d entry 0x%llx: VA 0x%llx above TOM", level, i, entry, next_vaddr);
-         break; // subsequent entries will also be above top of memory
-      } else if (PG_IS_LARGE(entry) || level == 1) {
-         if (buffer != NULL) {
-            buffer[i] = entry;
-         }
-      } else {
-         uint64_t *next_table = UINT_TO_PTR(entry & ~mask);
-         uint64_t *next_buf;
-
-         if (buffer != NULL) {
-            next_buf = buffer + table_count * PG_TABLE_MAX_ENTRIES;
-         } else {
-            next_buf = NULL;
-         }
-
-         table_count += traverse_page_tables_rec(next_table, level - 1,
-                                                 next_vaddr, mask, next_buf);
-         if (buffer != NULL) {
-            buffer[i] = PTR_TO_UINT(next_buf) | (entry & mask);
-         }
-      }
-   }
-
-   return table_count;
-}
-
-/*-- relocate_page_tables ------------------------------------------------------
- *
- *      Relocate the memory page tables in safe memory to ensure that they won't
- *      get overwritten by the bootloader relocations. Also reload the page
- *      table base pointer to point to the new - relocated - page tables.
- *
- *      This code assumes 64-bit page tables (not 32-bit). It is not directly
- *      portable to Arm, as it doesn't perform the necessary PoU D-cache
- *      maintenance either, and assumes all four page table levels are used
- *      and present.
- *
- * Results
- *      ERR_SUCCESS, or a generic error status.
- *----------------------------------------------------------------------------*/
-static int relocate_page_tables(void)
-{
-   uintptr_t pml4 = 0;
-   size_t tables;
-   run_addr_t newloc;
-   int status;
-   uint64_t mask = get_page_table_mask();
-
-   Log(LOG_DEBUG, "Relocating memory mapping tables...\n");
-
-   // Figure how much space is needed to copy the page tables over.
-   get_page_table_reg(&pml4);
-   pml4 &= ~0xfffULL;
-   tables = traverse_page_tables_rec(UINT_TO_PTR(pml4), 4, 0, mask, NULL);
-
-   // Allocate this space in safe memory or high memory (above 4GB)
-   status = alloc(&newloc, tables * PAGE_SIZE, ALIGN_PAGE, ALLOC_ANY);
-   if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Page tables relocation error: out of safe memory.\n");
-      return status;
-   }
-
-   Log(LOG_DEBUG, "...moving %d pages to %p\n",
-       tables, UINT64_TO_PTR(newloc));
-
-   // Copy the page tables, and reload page table base register.
-   traverse_page_tables_rec(UINT_TO_PTR(pml4), 4, 0, mask,
-                            UINT64_TO_PTR(newloc));
-   set_page_table_reg((uintptr_t *)&newloc);
-
-   return ERR_SUCCESS;
-}
-#endif
 
 /*-- install_trampoline --------------------------------------------------------
  *
@@ -831,15 +691,7 @@ int install_trampoline(trampoline_t *run_trampo, handoff_t **run_handoff)
    do_reloc(data);
 
 #if defined(only_em64t)
-   /*
-    * On Arm, we rely on blacklisting all of the UEFI boot services code and
-    * data to avoid stepping on page tables. Additionally, we have no objects
-    * loaded to fixed addresses that could conflict with any existing UEFI
-    * boot services code or data. Notably, the 'k' object can be anywhere, unlike
-    * the current behavior for x86. This sort of tells you where the x86
-    * implementation could eventually go.
-    */
-   status = relocate_page_tables();
+   status = relocate_page_tables2();
    if (status != ERR_SUCCESS) {
       return status;
    }

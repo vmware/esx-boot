@@ -101,8 +101,14 @@ int elf_register(void *buffer, Elf_CommonAddr *entry);
 #define DEFAULT_SERIAL_COM      1       /* Default serial port (COM1) */
 #define DEFAULT_SERIAL_BAUDRATE 115200  /* Default serial baud rate */
 
-#define NOT_REACHED()   for ( ; ; )
-#define PANIC()         for ( ; ; )
+static inline void PANIC(void)
+{
+   for (;;) {
+      HLT();
+   }
+}
+
+#define NOT_REACHED() PANIC()
 
 typedef struct {
    Elf_CommonAddr entry;      /* Run-time entry point address */
@@ -130,7 +136,6 @@ typedef struct {
    module_t *modules;         /* Modules cmdlines, addresses and sizes */
    e820_range_t *mmap;        /* E820 Memory map */
    size_t mmap_count;         /* Number of entries in the memory map */
-   uint64_t mmap_top;         /* First address beyond end of memory map */
    framebuffer_t fb;          /* Framebuffer properties */
    efi_info_t efi_info;       /* EFI-specific information */
    uint64_t load_size;        /* Total size to load (in bytes) */

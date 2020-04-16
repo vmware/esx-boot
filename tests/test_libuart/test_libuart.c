@@ -15,6 +15,7 @@
  *                        second).
  */
 
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
        serial_dev.type == SERIAL_NS16550 ? "ns16550" : "pl011",
        original_baudrate);
 
-   Log(LOG_ERR, "registers at %s 0x%lx with scaling %u\n",
+   Log(LOG_ERR, "registers at %s 0x%"PRIxPTR" with scaling %u\n",
        serial_dev.io.type == IO_PORT_MAPPED ? "io" : "mmio",
        serial_dev.io.channel.addr,
        serial_dev.io.offset_scaling);

@@ -152,11 +152,11 @@
   ///
   /// 8-byte unsigned value
   ///
-  typedef unsigned long long  UINT64;
+  typedef uint64_t            UINT64;
   ///
   /// 8-byte signed value
   ///
-  typedef long long           INT64;
+  typedef int64_t             INT64;
   ///
   /// 4-byte unsigned value
   ///

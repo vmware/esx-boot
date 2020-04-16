@@ -151,7 +151,7 @@ int parse_config_file(int volid, const char *filename, option_t *options)
    size_t size, len;
    int status;
 
-   status = file_load(volid, filename, NULL, &buffer, &size, NULL, NULL);
+   status = file_load(volid, filename, NULL, &buffer, &size);
    if (status != ERR_SUCCESS) {
       return status;
    }

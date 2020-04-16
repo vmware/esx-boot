@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -57,6 +57,53 @@ int get_volume_info(disk_t *disk, int part_id, partition_t *partition)
    }
 
    status = mbr_get_part_info(disk, mbr, part_id, partition);
+   sys_free(mbr);
+   return status;
+}
+
+/*-- get_max_volume ------------------------------------------------------------
+ *
+ *      Scan a disk to find the highest partition number that exists.  The
+ *      partition isn't necessarily valid, nor are all lower partition numbers
+ *      necessarily valid, but certainly no higher partition numbers are valid.
+ *      MBR partition table and GUID partition table (GPT) are supported.
+ *
+ * Parameters
+ *      IN disk:      pointer to the disk info structure
+ *      OUT max:      highest partition number (1-origin); 0 if none
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error code.
+ *
+ *      Even if an error occurred, *max is set to the max partition detected
+ *      before the error.
+ *----------------------------------------------------------------------------*/
+int get_max_volume(disk_t *disk, int *max)
+{
+   char *mbr;
+   mbr_part_t *part;
+   int status;
+
+   *max = 0;
+
+   mbr = sys_malloc(disk->bytes_per_sector);
+   if (mbr == NULL) {
+      return ERR_OUT_OF_RESOURCES;
+   }
+
+   status = disk_read(disk, mbr, 0, 1);
+   if (status != ERR_SUCCESS) {
+      sys_free(mbr);
+      return status;
+   }
+
+   part = PRIMARY_PARTITION_ENTRY(mbr, 1);
+
+   if (PART_IS_PROTECTIVE_MBR(part)) {
+      status = gpt_get_max_part(disk, max);
+   } else {
+      status = mbr_get_max_part(disk, mbr, max);
+   }
    sys_free(mbr);
    return status;
 }

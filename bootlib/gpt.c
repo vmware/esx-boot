@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -71,25 +71,24 @@ static void gpt_to_partinfo(gpt_entry *gpt_part, int part_id,
    }
 }
 
-/*-- gpt_get_part_info ---------------------------------------------------------
+/*-- gpt_read_header -----------------------------------------------------------
  *
- *      Scan the GUID Partition Table (GPT) and return information for a given
- *      partition on a given disk.
+ *      Read the GUID Partition Table (GPT) header
  *
  * Parameters
- *      IN disk:      pointer to the disk info structure
- *      IN part_id:   GPT partition number
- *      IN partition: pointer to a generic partition info structure
+ *      IN disk:         pointer to the disk info structure
+ *      OUT gpt:         pointer to the gpt header; to be freed by caller
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
+static int gpt_read_header(disk_t *disk, gpt_header **gpt_out)
 {
-   uint32_t checksum, entry_size, ptable_size, ptable_size_in_sectors;
+   uint32_t checksum;
    gpt_header *gpt;
-   uint8_t *ptable;
    int status;
+
+   *gpt_out = NULL;
 
    gpt = sys_malloc(disk->bytes_per_sector);
    if (gpt == NULL) {
@@ -110,6 +109,40 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
    checksum = gpt->headerCrc32;
    gpt->headerCrc32 = 0;
    if (crc32(0, (uint8_t *)gpt, gpt->headerSize) != checksum) {
+      sys_free(gpt);
+      return ERR_NOT_FOUND;
+   }
+
+   *gpt_out = gpt;
+   return ERR_SUCCESS;
+}
+
+/*-- gpt_get_part_info ---------------------------------------------------------
+ *
+ *      Scan the GUID Partition Table (GPT) and return information for a given
+ *      partition on a given disk.
+ *
+ * Parameters
+ *      IN disk:      pointer to the disk info structure
+ *      IN part_id:   GPT partition number
+ *      IN partition: pointer to a generic partition info structure
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
+{
+   uint32_t checksum, entry_size, ptable_size, ptable_size_in_sectors;
+   gpt_header *gpt;
+   uint8_t *ptable;
+   int status;
+
+   status = gpt_read_header(disk, &gpt);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
+   if ((uint32_t)part_id > gpt->numberOfEntries) {
       sys_free(gpt);
       return ERR_NOT_FOUND;
    }
@@ -143,6 +176,34 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
 
    sys_free(gpt);
    sys_free(ptable);
+
+   return ERR_SUCCESS;
+}
+
+/*-- gpt_get_max_part ---------------------------------------------------------
+ *
+ *      Read the GUID Partition Table (GPT) and find the max partition number.
+ *
+ * Parameters
+ *      IN disk:      pointer to the disk info structure
+ *      OUT max:      highest partition number (1-origin); 0 if none.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int gpt_get_max_part(disk_t *disk, int *max)
+{
+   gpt_header *gpt;
+   int status;
+
+   status = gpt_read_header(disk, &gpt);
+   if (status != ERR_SUCCESS) {
+      *max = 0;
+      return status;
+   }
+
+   *max = gpt->numberOfEntries;
+   sys_free(gpt);
 
    return ERR_SUCCESS;
 }

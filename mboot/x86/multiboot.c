@@ -72,7 +72,7 @@ static void mb_mmap_sanity_check(MultiBoot_MemMap *mmap, size_t size)
 
          if (msg != NULL) {
             error = true;
-            Log(LOG_ERR, "mmap[%zu]: %llx - %llx type %u: %s.\n",
+            Log(LOG_ERR, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u: %s.\n",
                 i, base, limit, desc->type, msg);
          }
 
@@ -87,7 +87,7 @@ static void mb_mmap_sanity_check(MultiBoot_MemMap *mmap, size_t size)
       for (i = 0; i < count; i++) {
          base = E820_BASE(desc);
          limit = E820_BASE(desc) + E820_LENGTH(desc) - 1;
-         Log(LOG_DEBUG, "mmap[%zu]: %llx - %llx type %u\n",
+         Log(LOG_DEBUG, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u\n",
              i, base, limit, desc->type);
          desc = MB_MMAP_NEXT_DESC(desc);
       }
@@ -413,39 +413,55 @@ static int mbi_set_vbe_info(MultiBoot_Info *mbi, vbe_t *vbe_info,
  *      large enough for holding the converted memory map.
  *
  * Parameters
- *      IN e820:    E820 memory map
- *      IN count:   number of entries in the E820 memory map
- *      IN buffer:  buffer to write the Multiboot memory map into
- *      IN buflen:  output buffer size, in bytes
- *      OUT buflen: Multiboot memory map size, in bytes
+ *      IN e820:      E820 memory map
+ *      IN/OUT count: number of entries in the E820 memory map
+ *      IN buffer:    buffer to write the Multiboot memory map into
+ *      IN buflen:    output buffer size, in bytes
+ *      OUT buflen:   Multiboot memory map size, in bytes
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *
  * Side effects
- *      E820_TYPE_BOOTLOADER and E820_TYPE_BLACKLISTED_FIRMWARE_BS memory is
- *      set to the E820_TYPE_AVAILABLE type in the converted memory map.
+ *      The E820 map is modified in place, with E820_TYPE_BOOTLOADER and
+ *      E820_TYPE_BLACKLISTED_FIRMWARE_BS entries changed to the
+ *      E820_TYPE_AVAILABLE type and coalesced (merged). The modified
+ *      E820 map is used to generate the converted memory map.
  *----------------------------------------------------------------------------*/
-static int e820_to_multiboot(e820_range_t *e820, size_t count, void *buffer,
+static int e820_to_multiboot(e820_range_t *e820, size_t *count, void *buffer,
                              size_t *buflen)
 {
    MultiBoot_MemMap *mb;
+   e820_range_t *range = e820;
+   e820_range_t *last = range + *count;
    size_t e820_size, mb_size, n;
    uint64_t base, length, end;
-   uint32_t type, attributes;
+   uint32_t attributes;
 
-   if (count == 0) {
+   if (*count == 0) {
       return ERR_INVALID_PARAMETER;
    }
 
-   mb_size = count * mb_mmap_desc_size();
+   while (range < last) {
+      if (range->type == E820_TYPE_BOOTLOADER ||
+          range->type == E820_TYPE_BLACKLISTED_FIRMWARE_BS) {
+         range->type = E820_TYPE_AVAILABLE;
+      }
+      range++;
+   }
+
+   Log(LOG_DEBUG, "E820 count before final merging: %zu\n", *count);
+   e820_mmap_merge(e820, count);
+   Log(LOG_DEBUG, "E820 count after final merging: %zu\n", *count);
+
+   mb_size = *count * mb_mmap_desc_size();
    if (mb_size > *buflen) {
       return ERR_BUFFER_TOO_SMALL;
    }
 
    /* Ensure we do not overwrite our source when writing to the destination */
    mb = buffer;
-   e820_size = count * sizeof (e820_range_t);
+   e820_size = *count * sizeof (e820_range_t);
    e820 = memmove((char *)mb + mb_size - e820_size, e820, e820_size);
 
    n = 0;
@@ -455,15 +471,9 @@ static int e820_to_multiboot(e820_range_t *e820, size_t count, void *buffer,
    attributes = 0;
    end = 0;
 
-   while (count-- > 0) {
-      if (e820->type == E820_TYPE_BOOTLOADER ||
-          e820->type == E820_TYPE_BLACKLISTED_FIRMWARE_BS) {
-         type = E820_TYPE_AVAILABLE;
-      } else {
-         type = e820->type;
-      }
-
-      if (n > 0 && mb->type == E820_TYPE_AVAILABLE && mb->type == type &&
+   while ((*count)-- > 0) {
+      if (n > 0 &&
+          mb->type == E820_TYPE_AVAILABLE && mb->type == e820->type &&
           attributes == e820->attributes && E820_BASE(e820) == end + 1) {
          length += E820_LENGTH(e820);
          end += E820_LENGTH(e820);
@@ -479,7 +489,7 @@ static int e820_to_multiboot(e820_range_t *e820, size_t count, void *buffer,
          end = base + length - 1;
          attributes = e820->attributes;
 
-         mb_set_mmap_entry(mb, base, length, type, attributes);
+         mb_set_mmap_entry(mb, base, length, e820->type, attributes);
          n++;
       }
       e820++;
@@ -515,7 +525,7 @@ int multiboot_set_runtime_pointers(run_addr_t *run_mbi)
    mb_mmap = (MultiBoot_MemMap *)boot.mmap;
    mmap_size = count * mb_mmap_desc_size();
 
-   status = e820_to_multiboot(boot.mmap, count, mb_mmap, &mmap_size);
+   status = e820_to_multiboot(boot.mmap, &count, mb_mmap, &mmap_size);
    boot.mmap = NULL;  // no longer a valid e820 map
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Multiboot memory map error.\n");

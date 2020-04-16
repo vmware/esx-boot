@@ -81,7 +81,7 @@ void alloc_sanity_check(void)
 
       if (msg != NULL) {
          error = true;
-         Log(LOG_ERR, "%llx - %llx (%llu bytes): %s.\n",
+         Log(LOG_ERR, "%"PRIx64" - %"PRIx64" (%"PRIu64" bytes): %s.\n",
              base, limit, len, msg);
       }
 
@@ -93,7 +93,8 @@ void alloc_sanity_check(void)
          base = allocs[i].base;
          len = allocs[i].len;
          limit = base + len - 1;
-         Log(LOG_DEBUG, "%llx - %llx (%llu)\n", base, limit, len);
+         Log(LOG_DEBUG, "%"PRIx64" - %"PRIx64" (%"PRIu64")\n",
+             base, limit, len);
       }
 
       Log(LOG_ERR, "Allocation table is corrupted.\n");

@@ -49,8 +49,8 @@
   //
   // Assume standard AARCH64 alignment.
   //
-  typedef unsigned long long  UINT64;
-  typedef long long           INT64;
+  typedef uint64_t            UINT64;
+  typedef int64_t             INT64;
   typedef unsigned int        UINT32;
   typedef int                 INT32;
   typedef unsigned short      UINT16;

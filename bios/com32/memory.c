@@ -379,6 +379,7 @@ void log_memory_map(UNUSED_PARAM(efi_info_t *efi_info))
     */
    if (get_memory_map(0, &e820_mmap, &count, NULL) == ERR_SUCCESS) {
       free_memory_map(e820_mmap, NULL);
+      log_malloc_arena();
    } else {
       bios_log(LOG_ERR, "failed to get memory map for logging\n");
    }

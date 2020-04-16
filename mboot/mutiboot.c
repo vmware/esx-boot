@@ -27,6 +27,13 @@
 #define MUTIBOOT_FLAGS_SUPPORTED    (MUTIBOOT_FLAG_VIDEO | \
                                      mutiboot_arch_supported_req_flags())
 
+/*
+ * This may become unnecessary at some point, once we're sure
+ * we've fully understood and categorized changes in the UEFI
+ * memory map between mutiboot_init and e820_to_mutiboot.
+ */
+#define NUM_E820_SLACK  20
+
 static Mutiboot_Info *mb_info;      /* The Mutiboot Info structure */
 static size_t size_mbi;
 static Mutiboot_Elmt *next_elmt;    /* Next Mutiboot element to use */
@@ -88,7 +95,7 @@ static void mb_mmap_sanity_check(void)
       if (base < max_base) {
          error = true;
          msg = "Mutiboot MemMap is not sorted";
-         Log(LOG_ERR, "mmap[%zu]: %llx - %llx type %u: %s.\n",
+         Log(LOG_ERR, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u: %s.\n",
              i, base, limit, mbi_mem->memType, msg);
       }
 
@@ -109,7 +116,7 @@ static void mb_mmap_sanity_check(void)
          len = mbi_mem->len;
          limit = base + len - 1;
 
-         Log(LOG_DEBUG, "mmap[%zu]: %llx - %llx type %u\n",
+         Log(LOG_DEBUG, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u\n",
              i, base, limit, mbi_mem->memType);
       } FOR_EACH_MUTIBOOT_ELMT_TYPE_DONE(mb_info, mbi_mem);
 
@@ -148,10 +155,13 @@ static void mb_advance_next_elmt(void)
  *----------------------------------------------------------------------------*/
 static int mb_check_space(size_t size)
 {
-   if (size <= size_mbi - ((uint8_t *)next_elmt - (uint8_t *)mb_info)) {
+   size_t used = (uint8_t *)next_elmt - (uint8_t *)mb_info;
+
+   if (size <= size_mbi - used) {
       return ERR_SUCCESS;
    }
-   Log(LOG_ERR, "Mutiboot buffer is too small.\n");
+   Log(LOG_ERR, "Mutiboot buffer is too small (wanted %zu, have %zu/%zu).\n",
+       size, size_mbi - used, size_mbi);
    return ERR_BUFFER_TOO_SMALL;
 }
 
@@ -488,38 +498,47 @@ static int set_efi_info(uint64_t systab,
  *      Convert a E820 memory map to the Mutiboot memory map format.
  *
  * Parameters
- *      IN e820:    E820 memory map
- *      IN count:   number of entries in the E820 memory map
+ *      IN e820:      E820 memory map
+ *      IN/OUT count: number of entries in the E820 memory map
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *
  * Side effects
- *      E820_TYPE_BOOTLOADER and E820_TYPE_BLACKLISTED_FIRMWARE_BS memory is
- *      set to the E820_TYPE_AVAILABLE type in the converted memory map.
+ *      The E820 map is modified in place, with E820_TYPE_BOOTLOADER and
+ *      E820_TYPE_BLACKLISTED_FIRMWARE_BS entries changed to the
+ *      E820_TYPE_AVAILABLE type and coalesced (merged). The modified
+ *      E820 map is used to generate the converted memory map.
  *----------------------------------------------------------------------------*/
-static int e820_to_mutiboot(e820_range_t *e820, size_t count)
+static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
 {
-   if (count == 0) {
+   e820_range_t *range = e820;
+   e820_range_t *last = range + *count;
+
+   if (*count == 0) {
       return ERR_INVALID_PARAMETER;
    }
 
-   while (count-- > 0) {
-      uint64_t base, length;
-      uint32_t type;
-      int status;
-
-      if (e820->type == E820_TYPE_BOOTLOADER ||
-          e820->type == E820_TYPE_BLACKLISTED_FIRMWARE_BS) {
-         type = E820_TYPE_AVAILABLE;
-      } else {
-         type = e820->type;
+   while (range < last) {
+      if (range->type == E820_TYPE_BOOTLOADER ||
+          range->type == E820_TYPE_BLACKLISTED_FIRMWARE_BS) {
+         range->type = E820_TYPE_AVAILABLE;
       }
+      range++;
+   }
+
+   Log(LOG_DEBUG, "E820 count before final merging: %zu\n", *count);
+   e820_mmap_merge(e820, count);
+   Log(LOG_DEBUG, "E820 count after final merging: %zu\n", *count);
+
+   while ((*count)-- > 0) {
+      uint64_t base, length;
+      int status;
 
       base = E820_BASE(e820);
       length = E820_LENGTH(e820);
 
-      status = mb_set_mmap_entry(base, length, type);
+      status = mb_set_mmap_entry(base, length, e820->type);
       if (status != ERR_SUCCESS) {
          return status;
       }
@@ -548,7 +567,7 @@ int mutiboot_set_runtime_pointers(run_addr_t *run_mbi)
 
    Log(LOG_DEBUG, "Converting e820 map to Mutiboot format...\n");
 
-   status = e820_to_mutiboot(boot.mmap, boot.mmap_count);
+   status = e820_to_mutiboot(boot.mmap, &boot.mmap_count);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Mutiboot memory map error.\n");
       return status;
@@ -811,13 +830,13 @@ int mutiboot_init(void)
    if (status != ERR_SUCCESS) {
       return status;
    }
+   Log(LOG_DEBUG, "E820 count estimate: %zu+%u slack\n",
+       num_e820_ranges, NUM_E820_SLACK);
    free_memory_map(e820, &boot.efi_info);
 
    size_mod = sizeof(Mutiboot_Module) + sizeof(Mutiboot_ModuleRange);
 
    size_mbi  = sizeof(Mutiboot_Info);
-
-#define NUM_E820_SLACK  20
    size_mbi += sizeof(Mutiboot_MemRange) * (num_e820_ranges + NUM_E820_SLACK);
    size_mbi += size_mod * boot.modules_nr;
    size_mbi += sizeof(Mutiboot_Vbe);

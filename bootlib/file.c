@@ -403,61 +403,21 @@ int file_get_size_hint(int volid, const char *filename, size_t *filesize)
  *      IN  callback:         routine to be called periodically while the file
  *                            is being loaded
  *      OUT buffer:           pointer to the buffer where the file was loaded
- *      OUT buffer:           pointer to the buffer where the file was loaded
  *      OUT bufsize:          the size of the loaded buffer
- *      OUT md5_compressed:   MD5 sum of compressed file. This parameter can be
- *                            NULL if the md5 sum is not to be calculated.
- *      OUT md5_uncompressed: MD5 sum of uncompressed file. This parameter can
- *                            be NULL if the md5 sum is not to be calculated.
- *
- *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 int file_load(int volid, const char *filename, int (*callback)(size_t),
-              void **buffer, size_t *bufsize, md5_t *md5_compressed,
-              md5_t *md5_uncompressed)
+              void **buffer, size_t *bufsize)
 {
-   void *data, *dest;
-   size_t size;
    int status;
-
-   data = NULL;
-   size = 0;
-
    if (volid != FIRMWARE_BOOT_VOLUME) {
-      status = fat_file_load(volid, filename, callback, &data, &size);
+      status = fat_file_load(volid, filename, callback, buffer, bufsize);
    } else {
-      status = firmware_file_read(filename, callback, &data, &size);
+      status = firmware_file_read(filename, callback, buffer, bufsize);
    }
 
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
-   if (md5_compressed != NULL) {
-      md5_compute(data, size, md5_compressed);
-   }
-
-   if (is_gzip(data, size)) {
-      status = gzip_extract(data, size, &dest, &size);
-      sys_free(data);
-
-      if (status != ERR_SUCCESS) {
-         return status;
-      }
-
-      data = dest;
-
-      if (md5_uncompressed != NULL) {
-         md5_compute(dest, size, md5_uncompressed);
-      }
-   }
-
-   *bufsize = size;
-   *buffer = data;
-
-   return ERR_SUCCESS;
+   return status;
 }
 
 /*-- file_overwrite ------------------------------------------------------------

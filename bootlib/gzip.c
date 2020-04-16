@@ -72,8 +72,9 @@ static int gzip_header_size(const void *buffer, size_t filesize,
    uInt len;
    const uint8_t *hdr = buffer;
 
+   *hdr_size = 0;
+
    if (filesize < 2 || hdr[0] != GZIP_BYTE_0 || hdr[1] != GZIP_BYTE_1) {
-      *hdr_size = 0;
       return ERR_BAD_TYPE;
    }
 
@@ -126,29 +127,47 @@ static int gzip_header_size(const void *buffer, size_t filesize,
    return ERR_SUCCESS;
 }
 
-/*-- gzip_get_size -------------------------------------------------------------
+/*-- gzip_get_info -------------------------------------------------------------
  *
- *      Get the original size of the gzip archive contained into buffer. The
+ *      Get the original size of the gzip archive & CRC from input buffer. The
  *      original size is the size that is needed in order to extract the gzip
  *      archive. According to the RFC 1952, this size is located into the last 4
- *      bytes of the archive.
+ *      bytes of the archive. CRC is 4 bytes and is located prior to size.
  *
  * Parameters
- *      IN buffer:   pointer to the archive
- *      IN filesize: size of the compressed archive
+ *      IN  buffer:   pointer to the archive
+ *      IN  filesize: size of the compressed archive
+ *      IN  hdrsize:  the header size in bytes
+ *      OUT size:     The original size (in bytes).
+ *      OUT csum:     Checksum of the compressed inout data.
  *
  * Results
- *      The original size (in bytes).
+ *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static size_t gzip_get_size(const void *buffer, size_t filesize)
+static int gzip_get_info(const void *buffer, size_t filesize, size_t hdrsize,
+                         size_t *size, uint32_t *csum)
 {
    const char *p;
-   uint32_t size;
+   uint32_t osize;
 
-   p = (const char *)buffer + filesize - 4;
-   memcpy(&size,  p, sizeof size);
+   /*
+    * Validate that the input filesize is large enough to hold gzip header,
+    * gzipped input buffer(0 or more bytes), CRC and extracted filesize.
+    * CRC and output filesize are at the end of gzipped buffer. filesize is
+    * the last 4 bytes and CRC is the 4 bytes prior to filesize.
+    */
+   if ((filesize - (hdrsize + 8)) <= 0) {
+      return ERR_INCONSISTENT_DATA;
+   }
 
-   return (size_t)size;
+   p = (const char *)buffer + filesize - 8; /* CRC checksum */
+   memcpy(&osize, p, sizeof osize);
+   *csum = osize;
+   p = (const char *)buffer + filesize - 4; /* filesize */
+   memcpy(&osize,  p, sizeof osize);
+   *size = (size_t)osize;
+
+   return ERR_SUCCESS;
 }
 
 /*-- gunzip_buffer -------------------------------------------------------------
@@ -216,9 +235,8 @@ int gzip_extract(const void *ibuffer, size_t isize,
 {
    void *output;
    size_t header_len;
-   size_t size;
+   size_t size = 0;
    int status;
-   char *crc_p;
    uint32_t received_crc, calculated_crc;
 
    status = gzip_header_size(ibuffer, isize, &header_len);
@@ -228,10 +246,20 @@ int gzip_extract(const void *ibuffer, size_t isize,
       return status;
    }
 
-   size = gzip_get_size(ibuffer, isize);
-   crc_p = (char *)ibuffer + isize - 8; /* 4 + 4 - CRC, file_size */
-   memcpy(&received_crc, crc_p, sizeof received_crc);
+   status = gzip_get_info(ibuffer, isize, header_len, &size, &received_crc);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Error %d (%s) reading original filesize or received crc\n",
+          status, error_str[status]);
+      return status;
+   }
    if (size == 0) {
+      size_t actual_isize = isize - (header_len + 8);
+      if (actual_isize > 256) {
+         Log(LOG_ERR, "Module content is likely corrupt.\n");
+         Log(LOG_ERR, "isize: %zu, hdrlen: %zu, recdCRC: %u, osize: %zu ",
+             isize, header_len, received_crc, size);
+         return ERR_CRC_ERROR;
+      }
       *obuffer = NULL;
       *osize = 0;
       return ERR_SUCCESS;
@@ -248,8 +276,9 @@ int gzip_extract(const void *ibuffer, size_t isize,
    isize -= (header_len + 8 - 1);
 
    output = sys_malloc(size);
+
    if (output == NULL) {
-      Log(LOG_ERR, "Out of resources for decompressing data\n");
+      Log(LOG_ERR, "Out of resources for decompressing data(%zu)\n", size);
       return ERR_OUT_OF_RESOURCES;
    }
 
@@ -258,6 +287,7 @@ int gzip_extract(const void *ibuffer, size_t isize,
       sys_free(output);
       Log(LOG_ERR, "Error %d (%s) while decompressing data\n",
           status, error_str[status]);
+      Log(LOG_ERR, "  input(%zu), output(%zu)\n", isize, size);
       return status;
    }
 
@@ -274,7 +304,8 @@ int gzip_extract(const void *ibuffer, size_t isize,
 
    *obuffer = output;
    *osize = size;
-
+   Log(LOG_DEBUG, "recdCRC 0x%x, calcCRC 0x%x, tSize %zu, eSize %zu\n",
+       received_crc, calculated_crc, isize, size);
    return ERR_SUCCESS;
 }
 
@@ -283,19 +314,17 @@ int gzip_extract(const void *ibuffer, size_t isize,
  *      Check whether the given buffer contains a gzip archive.
  *
  * Parameters
- *       IN buffer:   data buffer
- *       IN filesize: data size
+ *       IN  buffer:   data buffer
+ *       IN  filesize: data size
+ *       OUT status:   header status
  *
  * Results
  *       true if buffer is a gzip archive, false otherwise.
  *----------------------------------------------------------------------------*/
-bool is_gzip(const void *buffer, size_t bufsize)
+bool is_gzip(const void *buffer, size_t bufsize, int *status)
 {
    size_t hdr_size;
 
-   if (gzip_header_size(buffer, bufsize, &hdr_size) != ERR_SUCCESS) {
-      return false;
-   }
-
-   return true;
+   *status = gzip_header_size(buffer, bufsize, &hdr_size);
+   return *status == ERR_SUCCESS ? true : false;
 }

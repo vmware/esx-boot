@@ -29,6 +29,11 @@ static INLINE void STI(void)
    __asm__ __volatile__ ("sti");
 }
 
+static INLINE void HLT(void)
+{
+   __asm__ __volatile__("hlt");
+}
+
 /*
  * Control registers
  */
@@ -51,7 +56,8 @@ static INLINE void get_cr0(uintptr_t *cr0)
 /*
  * Bytes covered by an LnPTE.
  */
-#define PG_TABLE_LnE_SIZE(n) (1ULL << (PG_MPN_SHIFT + ((n) - 1) * PG_LEVEL_SHIFT))
+#define PG_TABLE_LnE_SIZE(n) ((uint64_t)1 << \
+                              (PG_MPN_SHIFT + ((n) - 1) * PG_LEVEL_SHIFT))
 
 #define PG_OFF_MASK            ((1 << PG_LEVEL_SHIFT) - 1)
 #define PG_LPN_2_LnOFF(lpn, n) (((lpn) >> (PG_LEVEL_SHIFT * (n - 1))) & PG_OFF_MASK)
@@ -66,19 +72,19 @@ static INLINE void get_cr0(uintptr_t *cr0)
 #define PG_SET_ENTRY(pt, n, lpn, mpn, flags)                            \
    PG_SET_ENTRY_RAW(pt, PG_LPN_2_LnOFF(lpn, n), (((mpn) << PG_MPN_SHIFT) | (flags)))
 
-#define PG_ATTR_PRESENT    (1ULL << 0)
-#define PG_ATTR_W          (1ULL << 1)
+#define PG_ATTR_PRESENT    ((uint64_t)1 << 0)
+#define PG_ATTR_W          ((uint64_t)1 << 1)
 #define PG_ATTR_RO         (0)
-#define PG_ATTR_PWT        (1ULL << 3)
-#define PG_ATTR_PCD        (1ULL << 4)
-#define PG_ATTR_A          (1ULL << 5)
-#define PG_ATTR_PAGE_SIZE  (1ULL << 7)
-#define PG_ATTR_PAT        (1ULL << 7)
-#define PG_ATTR_LARGE_PAT  (1ULL << 12)
-#define PG_ATTR_XD         (1ULL << 63)
-#define PG_ATTR_MASK       (PG_ATTR_XD | 0xfffULL)
+#define PG_ATTR_PWT        ((uint64_t)1 << 3)
+#define PG_ATTR_PCD        ((uint64_t)1 << 4)
+#define PG_ATTR_A          ((uint64_t)1 << 5)
+#define PG_ATTR_PAGE_SIZE  ((uint64_t)1 << 7)
+#define PG_ATTR_PAT        ((uint64_t)1 << 7)
+#define PG_ATTR_LARGE_PAT  ((uint64_t)1 << 12)
+#define PG_ATTR_XD         ((uint64_t)1 << 63)
+#define PG_ATTR_MASK       (PG_ATTR_XD | (uint64_t)0xfff)
 #define PG_ATTR_LARGE_MASK (PG_ATTR_MASK | PG_ATTR_LARGE_PAT)
-#define PG_FRAME_MASK      (0xffffffffff000ULL)
+#define PG_FRAME_MASK      ((uint64_t)0xffffffffff000)
 
 #define PG_DIR_CACHING_FLAGS(cr3) (cr3 & (PG_ATTR_PWT | PG_ATTR_PCD))
 

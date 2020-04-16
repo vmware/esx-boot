@@ -141,7 +141,7 @@ void check_efi_quirks(efi_info_t *efi_info)
       }
 
       efi_info->quirks |= q->efi_quirks;
-      Log(LOG_DEBUG, "Matched quirks 0x%lx\n", efi_info->quirks);
+      Log(LOG_DEBUG, "Matched quirks 0x%"PRIx64"\n", efi_info->quirks);
       return;
    }
 }

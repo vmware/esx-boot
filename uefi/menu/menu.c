@@ -204,7 +204,7 @@ void set_verbose(bool verbose);
  *----------------------------------------------------------------------------*/
 void log_syntax_error(Menu *menu, const char *msg, const char *msg2)
 {
-   Log(LOG_ERR, "Menu syntax error in %s, byte %u (in %s): %s %s\n",
+   Log(LOG_ERR, "Menu syntax error in %s, byte %tu (in %s): %s %s\n",
        menu->filename, menu->parse - menu->buffer,
        menu->last == NULL ? "top level" : menu->last->label, msg, msg2);
 }
@@ -689,7 +689,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       filename = absname;
    }
    Log(LOG_DEBUG, "file_load %s", filename);
-   status = file_load(volid, filename, NULL, bufOut, sizeOut, NULL, NULL);
+   status = file_load(volid, filename, NULL, bufOut, sizeOut);
    Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
 
    /*
@@ -716,7 +716,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       }
       filename = absname;
       Log(LOG_DEBUG, "file_load %s", filename);
-      status = file_load(volid, filename, NULL, bufOut, sizeOut, NULL, NULL);
+      status = file_load(volid, filename, NULL, bufOut, sizeOut);
       Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
    }
 
@@ -729,7 +729,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       }
       filename = absname;
       Log(LOG_DEBUG, "file_load %s", filename);
-      status = file_load(volid, filename, NULL, bufOut, sizeOut, NULL, NULL);
+      status = file_load(volid, filename, NULL, bufOut, sizeOut);
       Log(LOG_DEBUG, "file_load returns %d (%s)", status, error_str[status]);
    }
 
@@ -1107,7 +1107,7 @@ int chain_to(const char *program, const char *arguments)
    Child->SystemTable = st;
    Child->DeviceHandle = Volume;
 
-   Log(LOG_DEBUG, "Image loaded at %p (size 0x%lx)",
+   Log(LOG_DEBUG, "Image loaded at %p (size 0x%"PRIx64")",
        Child->ImageBase, Child->ImageSize);
 
    if (debug & DEBUG_PAUSE_BEFORE_START_IMAGE) {
@@ -1119,7 +1119,7 @@ int chain_to(const char *program, const char *arguments)
    /* Transfer control to the Child */
    Status = bs->StartImage(ChildHandle, &ExitDataSize, &ExitData);
    if (EFI_ERROR(Status) && ExitData != NULL) {
-      Log(LOG_ERR, "StartImage returned Status 0x%x", Status);
+      Log(LOG_ERR, "StartImage returned Status 0x%zx", Status);
       st->ConOut->OutputString(st->ConOut, ExitData);
    }
    efi_free(ExitData);

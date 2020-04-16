@@ -140,7 +140,8 @@ static void sparse_fill(efi_info_t *efi_info,
          v->VirtualStart = v->PhysicalStart - pa_offset +
             efi_info->rts_vaddr;
          p->VirtualStart = v->VirtualStart;
-         Log(LOG_DEBUG, "sparse RTS type=%u phys=%lx virt=%lx pgs=%x attr=%lx",
+         Log(LOG_DEBUG, "sparse RTS type=%u phys=%"PRIx64" virt=%"PRIx64
+             " pgs=%"PRIx64" attr=%"PRIx64"",
              v->Type, v->PhysicalStart, v->VirtualStart, v->NumberOfPages,
              v->Attribute);
          v = NextMemoryDescriptor(v, efi_info->desc_size);

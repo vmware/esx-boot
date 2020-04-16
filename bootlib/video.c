@@ -127,9 +127,7 @@ int video_check_support(void)
  *      IN  min_height:    minimum vertical resolution, in pixels
  *      IN  min_depth:     minimum color depth, in bits per pixel
  *      IN  debug:         if true, log all modes
- *      IN  mode:          pointer to the mode info structure to be filled
- *      OUT best_mode:     VBE mode id
- *      OUT fb_addr:       framebuffer address corresponding to mode_info
+ *      OUT best_mode_id:  VBE mode id
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -138,8 +136,7 @@ static int video_scan_modes(unsigned int width, unsigned int height,
                             unsigned int depth,
                             unsigned int min_width, unsigned int min_height,
                             unsigned int min_depth, bool debug,
-                            vbe_mode_t *best_mode, vbe_mode_id_t *best_mode_id,
-                            uintptr_t *fb_addr)
+                            vbe_mode_id_t *best_mode_id)
 {
    uint32_t pix_delta, best_pix_delta, prefered_pixels_number;
    vbe_mode_id_t best, mode_id;
@@ -180,8 +177,6 @@ static int video_scan_modes(unsigned int width, unsigned int height,
       if (width == mode.XResolution && height == mode.YResolution &&
           depth == mode.BitsPerPixel) {
          best = mode_id;
-         memcpy(best_mode, &mode, sizeof (vbe_mode_t));
-         *fb_addr = mode_fb_addr;
          if (debug) {
             Log(LOG_DEBUG, "Found exact match for video mode, id 0x%x", best);
          } else {
@@ -202,8 +197,6 @@ static int video_scan_modes(unsigned int width, unsigned int height,
 
       if (pix_delta <= best_pix_delta) {
          best = mode_id;
-         memcpy(best_mode, &mode, sizeof (vbe_mode_t));
-         *fb_addr = mode_fb_addr;
          best_pix_delta = pix_delta;
       }
    }
@@ -264,7 +257,6 @@ int video_set_mode(framebuffer_t *fb, unsigned int width, unsigned int height,
                    unsigned int min_height, unsigned int min_depth, bool debug)
 {
    vbe_mode_id_t id;
-   vbe_mode_t mode;
    int status;
 
    status = video_check_support();
@@ -276,16 +268,12 @@ int video_set_mode(framebuffer_t *fb, unsigned int width, unsigned int height,
       return status;
    }
 
-   memset(&mode, 0, sizeof (vbe_mode_t));
-
    status = video_scan_modes(width, height, depth,
                              min_width, min_height, min_depth,
-                             debug, &mode, &id, &vbe.fb_addr);
+                             debug, &id);
    if (status != ERR_SUCCESS) {
       return status;
    }
-
-   vbe_mode_dump(id, &mode, vbe.fb_addr);
 
    /*
     * With legacy BIOS, firmware_print is unsafe after vbe_set_mode.
@@ -297,8 +285,18 @@ int video_set_mode(framebuffer_t *fb, unsigned int width, unsigned int height,
       return status;
    }
 
+   /*
+    * We get the VBE mode info (including framebuffer base and size)
+    * here *after* setting mode, because the size and base can
+    * differ for different resolutions.
+    */
+   status = vbe_get_mode_info(id, &vbe.mode, &vbe.fb_addr);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
    vbe.current_mode = id;
-   memcpy(&vbe.mode, &mode, sizeof (vbe_mode_t));
+   vbe_mode_dump(id, &vbe.mode, vbe.fb_addr);
 
    return fb_init(&vbe.mode, vbe.fb_addr, fb);
 }

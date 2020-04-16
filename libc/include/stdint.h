@@ -32,22 +32,49 @@ typedef signed int               intptr_t;
 #endif
 
 #elif defined(__GNUC__)
-typedef unsigned long long int   uint64_t;
 typedef unsigned int             uint32_t;
 typedef unsigned short           uint16_t;
 typedef unsigned char            uint8_t;
 
-typedef signed long long int     int64_t;
 typedef signed int               int32_t;
 typedef signed short             int16_t;
 typedef signed char              int8_t;
 
 #if defined(only_em64t) || defined(only_arm64)
-typedef unsigned long long int   uintptr_t;
-typedef signed long long int     intptr_t;
+typedef unsigned long int        uint64_t;
+#define PRIo64 "lo"
+#define PRIu64 "lu"
+#define PRIx64 "lx"
+#define PRIX64 "lX"
+typedef signed long int          int64_t;
+#define PRId64 "ld"
+#define PRIi64 "li"
+typedef unsigned long int        uintptr_t;
+#define PRIoPTR "lo"
+#define PRIuPTR "lu"
+#define PRIxPTR "lx"
+#define PRIXPTR "lX"
+typedef signed long int          intptr_t;
+#define PRIdPTR "ld"
+#define PRIiPTR "li"
+
 #else
+typedef unsigned long long int   uint64_t;
+#define PRIo64 "llo"
+#define PRIu64 "llu"
+#define PRIx64 "llx"
+#define PRIX64 "llX"
+typedef signed long long int     int64_t;
+#define PRId64 "lld"
+#define PRIi64 "lli"
 typedef unsigned int             uintptr_t;
+#define PRIoPTR "o"
+#define PRIuPTR "u"
+#define PRIxPTR "x"
+#define PRIXPTR "X"
 typedef signed int               intptr_t;
+#define PRIdPTR "d"
+#define PRIiPTR "i"
 #endif
 
 #else

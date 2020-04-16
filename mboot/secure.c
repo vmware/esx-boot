@@ -410,7 +410,7 @@ static bool secure_boot_check_sig(uint32_t schema,
    }
 
    if (sigLen != V1_KEYID_LEN + pubkey->rsa.len) {
-      Log(LOG_WARNING, "Invalid signature length %u, should be %u",
+      Log(LOG_WARNING, "Invalid signature length %zu, should be %zu",
           sigLen, V1_KEYID_LEN + pubkey->rsa.len);
       return false;
    }

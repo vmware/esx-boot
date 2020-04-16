@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
-#define SCTLR_MMU                         (1ULL << 0)
+#define SCTLR_MMU                         ((uint64_t)1 << 0)
 #define TCR_ELx_TG0_SHIFT                 (14)
 #define TCR_ELx_TG0_MASK                  (3UL)
 #define TCR_GRANULARITY_4K                (0)
@@ -52,6 +52,16 @@ static INLINE void STI(void)
    __asm__ __volatile__ ("msr daifclr, #2");
 }
 
+static INLINE void HLT(void)
+{
+   /*
+    * wfe instead of wfi to mimic x86 behavior on HLT after CLI.
+    *
+    * wfi doesn't care about masked interrupts.
+    */
+   __asm__ __volatile__ ("wfe");
+}
+
 /*
  * MSR register accesses.
  */
@@ -75,7 +85,7 @@ static INLINE bool el_is_hyp(void)
 /*
  * Paging
  */
-#define PAGE_SIZE 0x1000ULL
+#define PAGE_SIZE ((uint64_t)0x1000)
 #define PG_TABLE_MAX_ENTRIES 512
 
 #define PG_LEVEL_SHIFT       9
@@ -84,7 +94,8 @@ static INLINE bool el_is_hyp(void)
 /*
  * Bytes covered by an LnPTE.
  */
-#define PG_TABLE_LnE_SIZE(n) (1ULL << (PG_MPN_SHIFT + ((n) - 1) * PG_LEVEL_SHIFT))
+#define PG_TABLE_LnE_SIZE(n) ((uint64_t)1 << \
+                              (PG_MPN_SHIFT + ((n) - 1) * PG_LEVEL_SHIFT))
 
 #define PG_OFF_MASK            ((1 << PG_LEVEL_SHIFT) - 1)
 #define PG_LPN_2_LnOFF(lpn, n) (((lpn) >> (PG_LEVEL_SHIFT * (n - 1))) & PG_OFF_MASK)
@@ -103,13 +114,13 @@ static INLINE bool el_is_hyp(void)
 #define PG_SET_ENTRY(pt, n, lpn, mpn, flags)                            \
    PG_SET_ENTRY_RAW(pt, PG_LPN_2_LnOFF(lpn, n), (((mpn) << PG_MPN_SHIFT) | (flags)))
 
-#define PG_ATTR_PRESENT    (1ULL << 0)
+#define PG_ATTR_PRESENT    ((uint64_t)1 << 0)
 #define PG_ATTR_W          (0)          // ARM uses RO bit.
-#define PG_ATTR_RO         (1ULL << 7)
-#define PG_ATTR_A          (1ULL << 10)
-#define PG_ATTR_TABLE      (1ULL << 2)
-#define PG_ATTR_MASK       (0xf870000000000fffULL)
-#define PG_FRAME_MASK      (0xffffffffff000ULL)
+#define PG_ATTR_RO         ((uint64_t)1 << 7)
+#define PG_ATTR_A          ((uint64_t)1 << 10)
+#define PG_ATTR_TABLE      ((uint64_t)1 << 2)
+#define PG_ATTR_MASK       ((uint64_t)0xf870000000000fff)
+#define PG_FRAME_MASK      ((uint64_t)0xffffffffff000)
 
 #define PG_DIR_CACHING_FLAGS(ttbr0) (0)
 #define PG_IS_LARGE(entry) ((entry & PG_ATTR_TABLE) == 0)

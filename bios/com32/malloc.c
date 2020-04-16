@@ -36,6 +36,12 @@
 
 typedef uint64_t addr_t;
 
+EXTERN void _start(void);
+struct stack_frame {
+   struct stack_frame *prev_frame;
+   uintptr_t rip;
+};
+
 /* This structure should be a power of two. This becomes the alignment unit. */
 struct free_arena_header;
 
@@ -205,6 +211,7 @@ static void *__malloc_from_block(struct free_arena_header *fp, size_t size)
 void *sys_malloc(size_t size)
 {
    struct free_arena_header *fp;
+   struct stack_frame *frame;
 
    if (size == 0) {
       return NULL;
@@ -220,6 +227,12 @@ void *sys_malloc(size_t size)
          return __malloc_from_block(fp, size);
       }
    }
+
+   /* Print caller's instruction pointer and memory arena due to malloc fail */
+   __asm__("movl %%ebp,%0" : "=r" (frame));
+   bios_log(LOG_ERR, "Requested malloc size %zu failed, caller offset 0x%zx\n",
+            size, frame->rip - (uintptr_t)_start);
+   log_malloc_arena();
 
    return NULL;
 }
@@ -456,4 +469,21 @@ static void CONSTRUCTOR init_memory_arena(void)
 
    /* Scan the memory map to look for other suitable regions */
    com32_scan_memory();
+}
+
+void log_malloc_arena(void)
+{
+   struct free_arena_header *nah;
+
+   bios_log(LOG_DEBUG, "COM32 sysargs %u, memsize (%s) %u\n",
+      __com32.cs_sysargs,
+      __com32.cs_sysargs >= 7 ?  "valid" : "invalid",
+      __com32.cs_memsize);
+   bios_log(LOG_DEBUG, "Malloc arena:\n");
+   for (nah = __malloc_head.a.next; nah->a.type != ARENA_TYPE_HEAD;
+        nah = nah->a.next) {
+      bios_log(LOG_DEBUG, "  (%s) address %p, size %zu\n",
+         nah->a.type == ARENA_TYPE_FREE ? "free" : "used",
+         nah, nah->a.size);
+   }
 }

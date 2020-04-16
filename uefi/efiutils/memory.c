@@ -38,10 +38,10 @@ static EFI_MEMORY_TYPE ImageDataType = EfiMaxMemoryType;
  *      ExitBootServices() to verify the memory map consistency when shutting
  *      down the boot services.
  *----------------------------------------------------------------------------*/
-static EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
-                                     EFI_MEMORY_DESCRIPTOR **MMap,
-                                     UINTN *Size, UINTN *SizeOfDesc,
-                                     UINT32 *MMapVersion)
+EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
+                              EFI_MEMORY_DESCRIPTOR **MMap,
+                              UINTN *Size, UINTN *SizeOfDesc,
+                              UINT32 *MMapVersion)
 {
    EFI_MEMORY_DESCRIPTOR *Buffer;
    UINTN BufLen, DescSize;
@@ -194,21 +194,19 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
             }
             break;
          case EfiBootServicesData:
+            /*
+             * Between ExitBootServices and entry to the trampoline, we are
+             * running on a stack in EfiBootServicesData memory.  (GDT and IDT
+             * are likely also there, though that doesn't matter so much.)  So
+             * we blacklist such memory along with EfiLoaderCode and Data, to
+             * prevent alloc() from handing it out for immediate use while we
+             * are still running in C code.  PR 2162215 update #28.
+             */
             if (arch_is_arm64) {
                type = E820_TYPE_BLACKLISTED_FIRMWARE_BS;
-            } else if (arch_is_x86 && arch_is_64) {
-               /*
-                * 64-bit EFI only: page tables may be in
-                * EfiBootServicesData.  Setting the type to
-                * E820_TYPE_BOOTLOADER here causes this memory to be
-                * blacklisted in time for relocate_page_tables to
-                * relocate the page tables into safe memory.
-                */
-               type = E820_TYPE_BOOTLOADER;
             } else {
-               type = E820_TYPE_AVAILABLE;
+               type = E820_TYPE_BOOTLOADER;
             }
-
             break;
          case EfiConventionalMemory:
             if ((MMap->Attribute & EFI_MEMORY_NV) == 0) {
@@ -254,6 +252,33 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
    return error_efi_to_generic(EFI_SUCCESS);
 }
 
+/*-- efi_log_memory_map -----------------------------------------------------------
+ *
+ *      Log UEFI system memory map currently saved in efi_info.
+ *
+ * Parameters
+ *      IN  efi_info: efi_info_t
+ *----------------------------------------------------------------------------*/
+void efi_log_memory_map(efi_info_t *efi_info)
+{
+   UINTN i;
+   EFI_MEMORY_DESCRIPTOR *MMap;
+
+   MMap = efi_info->mmap;
+   EFI_ASSERT(MMap != NULL);
+
+   for (i = 0; i < efi_info->num_descs; i++) {
+      uint64_t base, length;
+      base = MMap->PhysicalStart;
+      length = MMap->NumberOfPages << EFI_PAGE_SHIFT;
+
+      efi_log(LOG_INFO, "MMap[%d]: 0x%llx - 0x%llx len=%llu, type=%u, attr=0x%llx\n",
+              i, base, base + length - 1, length, MMap->Type, MMap->Attribute);
+
+      MMap = NextMemoryDescriptor(MMap, efi_info->desc_size);
+   }
+}
+
 /*-- log_memory_map -----------------------------------------------------------
  *
  *      Log system memory map.
@@ -269,8 +294,6 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
  *----------------------------------------------------------------------------*/
 void log_memory_map(efi_info_t *efi_info)
 {
-   UINTN i;
-   EFI_MEMORY_DESCRIPTOR *MMap;
    e820_range_t *e820_mmap;
    size_t count;
 
@@ -279,19 +302,7 @@ void log_memory_map(efi_info_t *efi_info)
       return;
    }
 
-   MMap = efi_info->mmap;
-   EFI_ASSERT(MMap != NULL);
-
-   for (i = 0; i < efi_info->num_descs; i++) {
-      uint64_t base, length;
-      base = MMap->PhysicalStart;
-      length = MMap->NumberOfPages << EFI_PAGE_SHIFT;
-
-      efi_log(LOG_INFO, "MMap[%d]: 0x%llx - 0x%llx len=%llu, type=%u, attr=0x%llx\n",
-              i, base, base + length - 1, length, MMap->Type, MMap->Attribute);
-
-      MMap = NextMemoryDescriptor(MMap, efi_info->desc_size);
-   }
+   efi_log_memory_map(efi_info);
 
    free_memory_map(e820_mmap, efi_info);
 }

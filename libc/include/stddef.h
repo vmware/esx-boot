@@ -21,7 +21,7 @@
 #   endif
 #elif defined(__GNUC__)
 #   if defined(only_em64t) || defined(only_arm64)
-       typedef unsigned long long int  size_t;
+       typedef unsigned long int       size_t;
 #   else
        typedef unsigned int            size_t;
 #   endif
@@ -40,7 +40,7 @@ typedef size_t off_t;
 #   endif
 #elif defined (__GNUC__)
 #   if defined(only_em64t) || defined(only_arm64)
-       typedef signed long long int    ptrdiff_t;
+       typedef signed long int         ptrdiff_t;
 #   else
        typedef signed int              ptrdiff_t;
 #   endif

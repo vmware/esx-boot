@@ -167,7 +167,7 @@ void disable_network_controllers(void)
        * Disconnect drivers from the NIC.
        */
       Status = bs->DisconnectController(nicHandle, NULL, NULL);
-      Log(LOG_DEBUG, "Disconnect drivers from %p: %u", nicHandle, Status);
+      Log(LOG_DEBUG, "Disconnect drivers from %p: %zx", nicHandle, Status);
       if (EFI_ERROR(Status)) {
          continue;
       }
@@ -184,7 +184,7 @@ void disable_network_controllers(void)
       Status = nicPciIo->Attributes(nicPciIo,
                                     EfiPciIoAttributeOperationDisable,
                                     EFI_PCI_IO_ATTRIBUTE_BUS_MASTER, NULL);
-      Log(LOG_DEBUG, "Disable bus mastering on %p: %u", nicPciDevice, Status);
+      Log(LOG_DEBUG, "Disable bus mastering on %p: %zx", nicPciDevice, Status);
       if (EFI_ERROR(Status)) {
          continue;
       }

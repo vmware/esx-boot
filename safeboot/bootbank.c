@@ -1,17 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * bootbank.c -- ESXi bootbanks management
- *
- *  Safeboot assumes that the ESXi image partition layout is as follow:
- *
- *      #ID   TYPE      LABEL           DESCRIPTION
- *      1     primary   "Hypervisor0"   Boot partition
- *      5     logical   "Hypervisor1"   Bootbank 1
- *      6     logical   "Hypervisor2"   Bootbank 2
  *
  * Bootbank states
  *
@@ -54,9 +47,10 @@
 #include <boot_services.h>
 #include "safeboot.h"
 
-#define BOOTBANKS_NR       2
-#define BOOTBANK1_VOL_ID   5
-#define BOOTBANK2_VOL_ID   6
+/*
+ * Safeboot assumes the ESXi image contains at most two bootbank partitions.
+ */
+#define BOOTBANKS_NR 2
 
 static bootbank_t banks[BOOTBANKS_NR];
 
@@ -105,12 +99,12 @@ static void bank_dump(const bootbank_t *bank)
 
 /*-- bank_scan -----------------------------------------------------------------
  *
- *      Get the information relative to the given bootbank. Bootbanks are
- *      identified by their partition number (5 or 6).
+ *      Get information from the given bootbank, and update its
+ *      bootstate if needed.
  *
  * Parameters
- *      IN volid: MBR/GPT partition number
- *      IN bank:  pointer to a boot bank info structure
+ *      IN volid: MBR/GPT partition number of the bootbank to scan
+ *      OUT bank: pointer to a bootbank info structure to fill
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -131,7 +125,7 @@ static int bank_scan(int volid, bootbank_t *bank)
    /* Get bank UUID */
    status = vmfat_get_uuid(volid, bank->uuid, VMWARE_FAT_UUID_LEN);
    if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "BANK%d: not a VMware boot bank\n", volid);
+      Log(LOG_DEBUG, "BANK%d: no bank UUID.\n", volid);
       return status;
    }
 
@@ -140,7 +134,7 @@ static int bank_scan(int volid, bootbank_t *bank)
    /* Get bank state & configuration */
    status = bank_get_config(bank);
    if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "BANK%d: invalid configuration.\n", volid);
+      Log(LOG_DEBUG, "BANK%d: no valid configuration file.\n", volid);
       return status;
    }
 
@@ -258,18 +252,20 @@ static int bank_kill(bootbank_t *bank)
 {
    const char *errmsg;
    unsigned int i;
+   int nvalid = 0;
 
    Log(LOG_INFO, "Installed hypervisors:\n\n");
    for (i = 0; i < BOOTBANKS_NR; i++) {
       if (banks[i].valid) {
-         Log(LOG_INFO, "   HYPERVISOR%u: %s%s\n", i + 1, banks[i].build,
+         nvalid++;
+         Log(LOG_INFO, "   BANK%d: %s%s\n", banks[i].volid, banks[i].build,
              banks[i].upgrading ? " (Upgrading...)" :
              ((&banks[i] == bank) ? " (Default)" : ""));
       }
    }
    Log(LOG_INFO, "\n");
 
-   if (!banks[0].valid || !banks[1].valid) {
+   if (nvalid < 2) {
       errmsg = "No alternate hypervisor to roll back to.";
    } else {
       errmsg = NULL;
@@ -310,11 +306,35 @@ static int bank_kill(bootbank_t *bank)
  *----------------------------------------------------------------------------*/
 int get_boot_bank(bool shift_r, bootbank_t **bootbank)
 {
+   disk_t disk;
    bootbank_t *bank;
    int status;
+   int volid;
+   int nvols;
+   int nfound;
 
-   bank_scan(BOOTBANK1_VOL_ID, &banks[0]);
-   bank_scan(BOOTBANK2_VOL_ID, &banks[1]);
+   status = get_boot_disk(&disk);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Error getting boot disk: %d", status);
+      return status;
+   }
+
+   status = get_max_volume(&disk, &nvols);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_DEBUG, "Error while getting max volid: %d", status);
+   }
+   Log(LOG_DEBUG, "max volid = %d", nvols);
+
+   nfound = 0;
+   for (volid = 1; volid <= nvols; volid++) {
+      status = bank_scan(volid, &banks[nfound]);
+      if (status == ERR_SUCCESS) {
+         nfound++;
+         if (nfound >= BOOTBANKS_NR) {
+            break;
+         }
+      }
+   }
 
    if (shift_r) {
       Log(LOG_DEBUG, "Roll back requested by user.\n");

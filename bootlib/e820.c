@@ -188,7 +188,7 @@ static int e820_sanity_check(e820_range_t *mmap, size_t count)
 
       if (msg != NULL) {
          error = true;
-         Log(LOG_ERR, "E820[%zu]: %llx - %llx type %u: %s\n",
+         Log(LOG_ERR, "E820[%zu]: %"PRIx64" - %"PRIx64" type %u: %s\n",
              i, base, limit, mmap[i].type, msg);
       }
 
@@ -200,7 +200,7 @@ static int e820_sanity_check(e820_range_t *mmap, size_t count)
       for (i = 0; i < count; i++) {
          base = E820_BASE(&mmap[i]);
          limit = E820_BASE(&mmap[i]) + E820_LENGTH(&mmap[i]) - 1;
-         Log(LOG_DEBUG, "E820[%zu]: %llx - %llx type %u\n",
+         Log(LOG_DEBUG, "E820[%zu]: %"PRIx64" - %"PRIx64" type %u\n",
              i, base, limit, mmap[i].type);
       }
 

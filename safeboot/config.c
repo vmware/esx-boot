@@ -160,8 +160,7 @@ int bank_set_bootstate(bootbank_t *bank, int bootstate)
       return ERR_INVALID_PARAMETER;
    }
 
-   status = file_load(bank->volid, SAFEBOOT_CFG, NULL, (void **)&buffer, &size,
-                      NULL, NULL);
+   status = file_load(bank->volid, SAFEBOOT_CFG, NULL, (void **)&buffer, &size);
    if (status != ERR_SUCCESS) {
       return status;
    }

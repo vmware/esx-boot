@@ -143,7 +143,8 @@ static void compact_fill(efi_info_t *efi_info,
          prev = p;
 
          p->VirtualStart = v->VirtualStart;
-         Log(LOG_DEBUG, "compact RTS type=%u phys=%lx virt=%lx pgs=%x attr=%lx",
+         Log(LOG_DEBUG, "compact RTS type=%u phys=%"PRIx64" virt=%"PRIx64
+             " pgs=%"PRIx64" attr=%"PRIx64"",
              v->Type, v->PhysicalStart, v->VirtualStart, v->NumberOfPages,
              v->Attribute);
          v = NextMemoryDescriptor(v, efi_info->desc_size);

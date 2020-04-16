@@ -217,7 +217,8 @@ static int elf_register_segments(Elf_CommonEhdr *ehdr,
       bss_size = run_size - load_size;
 
       if (boot.debug) {
-         Log(LOG_DEBUG, "[k] %llx - %llx -> %llx - %llx (%llu bytes)",
+         Log(LOG_DEBUG, "[k] %"PRIx64" - %"PRIx64" -> %"PRIx64
+             " - %"PRIx64" (%"PRIu64" bytes)",
              PTR_TO_UINT64(load_addr), PTR_TO_UINT64(load_addr) + load_size,
              run_addr, run_addr + run_size, run_size);
       }
@@ -263,7 +264,7 @@ int elf_register(void *buffer, Elf_CommonAddr *entry)
    int status;
 
    get_image_addr_range(buffer, &link_base, &link_end);
-   Log(LOG_DEBUG, "ELF link address range is [0x%lx:0x%lx)\n",
+   Log(LOG_DEBUG, "ELF link address range is [0x%"PRIx64":0x%"PRIx64")\n",
        link_base, link_end);
 
    status = elf_arch_alloc(link_base, link_end - link_base, &run_addend);

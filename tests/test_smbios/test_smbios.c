@@ -61,7 +61,8 @@ static int test_tables(void *eps_start, size_t eps_length,
    smbios_entry smbios_end;
    smbios_entry ptr;
 
-   Log(LOG_INFO, "SMBIOS entry point %u bytes at %p\n",  eps_length, eps_start);
+   Log(LOG_INFO, "SMBIOS entry point %zu bytes at %p\n",
+       eps_length, eps_start);
    if (!is_valid_firmware_table(eps_start, eps_length) ||
        eps_length < SMBIOS_EPS3_SIGNATURE_LEN) {
       Log(LOG_ERR, "Corrupt SMBIOS entry point");
@@ -77,7 +78,8 @@ static int test_tables(void *eps_start, size_t eps_length,
       return ERR_UNSUPPORTED;
    }
 
-   Log(LOG_INFO, "SMBIOS tables %u bytes at %p\n", table_length, table_start);
+   Log(LOG_INFO, "SMBIOS tables %zu bytes at %p\n",
+       table_length, table_start);
    smbios_start.raw_bytes = table_start;
    smbios_end.raw_bytes = smbios_start.raw_bytes + table_length;
    if (smbios_get_struct(smbios_start, smbios_end, 1, &ptr) == ERR_SUCCESS) {

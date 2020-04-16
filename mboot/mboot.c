@@ -325,6 +325,15 @@ int main(int argc, char **argv)
    }
 
    /*
+    * Log a message to show where mboot has been relocated to and
+    * loaded, for use in debugging.  Currently the unrelocated value
+    * of __executable_start is 0 for COM32, but is 0x1000 for UEFI
+    * because of HEADERS_SIZE is uefi/uefi.lds.  Check the symbol
+    * table in the .elf binary to be sure.
+    */
+   Log(LOG_DEBUG, "mboot __executable_start is at %p\n", __executable_start);
+
+   /*
     * Log the initial state of the firmware memory map.  This logging
     * occurs prior to GUI initialization (causing spew on the screen
     * on some machines), and the log is generally much more than a

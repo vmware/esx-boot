@@ -137,7 +137,7 @@ EXTERN int delete_char(char *str, size_t n);
 /*
  * gzip.c
  */
-EXTERN bool is_gzip(const void *buffer, size_t size);
+EXTERN bool is_gzip(const void *buffer, size_t size, int *status);
 EXTERN int gzip_extract(const void *src, size_t src_size, void **dest,
                         size_t *dest_size);
 
@@ -149,8 +149,7 @@ EXTERN int gzip_extract(const void *src, size_t src_size, void **dest,
 EXTERN int file_get_size_hint(int volid, const char *filename,
                               size_t *filesize);
 EXTERN int file_load(int volid, const char *filename, int (*callback)(size_t),
-                     void **buffer, size_t *bufsize, md5_t *md5_compressed,
-                     md5_t *md5_uncompressed);
+                     void **buffer, size_t *bufsize);
 EXTERN int file_overwrite(int volid, const char *filepath, void *buffer,
                           size_t size);
 EXTERN int file_sanitize_path(char *filepath);
@@ -164,18 +163,21 @@ EXTERN int get_mac_address(const char **mac);
  * volume.c
  */
 #define FIRMWARE_BOOT_VOLUME 0
+EXTERN int get_max_volume(disk_t *disk, int *max);
 EXTERN int volume_read(int volid, void *dest, uint64_t offset, size_t size);
 EXTERN int get_volume_info(disk_t *disk, int part_id, partition_t *partition);
 
 /*
  * mbr.c
  */
+EXTERN int mbr_get_max_part(disk_t *disk, char *mbr, int *max);
 EXTERN int mbr_get_part_info(disk_t *disk, char *mbr, int part_id,
                              partition_t *partition);
 
 /*
  * gpt.c
  */
+EXTERN int gpt_get_max_part(disk_t *disk, int *max);
 EXTERN int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition);
 
 /*
@@ -193,7 +195,9 @@ static INLINE bool is_syslog_message(const char *str)
 
 typedef int (*log_callback_t)(const char *msg);
 
-EXTERN void Log(int level, const char *fmt, ...);
+EXTERN void Log(int level, const char *fmt, ...)
+   __attribute__ ((format (__printf__, 2, 3)));
+
 EXTERN int log_subscribe(log_callback_t callback, int maxlevel);
 EXTERN void log_unsubscribe(log_callback_t callback);
 EXTERN const char *log_buffer_addr(void);

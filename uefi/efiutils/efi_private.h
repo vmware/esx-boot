@@ -39,6 +39,12 @@ void mem_init(EFI_MEMORY_TYPE MemType);
 #define NextMemoryDescriptor(_CurrentDesc_, _DescSize_)                   \
    ((EFI_MEMORY_DESCRIPTOR *)(((UINT8 *)(_CurrentDesc_)) + (_DescSize_)))
 
+EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
+                              EFI_MEMORY_DESCRIPTOR **MMap,
+                              UINTN *Size, UINTN *SizeOfDesc,
+                              UINT32 *MMapVersion);
+void efi_log_memory_map(efi_info_t *efi_info);
+
 /*
  * volume.c
  */

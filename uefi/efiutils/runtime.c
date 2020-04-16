@@ -37,7 +37,7 @@ static rts_policy *policies[] = {
 
 #define last_pol(p) ((p) == NULL)
 
-/*-- can_old_and_new ------------------------------------------------------------
+/*-- can_old_and_new -----------------------------------------------------------
  *
  *     Return ERR_SUCCESS if none of the 1:1 RT mappings collide with the
  *     OS-provided VA region reserved for RTS mappings. We check this
@@ -89,7 +89,8 @@ static int can_old_and_new(UNUSED_PARAM(efi_info_t *efi_info))
     * us manipulating page tables to keep both mappings present.
     */
    if (!mmu_supported_configuration()) {
-      Log(LOG_WARNING, "Unsupported MMU configuration; skipping temp map quirk");
+      Log(LOG_WARNING,
+          "Unsupported MMU configuration; skipping temp map quirk");
       return ERR_UNSUPPORTED;
    }
 
@@ -111,6 +112,9 @@ static int can_old_and_new(UNUSED_PARAM(efi_info_t *efi_info))
     * (Checks only the l4pt page itself.)
     * We've seen this on recent Apple firmware (PR 1713949).
     * Fortunately Apple doesn't need the workaround.
+    * Note: This isn't possible on x86 anymore, as at this point
+    * we are on our own copy of the PTs and we have cleared all
+    * read-only flags.
     */
    if (PG_IS_READONLY(get_l1e_flags(l4pt, (uint64_t)l4pt >> EFI_PAGE_SHIFT))) {
       Log(LOG_DEBUG, "Page tables are read-only; skipping temp map quirk");
@@ -132,14 +136,15 @@ static int can_old_and_new(UNUSED_PARAM(efi_info_t *efi_info))
          } else {
             /*
              * We have seen a number of x86 boxes that leave garbage in L4 page
-             * table entries beyond the end of physical memory.  Examples include
-             * an IBM box (PR 1698684), a Dell Edge Gateway 5000, and an AMD
-             * Myrtle prototype (PR 1792733 update #49).  In theory the firmware
-             * could really be using the vmkernel's RTS VA range for something,
-             * but it's extremely unlikely.  So if we see a present L4PTE there,
-             * just clear the entry and continue.  Clearing the entry is important
-             * for every policy besides "simple", as otherwise we'd interpret the
-             * garbage as a real pointer to an L3 PT.
+             * table entries beyond the end of physical memory.  Examples
+             * include an IBM box (PR 1698684), a Dell Edge Gateway 5000, and
+             * an AMD Myrtle prototype (PR 1792733 update #49).  In theory the
+             * firmware could really be using the vmkernel's RTS VA range for
+             * something, but it's extremely unlikely.  So if we see a present
+             * L4PTE there, just clear the entry and continue.  Clearing the
+             * entry is important for every policy besides "simple", as
+             * otherwise we'd interpret the garbage as a real pointer to an L3
+             * PT.
              */
             PG_SET_ENTRY_RAW(l4pt, i, 0);
          }
@@ -152,7 +157,7 @@ static int can_old_and_new(UNUSED_PARAM(efi_info_t *efi_info))
 #endif
 }
 
-/*-- relocate_runtime_services --------------------------------------------------
+/*-- relocate_runtime_services -------------------------------------------------
  *
  *     Enable runtime services use by the kernel to be booted.  Assumes the
  *     kernel will map EFI runtime memory regions to virtual addresses at an
@@ -201,7 +206,8 @@ int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks)
       Log(LOG_DEBUG, "Kernel does not support UEFI runtime services");
       return ERR_SUCCESS;
    } else {
-      Log(LOG_DEBUG, "OS wants UEFI runtime services at 0x%lx (size 0x%lx)",
+      Log(LOG_DEBUG,
+          "OS wants UEFI runtime services at 0x%"PRIx64" (size 0x%"PRIx64")",
           efi_info->rts_vaddr, efi_info->rts_size);
    }
 
@@ -217,7 +223,8 @@ int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks)
           * Quirks say both mappings must be present, but
           * we know it won't work.
           */
-         Log(LOG_INFO, "Booting without RTS support (can't apply quirk 0x%lx)",
+         Log(LOG_INFO,
+             "Booting without RTS support (can't apply quirk 0x%"PRIx64")",
              EFI_RTS_OLD_AND_NEW);
          return ERR_SUCCESS;
       }
@@ -226,7 +233,8 @@ int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks)
    virtualMapSize = 0;
    status = ERR_UNSUPPORTED;
    while (!last_pol(*pol)) {
-      if ((!no_quirks || ((*pol)->incompat_efi_quirks & efi_info->quirks) == 0) &&
+      if ((!no_quirks || ((*pol)->incompat_efi_quirks &
+                          efi_info->quirks) == 0) &&
           ((*pol)->efi_caps & efi_info->caps) == (*pol)->efi_caps) {
          status = (*pol)->supported(efi_info, &virtualMapSize);
          if (status == ERR_SUCCESS) {

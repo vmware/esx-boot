@@ -126,7 +126,7 @@ CFLAGS     += --sysroot $(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
                                                                              \
               -W -Wall -Werror -std=c99 -Wwrite-strings -Wstrict-prototypes  \
               -Wpointer-arith -Wdeclaration-after-statement                  \
-              -Wvla -Woverlength-strings -Wredundant-decls
+              -Wvla -Woverlength-strings -Wredundant-decls -Wformat
 
 LDFLAGS    += -nostdlib -q -T $(LDSCRIPT)
 

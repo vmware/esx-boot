@@ -70,26 +70,31 @@ typedef struct {
 
 /*
  * Additional memory types (for bootloader internal usage).
- *
- * This range of addresses contains the bootloader's memory. Ranges of this type
+ */
+
+
+/* E820_TYPE_BOOTLOADER contains the bootloader's memory. Ranges of this type
  * are converted to E820_TYPE_AVAILABLE prior to passing the memory map to the
  * operating system. Ranges of this type are fair game for relocating loaded
- * objects and allocated bootloader structures into as part of handing off
- * to the loaded OS.
+ * objects and allocated bootloader structures into as part of handing off to
+ * the loaded OS. Ranges of this type must be used for memory that is allocated
+ * by alloc and then used immediately. So they are blacklisted by
+ * blacklist_bootloader_mem prior to the first such allocation.
  */
 #define E820_TYPE_BOOTLOADER  0xffffffff
+
 /*
- * This range of addresses contains the discardable, non-runtime resident
- * portions of firmware code and data. Ranges of this type are converted
- * to E820_TYPE_AVAILABLE prior to passing the memory map to the operating
- * system. Ranges of this type are not fair game for relocating loaded
- * objects and allocated bootloader structures into as part of handing off
- * to the loaded OS, because they may contain the still-in-use page
- * table data structures, which must be preserved until the loaded OS
- * initializes its own.
+ * E820_TYPE_BLACKLISTED_FIRMWARE_BS is only used by the AArch64 efiboot.
  *
- * Today, E820_TYPE_BLACKLISTED_FIRMWARE_BS is only used by the AArch64
- * efiboot.
+ * E820_TYPE_BLACKLISTED_FIRMWARE_BS contains the discardable, non-runtime
+ * resident portions of firmware code and data. Ranges of this type are
+ * converted to E820_TYPE_AVAILABLE prior to passing the memory map to the
+ * operating system. Ranges of this type are not fair game for relocating
+ * loaded objects and allocated bootloader structures into as part of handing
+ * off to the loaded OS, because they may contain the still-in-use page table
+ * data structures, which must be preserved until the loaded OS initializes its
+ * own. So they are blacklisted by system_blacklist_memory prior to the first
+ * allocation by alloc.
  */
 #define E820_TYPE_BLACKLISTED_FIRMWARE_BS 0xfffffffe
 

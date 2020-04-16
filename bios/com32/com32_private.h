@@ -98,6 +98,7 @@ int int15_e820(e820_range_t *desc, uint32_t *next, uint32_t *desc_size);
  * malloc.c
  */
 void *realloc(void *ptr, size_t size);
+void log_malloc_arena(void);
 
 /*
  * disk.c

@@ -24,6 +24,7 @@
  *         %l    : following value is a 'long'
  *         %ll   : following value is a 'long long'
  *         %z    : following value is a 'size_t'
+ *         %t    : following value is a 'ptrdiff_t'
  *
  *      Conversion specifier
  *         %%    : '%' character printing
@@ -52,6 +53,7 @@ typedef enum {
    PRINTF_TYPE_LONG,       /* %l */
    PRINTF_TYPE_LONG_LONG,  /* %ll */
    PRINTF_TYPE_SIZE_T,     /* %z */
+   PRINTF_TYPE_PTRDIFF_T,  /* %t */
    PRINTF_TYPE_VOID_P      /* %p, %P */
 } printf_type_t;
 
@@ -134,6 +136,9 @@ static int parse_length_modifier(const char *format, printf_type_t *type)
          break;
       case 'z':
          *type = PRINTF_TYPE_SIZE_T;
+         return 1;
+      case 't':
+         *type = PRINTF_TYPE_PTRDIFF_T;
          return 1;
       default:
          *type = PRINTF_TYPE_INT;
@@ -294,6 +299,9 @@ int vsnprintf(char *buffer, size_t buflen, const char *format, va_list ap)
                      break;
                   case PRINTF_TYPE_SIZE_T:
                      u = (uintmax_t)va_arg(ap, size_t);
+                     break;
+                  case PRINTF_TYPE_PTRDIFF_T:
+                     u = (uintmax_t)va_arg(ap, ptrdiff_t);
                      break;
                   case PRINTF_TYPE_VOID_P:
                      u = (uintmax_t)(uintptr_t)va_arg(ap, void *);

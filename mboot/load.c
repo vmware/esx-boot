@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015,2017-2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -73,21 +73,11 @@ static void load_sanity_check(void)
  *                     this function
  *
  * Results
- *      ERR_SUCCESS, or a generic error status.
+ *      ERR_SUCCESS
  *----------------------------------------------------------------------------*/
 static int load_callback(size_t chunk_size)
 {
-   unsigned int i;
-
-   for (i = 0; i < boot.modules_nr; i++) {
-      if (!boot.modules[i].is_loaded) {
-         boot.modules[i].load_size += chunk_size;
-         break;
-      }
-   }
-
    boot.load_offset += chunk_size;
-
    gui_refresh();
 
    return ERR_SUCCESS;
@@ -295,32 +285,35 @@ static void log_module_transfer_stats(unsigned int n)
                                          &bandwidth_unit);
       if (bandwidth > 0) {
          if (pretty_unit > BYTES) {
-            Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu%s (%llu bytes) in"
-                " %llu.%llu seconds (%llu%s/s)\n",
+            Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64
+                "%s (%"PRIu64" bytes) in"
+                " %"PRIu64".%"PRIu64" seconds (%"PRIu64"%s/s)\n",
                 path, md5str, pretty_size, pretty_unit_str, load_size, seconds,
                 tenths_of_second, bandwidth, size_unit_to_str(bandwidth_unit));
          } else {
-            Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu bytes in %llu.%llu"
-                " seconds (%llu%s/s)\n",
+            Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64
+                " bytes in %"PRIu64".%"PRIu64""
+                " seconds (%"PRIu64"%s/s)\n",
                 path, md5str, load_size, seconds, tenths_of_second, bandwidth,
                 size_unit_to_str(bandwidth_unit));
          }
       } else {
          if (pretty_unit > BYTES) {
-            Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu%s (%llu bytes) in"
-                " less than 1 second\n",
+            Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64
+                "%s (%"PRIu64" bytes) in less than 1 second\n",
                 path, md5str, pretty_size, pretty_unit_str, load_size);
          } else {
-            Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu bytes in less than"
-                " 1 second\n", path, md5str, load_size);
+            Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64
+                " bytes in less than 1 second\n", path, md5str, load_size);
          }
       }
    } else {
       if (pretty_unit > BYTES) {
-         Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu%s (%llu bytes)\n",
+         Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64
+             "%s (%"PRIu64" bytes)\n",
              path, md5str, pretty_size, pretty_unit_str, load_size);
       } else {
-         Log(LOG_DEBUG, "%s (MD5: %s): transferred %llu bytes\n",
+         Log(LOG_DEBUG, "%s (MD5: %s): transferred %"PRIu64" bytes\n",
              path, md5str, load_size);
       }
    }
@@ -332,14 +325,62 @@ static void log_module_transfer_stats(unsigned int n)
    md5_to_str(&mod->md5_uncompressed, md5str, sizeof(md5str));
 
    if (pretty_unit > BYTES) {
-      Log(LOG_DEBUG, "%s (MD5: %s): extracted %llu%s (%llu bytes)\n",
+      Log(LOG_DEBUG, "%s (MD5: %s): extracted %"PRIu64"%s (%"PRIu64" bytes)\n",
           path, md5str, pretty_size, pretty_unit_str, extracted_size);
    } else {
-      Log(LOG_DEBUG, "%s (MD5: %s): extracted %llu bytes\n",
+      Log(LOG_DEBUG, "%s (MD5: %s): extracted %"PRIu64" bytes\n",
           path, md5str, extracted_size);
    }
 
    sys_free(filepath);
+}
+
+/*-- extract_cksum_module ------------------------------------------------------
+ *
+ *      Extract and calculate md5 checksums for incoming compressed module
+ *
+ * Parameters
+ *      IN     modulename:       name of the compressed module
+ *      IN/OUT buffer:           incoming compressed buffer is replaced with
+ *                               newly allocated outgoing uncompressed buffer.
+ *                               Incoming buffer is freed in this routine.
+ *      IN     isize:            size of incoming compressed buffer
+ *      OUT    osize:            size of outgoing uncompressed buffer
+ *      OUT    md5_compressed:   MD5 sum of compressed buffer.
+ *      OUT    md5_uncompressed: MD5 sum of uncompressed buffer.
+ *
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int extract_cksum_module(const char *modname, void **buffer,
+                                size_t *bufsize, md5_t *md5_compressed,
+                                md5_t *md5_uncompressed)
+{
+   void *data = NULL;
+   size_t size = *bufsize;
+   int status;
+
+   md5_compute(*buffer, size, md5_compressed);
+
+   if (!is_gzip(*buffer, size, &status)) {
+      return status;
+   }
+
+   status = gzip_extract(*buffer, size, &data, &size);
+   sys_free(*buffer);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "gzip_extract failed for %s (size %zu): %s\n",
+          modname, size, error_str[status]);
+      return status;
+   }
+
+   md5_compute(data, size, md5_uncompressed);
+
+   *bufsize = size;
+   *buffer = data;
+
+   return status;
 }
 
 /*-- load_module --------------------------------------------------------------
@@ -355,7 +396,7 @@ static void log_module_transfer_stats(unsigned int n)
 static int load_module(unsigned int n)
 {
    const char *filepath;
-   size_t size;
+   size_t load_size, size;
    void *addr;
    int status;
    uint64_t start_time, end_time;
@@ -370,26 +411,44 @@ static int load_module(unsigned int n)
    }
    status = file_load(boot.volid, filepath,
                       (boot.load_size > 0) ? load_callback : NULL,
-                      &addr, &size, &boot.modules[n].md5_compressed,
-                      &boot.modules[n].md5_uncompressed);
+                      &addr, &load_size);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
    if (is_network_boot) {
       end_time = firmware_get_time_ms(true);
    }
 
-   if (status != ERR_SUCCESS) {
-      if (status != ERR_ABORTED) {
-         const module_t *mod = &boot.modules[n];
-         char md5str[MD5_STRING_LEN];
+   /* Boot modules should be in compressed(gzip) format. */
+   size = load_size;
+   status = extract_cksum_module(filepath, &addr, &size,
+                                 &boot.modules[n].md5_compressed,
+                                 &boot.modules[n].md5_uncompressed);
 
+   if (status != ERR_SUCCESS) {
+      const module_t *mod = &boot.modules[n];
+      char md5str[MD5_STRING_LEN];
+
+      md5_to_str(&mod->md5_compressed, md5str, sizeof(md5str));
+
+      if (status == ERR_BAD_TYPE) {
+         /*
+          * Allow uncompressed modules for Dell, PR 2273023.  Issue a
+          * warning, because in other cases if an ESXi bootbank module
+          * is not compressed, that generally means it was corrupted
+          * and contains garbage.
+          */
+         Log(LOG_WARNING, "Warning: uncompressed module %s\n", filepath);
+         Log(LOG_WARNING, "MD5: %s, size %zu\n", md5str, load_size);
+      } else {
          Log(LOG_ERR, "Error %d (%s) while loading module: %s\n",
              status, error_str[status], filepath);
-         md5_to_str(&mod->md5_compressed, md5str, sizeof(md5str));
          Log(LOG_ERR, "Compressed MD5: %s\n", md5str);
          md5_to_str(&mod->md5_uncompressed, md5str, sizeof(md5str));
          Log(LOG_ERR, "Decompressed MD5: %s\n", md5str);
+         return status;
       }
-
-      return status;
    }
 
    if (is_network_boot) {
@@ -421,20 +480,12 @@ static int load_module(unsigned int n)
    }
 
    boot.modules[n].addr = addr;
+   boot.modules[n].load_size = load_size;
    boot.modules[n].size = size;
    boot.modules[n].is_loaded = true;
 
    if (boot.load_size == 0) {
-      status = load_callback(size);
-      if (status != ERR_SUCCESS) {
-         boot.modules[n].addr = NULL;
-         boot.modules[n].size = 0;
-         boot.modules[n].is_loaded = false;
-         sys_free(addr);
-         Log(LOG_ERR, "Error %d (%s) in module - %s, during load_callback\n",
-             status, error_str[status], filepath);
-         return status;
-      }
+      gui_refresh();
    }
 
    log_module_transfer_stats(n);
@@ -477,18 +528,20 @@ static void log_transfer_stats(unsigned int num_modules_loaded,
                                              &bandwidth_unit);
 
       if (avg_bandwidth > 0) {
-         Log(LOG_DEBUG, "Total transferred: %llu%s (%llu bytes) in %llu.%llu"
-             " seconds (average speed %llu%s/s)\n",
+         Log(LOG_DEBUG, "Total transferred: %"PRIu64
+             "%s (%"PRIu64" bytes) in %"PRIu64".%"PRIu64""
+             " seconds (average speed %"PRIu64"%s/s)\n",
              pretty_size, pretty_unit_str, size_transferred, seconds,
              tenths_of_second, avg_bandwidth, size_unit_to_str(bandwidth_unit));
       } else {
-         Log(LOG_DEBUG, "Total transferred: %llu%s (%llu bytes) in %llu.%llu"
+         Log(LOG_DEBUG, "Total transferred: %"PRIu64
+             "%s (%"PRIu64" bytes) in %"PRIu64".%"PRIu64""
              " seconds\n",
              pretty_size, pretty_unit_str, size_transferred, seconds,
              tenths_of_second);
       }
    } else {
-      Log(LOG_DEBUG, "Total transferred: %llu%s (%llu bytes)\n",
+      Log(LOG_DEBUG, "Total transferred: %"PRIu64"%s (%"PRIu64" bytes)\n",
           pretty_size, pretty_unit_str, size_transferred);
    }
 
@@ -496,7 +549,7 @@ static void log_transfer_stats(unsigned int num_modules_loaded,
    pretty_unit = modify_size_units(&pretty_size);
    pretty_unit_str = size_unit_to_str(pretty_unit);
 
-   Log(LOG_DEBUG, "Total extracted: %llu%s (%llu bytes)\n",
+   Log(LOG_DEBUG, "Total extracted: %"PRIu64"%s (%"PRIu64" bytes)\n",
        pretty_size, pretty_unit_str, size_extracted);
 }
 

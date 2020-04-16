@@ -63,7 +63,7 @@ int dump_firmware_info(void)
  *----------------------------------------------------------------------------*/
 static INLINE int reserve_sysmem(const char *name, void *addr, uint64_t size)
 {
-   Log(LOG_DEBUG, "%s found @ %p (%llu bytes)\n", name, addr, size);
+   Log(LOG_DEBUG, "%s found @ %p (%"PRIu64" bytes)\n", name, addr, size);
 
    return blacklist_runtime_mem(PTR_TO_UINT64(addr), size);
 }
@@ -217,10 +217,6 @@ int firmware_shutdown(e820_range_t **mmap, size_t *count, efi_info_t *efi_info)
    Log(LOG_DEBUG, "Scanning system tables...");
 
    e820_mmap_merge(*mmap, count);
-
-   boot.mmap_top = (E820_BASE(&((*mmap)[*count - 1])) +
-                    E820_LENGTH(&((*mmap)[*count - 1])));
-   Log(LOG_DEBUG, "Top of memory map = 0x%llx", boot.mmap_top);
 
    status = system_blacklist_memory(*mmap, *count);
    if (status != ERR_SUCCESS) {

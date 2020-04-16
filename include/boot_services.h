@@ -180,5 +180,6 @@ EXTERN bool secure_boot_mode(void);
 EXTERN int secure_boot_check(void);
 
 EXTERN void check_efi_quirks(efi_info_t *efi_info);
+EXTERN int relocate_page_tables2(void);
 
 #endif /* !BOOT_SERVICES_H_ */
