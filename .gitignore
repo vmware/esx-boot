@@ -1,0 +1,7 @@
+**/*~
+**/tmp.*
+cscope.*
+TAGS
+efiboot*.tgz
+nohup.out
+build
