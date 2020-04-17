@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2015,2019 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -22,6 +22,8 @@
  */
 
 #define _GNU_SOURCE
+#define EFIAPI
+#define NO_MSABI_VA_FUNCS 1
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -675,7 +677,7 @@ static void write_pe_file ( struct pe_header *pe_header,
 	for ( section = pe_sections ; section ; section = section->next ) {
 		if ( fseek ( pe, section->hdr.PointerToRawData,
 			     SEEK_SET ) != 0 ) {
-			eprintf ( "Could not seek to %lx: %s\n",
+			eprintf ( "Could not seek to %x: %s\n",
 				  section->hdr.PointerToRawData,
 				  strerror ( errno ) );
 			exit ( 1 );

@@ -1,3 +1,8 @@
+/*******************************************************************************
+ * Portions Copyright (c) 2019 VMware, Inc.  All rights reserved.
+ * SPDX-License-Identifier: GPL-2.0
+ ******************************************************************************/
+
 /* -----------------------------------------------------------------------
  *
  *   Copyright 2003-2008 H. Peter Anvin - All Rights Reserved
@@ -47,7 +52,7 @@ _start:
 		call 1f
 1:		popl %ebx
 		addl $_GLOBAL_OFFSET_TABLE_ + (. - 1b), %ebx
-	
+
 		/* Process relocations (which overlay the .bss segment) */
 		leal _edata@GOTOFF(%ebx),%esi
 		leal _start@GOTOFF(%ebx),%edx
@@ -60,12 +65,11 @@ _start:
 		/* Relocate the GOT (is this right?) */
 		leal __got_start@GOTOFF(%ebx),%esi
 		leal __got_end@GOTOFF(%ebx),%edi
-4:
-		addl %edx,(%esi)
+4:		addl %edx,(%esi)
 		addl $4,%esi
 		cmpl %edi,%esi
 		jb 4b
-	
+
 		/* Zero the .bss segment */
 		xorl %eax,%eax
 		leal __bss_start@GOTOFF(%ebx),%edi
@@ -85,19 +89,27 @@ _start:
 5:		inc %ecx			# Copy the argument count, too
 		rep ; movsl
 
-		/* Look for library initialization functions */
+		/* Look for library initialization functions in ctors */
 		leal __ctors_start@GOTOFF(%ebx),%esi
 		leal __ctors_end@GOTOFF(%ebx),%edi
-6:
-		cmpl %edi,%esi
+6:		cmpl %edi,%esi
 		jae 7f
 		call *(%esi)
 		addl $4,%esi
 		jmp 6b
+7:
+		/* Look for library initialization functions in init_array */
+		leal __init_array_start@GOTOFF(%ebx),%esi
+		leal __init_array_end@GOTOFF(%ebx),%edi
+8:		cmpl %edi,%esi
+		jae 9f
+		call *(%esi)
+		addl $4,%esi
+		jmp 8b
+9:
 /*
  * Actually run main.
  */
-7:
 		call com32_main
 		call *__exit_handler@GOTOFF(%ebx)
 		hlt

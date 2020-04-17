@@ -1,6 +1,6 @@
 #!/bin/sh
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2018 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2019 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -17,25 +17,26 @@ toolchain='#
 # Delete this line once the tool chain is setup.
 $(error Please setup your toolchain in env/toolchain.mk)
 
-#
-# The host toolchain is used to build tools
-# like uefi/elf2efi and bios/relocs.
-#
+#=============================================================
+# Host definitions. Used to compile tools that run on the
+# host during the build, such as uefi/elf2efi and bios/relocs.
+#=============================================================
 
 HOST_CC         := <Path to host gcc>
-
+HOST_CFLAGS     :=
 #
 # Known to work with libbfd 2.17.50. libbfd
 # used should be aware of all architecture types
 # used in build.
 #
-HOST_LIBBFD     := <Path to host libbfd.a>
 HOST_LIBBFDINC  := <Path to host bfd.h>
+HOST_LIBBFD     := <Path to host libbfd.a>
 HOST_LIBERTY    := <Path to host libiberty.a>
 
-#
+#=============================================================
 # Target definitions.
-#
+#=============================================================
+
 ifeq ($(BUILDENV),uefiarm64)
 GCCROOT := <Path to aarch64 gcc sysroot>
 CC      := <Path to aarch64 gcc>
@@ -43,17 +44,15 @@ LD      := <Path to aarch64 ld>
 AR      := <Path to aarch64 ar>
 OBJCOPY := <Path to aarch64 objcopy>
 else
-# Known to work with gcc 4.8.3.
+#
+# Known to work with gcc 4.8.0, nasm 2.01, and binutils 2.22
+#
 GCCROOT := <Path to x86/x86_64 gcc sysroot>
 CC      := <Path to x86/x86_64 gcc>
-
-# Known to work nasm 2.01
-AS      := <Path to nasm>
-
-# Known to work with binutils 2.22
 LD      := <Path to x86/x86_64 ld>
 AR      := <Path to x86/x86_64 ar>
 OBJCOPY := <Path to x86/x86_64 objcopy>
+AS      := <Path to nasm>
 endif'
 
 makfile='#
@@ -83,7 +82,7 @@ com32:
 # mode, early bootbank modules must be signed with one of the embedded
 # keys. See mboot/secure.c for details.
 #
-uefi64 uefi32:
+uefi64 uefi32 uefiarm64:
 	$(MAKE) -f Makefile.main BUILDENV=$@ \
 		KEY=elfsign_test+test_sb2017 EKEY=test
 	$(MAKE) -f Makefile.main BUILDENV=$@ \

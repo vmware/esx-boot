@@ -22,7 +22,7 @@ __GET_CPUID(unsigned int input, CPUIDRegs *regs)
    __get_cpuid(input, &regs->eax, &regs->ebx, &regs->ecx, &regs->edx);
 }
 
-inline unsigned int
+unsigned int
 CPUID_EFFECTIVE_FAMILY(unsigned int v) /* %eax from CPUID with %eax=1. */
 {
    unsigned int f = CPUID_GET(1, EAX, FAMILY, v);
@@ -30,13 +30,13 @@ CPUID_EFFECTIVE_FAMILY(unsigned int v) /* %eax from CPUID with %eax=1. */
       CPUID_GET(1, EAX, EXTENDED_FAMILY, v);
 }
 
-inline bool
+bool
 CPUID_FAMILY_IS_P6(unsigned int eax)
 {
    return CPUID_EFFECTIVE_FAMILY(eax) == CPUID_FAMILY_P6;
 }
 
-inline unsigned int
+unsigned int
 CPUID_EFFECTIVE_MODEL(unsigned int v) /* %eax from CPUID with %eax=1. */
 {
    unsigned int m = CPUID_GET(1, EAX, MODEL, v);
@@ -44,7 +44,7 @@ CPUID_EFFECTIVE_MODEL(unsigned int v) /* %eax from CPUID with %eax=1. */
    return m + (em << 4);
 }
 
-inline bool
+bool
 CPUID_UARCH_IS_SKYLAKE(unsigned int v) // IN: %eax from CPUID with %eax=1.
 {
    unsigned int model = 0;
@@ -63,7 +63,7 @@ CPUID_UARCH_IS_SKYLAKE(unsigned int v) // IN: %eax from CPUID with %eax=1.
            model == CPUID_MODEL_KABYLAKE_9E);
 }
 
-inline bool
+bool
 CPUID_IsRawVendor(CPUIDRegs *id0, const char* vendor)
 {
    return (id0->ebx == *(const unsigned int *)(uintptr_t) (vendor + 0) &&
@@ -71,7 +71,7 @@ CPUID_IsRawVendor(CPUIDRegs *id0, const char* vendor)
            id0->edx == *(const unsigned int *)(uintptr_t) (vendor + 8));
 }
 
-inline bool
+bool
 CPUID_IsVendorIntel(CPUIDRegs *id0)
 {
    return CPUID_IsRawVendor(id0, CPUID_INTEL_VENDOR_STRING);

@@ -105,7 +105,7 @@ else
    LDFLAGS    += --defsym _start=efi_main
    LDSCRIPT   := $(TOPDIR)/uefi/uefi.lds
    ifeq ($(ARCH),ia32)
-      CFLAGS     += -malign-double
+      CFLAGS     += -malign-double -fno-pie
    else ifeq ($(ARCH),em64t)
       CFLAGS     += -fpie
    endif
@@ -126,7 +126,8 @@ CFLAGS     += --sysroot $(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
                                                                              \
               -W -Wall -Werror -std=c99 -Wwrite-strings -Wstrict-prototypes  \
               -Wpointer-arith -Wdeclaration-after-statement                  \
-              -Wvla -Woverlength-strings -Wredundant-decls -Wformat
+              -Wvla -Woverlength-strings -Wredundant-decls -Wformat          \
+              -Wno-implicit-fallthrough
 
 LDFLAGS    += -nostdlib -q -T $(LDSCRIPT)
 
