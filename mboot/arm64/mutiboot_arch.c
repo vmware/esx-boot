@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2018,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,10 +9,11 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/types.h>
 #include <mutiboot.h>
 #include <stdbool.h>
 #include <cpu.h>
-
+#include <bootlib.h>
 
 /*-- mutiboot_arch_supported_req_flags -----------------------------------------
  *

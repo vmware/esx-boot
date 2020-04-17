@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * multiboot.h -- Multiboot specification definitions
  *
- * Multiboot has been deprecated in favor of Mutiboot, and is only
- * supported by esx-boot to boot older version of vSphere.
+ * For use in booting ESXi, Multiboot has been replaced by Mutiboot.
+ * Multiboot is still supported by esx-boot to boot older versions of ESXi.
  *
  * Most of this file reflects the "official" multiboot specification, published
  * by the GNU project, available at:
@@ -68,7 +68,8 @@
 
 #define MBH_FLAG_PAGE_ALIGN   (1 << 0)   /* Align modules on page (4KB) */
 #define MBH_FLAG_MEMORY       (1 << 1)   /* Must pass memory info to OS */
-#define MBH_FLAG_VIDEO        (1 << 2)   /* Must pass video info to OS */
+#define MBH_FLAG_VIDEO        (1 << 2)   /* Must pass video info to OS;
+                                            video fields are valid */
 #define MBH_FLAG_AOUT_KLUDGE  (1 << 16)  /* Address fields are valid */
 #define MBH_FLAG_EFI_RTS_OLD  (1 << 17)  /* rts_vaddr field is valid */
 #define MBH_FLAG_EFI_RTS_NEW  (1 << 18)  /* rts_vaddr/rts_size fields are valid */

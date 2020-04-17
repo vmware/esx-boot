@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -25,11 +25,8 @@
 #ifndef MUTIBOOT_H_
 #define MUTIBOOT_H_
 
-#include <sys/types.h>
-#include <bootlib.h>
-
 /*
- * Define constant values accross boot loaders
+ * Define constant values across boot loaders
  */
 #define MUTIBOOT_MAXCMDLINE   (4096)
 #define MUTIBOOT_MAXMODNAME    (256)
@@ -52,16 +49,16 @@
  * 0. Flag 16 - 31 describes optional features. The boot loader continues, even
  * if it does not support all of the optional flags.
  */
-#define MUTIBOOT_ARCH_FLAG_X86_UNUSED  (1 << 0)   /* For future x86-specific expansion. */
 #define MUTIBOOT_ARCH_FLAG_ARM64_EL1   (1 << 0)   /* Kernel runs in EL1, not EL2 */
-#define MUTIBOOT_FLAG_VIDEO            (1 << 2)   /* Must pass video info to OS */
-#define MUTIBOOT_FLAG_EFI_RTS_OLD      (1 << 17)  /* rts_vaddr field is valid */
-#define MUTIBOOT_FLAG_EFI_RTS_NEW      (1 << 18)  /* rts vaddr and size fields valid */
+#define MUTIBOOT_FLAG_VIDEO            (1 << 2)   /* Must pass video info to OS;
+                                                     non-min video fields valid */
+#define MUTIBOOT_FLAG_EFI_RTS_OLD      (1 << 17)  /* Reserved; do not redefine */
+#define MUTIBOOT_FLAG_EFI_RTS          (1 << 18)  /* EFI RTS fields valid */
 #define MUTIBOOT_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */
 #define MUTIBOOT_FLAG_VIDEO_MIN        (1 << 20)  /* Video min fields valid */
 
-#define MUTIBOOT_VIDEO_GRAPHIC     0          /* Linear graphics mode */
-#define MUTIBOOT_VIDEO_TEXT        1          /* EGA-standard text mode */
+#define MUTIBOOT_VIDEO_GRAPHIC         0          /* Linear graphics mode */
+#define MUTIBOOT_VIDEO_TEXT            1          /* EGA-standard text mode */
 
 typedef struct Mutiboot_Header {
    uint32_t magic;           /* Mutiboot Header Magic */
@@ -114,6 +111,7 @@ typedef enum Mutiboot_Type {
    MUTIBOOT_VBE_TYPE,
    MUTIBOOT_EFI_TYPE,
    MUTIBOOT_LOADESX_TYPE,
+   MUTIBOOT_LOADESX_CHECKS_TYPE,
    NUM_MUTIBOOT_TYPE
 } Mutiboot_Type;
 
@@ -170,7 +168,7 @@ typedef struct Mutiboot_Vbe {
 /* EFI flags */
 #define MUTIBOOT_EFI_ARCH64            (1<<0)  /* 64-bit EFI */
 #define MUTIBOOT_EFI_SECURE_BOOT       (1<<1)  /* EFI Secure Boot in progress */
-#define MUTIBOOT_EFI_MMAP              (1<<2)  /* UEFI memory map is valid */
+#define MUTIBOOT_EFI_MMAP              (1<<2)  /* EFI memory map is valid */
 
 typedef struct Mutiboot_Efi {
    Mutiboot_Type type;
@@ -189,6 +187,7 @@ typedef struct Mutiboot_Efi {
 /* LoadESX Flags */
 #define MUTIBOOT_LOADESX_ENABLE           (1<<0)  /* Enable LoadESX */
 #define MUTIBOOT_LOADESX_IGNORE_PRECHECK  (1<<1)  /* Ignore Prechecks */
+#define MUTIBOOT_LOADESX_USES_MEMXFERFS   (1<<2)  /* LoadESX uses MemXferFS */
 
 typedef struct Mutiboot_LoadESX {
    Mutiboot_Type type;
@@ -199,7 +198,23 @@ typedef struct Mutiboot_LoadESX {
    uint8_t enableLoadESX;
    /* Set if flags & MUTIBOOT_LOADESX_IGNORE_PRECHECK */
    uint8_t ignorePrecheck;
+   /* Set if flags & MUTIBOOT_LOADESX_USES_MEMXFERFS */
+   uint64_t memXferFsStartMPN;
 } __attribute__((packed)) Mutiboot_LoadESX;
+
+#define MUTIBOOT_LOADESX_CHECK_MAX_LEN 32
+typedef struct Mutiboot_LoadESXCheck {
+   char name[MUTIBOOT_LOADESX_CHECK_MAX_LEN];
+   uint64_t cookie;
+} Mutiboot_LoadESXCheck;
+
+typedef struct Mutiboot_LoadESXChecks {
+   Mutiboot_Type type;
+   uint64_t elmtSize;
+
+   uint8_t numLoadESXChecks;
+   Mutiboot_LoadESXCheck loadESXChecks[0];
+} __attribute__((packed)) Mutiboot_LoadESXChecks;
 
 typedef struct Mutiboot_Info {
    uint64_t cmdline;
@@ -233,4 +248,4 @@ typedef struct Mutiboot_Info {
    } FOR_EACH_MUTIBOOT_ELMT_DONE(mbi, elmt)
 
 
-#endif /* !MUTIBOOT_H_ */
+#endif /* MUTIBOOT_H_ */

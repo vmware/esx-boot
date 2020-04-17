@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/types.h>
 #include <mutiboot.h>
 #include <stdbool.h>
 #include <e820.h>
@@ -279,13 +280,14 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
    if ((mbh->flags & MUTIBOOT_FLAG_EFI_RTS_OLD) != 0) {
       boot.efi_info.rts_vaddr = mbh->rts_vaddr;
       /*
-       * The old way stuffed RTS into DirectMap,
-       * and this is the implicit size of that region.
+       * Legacy code for a deprecated version of RTS support.  Compute
+       * the implicit size of the RTS region here, and allow only
+       * EFI_RTS_CAP_RTS_SIMPLE.
        */
       boot.efi_info.rts_size = (64UL*1024*1024*1024*1024);
    }
 
-   if ((mbh->flags & MUTIBOOT_FLAG_EFI_RTS_NEW) != 0) {
+   if ((mbh->flags & MUTIBOOT_FLAG_EFI_RTS) != 0) {
       boot.efi_info.rts_vaddr = mbh->rts_vaddr;
       boot.efi_info.rts_size = mbh->rts_size;
       boot.efi_info.caps |= EFI_RTS_CAP_RTS_SPARSE |
