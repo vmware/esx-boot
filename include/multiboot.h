@@ -6,7 +6,7 @@
 /*
  * multiboot.h -- Multiboot specification definitions
  *
- * For use in booting ESXi, Multiboot has been replaced by Mutiboot.
+ * For use in booting ESXi, Multiboot has been replaced by ESXBootInfo.
  * Multiboot is still supported by esx-boot to boot older versions of ESXi.
  *
  * Most of this file reflects the "official" multiboot specification, published
@@ -316,7 +316,7 @@ static INLINE void mbi_set_efi_info(MultiBoot_Info *mbi, uint64_t systab,
    /*
     * Note: do not add new flags to efi_flags in multiboot.h, as old
     * kernels will panic if unexpected flags are set.  Add new flags
-    * only in mutiboot.h.
+    * only in esxbootinfo.h.
     */
 #if defined(only_em64t)
    mbi->efi_flags |= MBI_EFI_FLAG_ARCH64;

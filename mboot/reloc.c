@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2014-2016,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2014-2016,2018,2020 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -839,7 +839,7 @@ int compute_relocations(e820_range_t *mmap, size_t count)
     * ALLOC_ANY and ALLOC_32BIT.
     */
    status = set_runtime_addr(&relocs[k], m, 0,
-                             boot.is_mutiboot ? ALLOC_ANY : ALLOC_32BIT);
+                             boot.is_esxbootinfo ? ALLOC_ANY : ALLOC_32BIT);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Modules relocation error: %s", error_str[status]);
       return status;

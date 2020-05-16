@@ -4,18 +4,18 @@
  ******************************************************************************/
 
 /*
- * mutiboot_arch.c -- Arch-specific portions of mutiboot.
+ * esxbootinfo_arch.c -- Arch-specific portions of esxbootinfo.
  */
 
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
-#include <mutiboot.h>
+#include <esxbootinfo.h>
 #include <stdbool.h>
 #include <cpu.h>
-#include <bootlib.h>
 
-/*-- mutiboot_arch_supported_req_flags -----------------------------------------
+
+/*-- esxbootinfo_arch_supported_req_flags --------------------------------------
  *
  *      Extra arch-specific supported required flags.
  *
@@ -23,33 +23,24 @@
  *      None.
  *
  * Results
- *      MUTIBOOT_ARCH_FLAG_ARM64_EL1.
+ *      0.
  *----------------------------------------------------------------------------*/
-int mutiboot_arch_supported_req_flags(void)
+int esxbootinfo_arch_supported_req_flags(void)
 {
-   return MUTIBOOT_ARCH_FLAG_ARM64_EL1;
+   return 0;
 }
 
-/*-- mutiboot_arch_check_kernel-------------------------------------------------
+/*-- esxbootinfo_arch_check_kernel----------------------------------------------
  *
  *      Extra arch-specific kernel checks.
  *
  * Parameters
- *      IN mbh: Mutiboot header.
+ *      IN mbh: ESXBootInfo header.
  *
  * Results
  *      False if kernel is not supported (with error logged).
  *----------------------------------------------------------------------------*/
-bool mutiboot_arch_check_kernel(Mutiboot_Header *mbh)
+bool esxbootinfo_arch_check_kernel(UNUSED_PARAM(ESXBootInfo_Header *mbh))
 {
-   unsigned system_el = el_is_hyp() ? 2 : 1;
-   unsigned kernel_el = (mbh->flags & MUTIBOOT_ARCH_FLAG_ARM64_EL1) == 0 ? 2 : 1;
-
-   if (system_el != kernel_el) {
-      Log(LOG_ERR, "System EL(%u) != kernel EL(%u) (Mutiboot flags 0x%x)\n",
-          system_el, kernel_el, mbh->flags);
-      return false;
-   }
-
    return true;
 }

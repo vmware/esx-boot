@@ -17,10 +17,7 @@ mode.
 You probably don't want to use esx-boot to boot anything other than
 ESXi.  esx-boot has some support for a slightly extended version of
 the Multiboot standard, but ongoing development is using a new 64-bit
-boot API specific to VMware called "Mutiboot". (Notice the different
-spelling, with no "l".  Mutiboot is short for "VMware's mutated boot"
-and is pronounced muti-boot.  In the future we are likely to change
-the name to something less confusingly similar to Multiboot.)
+boot API specific to VMware called ESXBootInfo.
 
 ## Try it out
 
@@ -73,7 +70,7 @@ The main bootloader module is called mboot. The mboot module is responsible for:
     - kernel boot options
     2. Loading the kernel and other modules from the boot media into main memory
     3. Verifying the cryptographic signatures on the early modules for Secure Boot purposes.
-    4. Setting up system information (Multiboot or Mutiboot) structures and passing them to the kernel
+    4. Setting up system information (Multiboot or ESXBootInfo) structures and passing them to the kernel
     5. Preparing the firmware for kernel hand-off.
     6. Handing off to the kernel. 
 

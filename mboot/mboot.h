@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
- * mboot.h -- Mu(l)tiboot Loader header file
+ * mboot.h -- ESXBootInfo loader header file
  */
 
 #ifndef MBOOT_H_
@@ -12,7 +12,7 @@
 
 #include <bootlib.h>
 #include <multiboot.h>
-#include <mutiboot.h>
+#include <esxbootinfo.h>
 #include <elf.h>
 #include <vbe.h>
 #include <e820.h>
@@ -147,9 +147,9 @@ typedef struct {
    bool headless;             /* True if no video adapter is found */
    bool exit_on_errors;       /* Exit on transient errors */
    bool bootif;               /* Force BOOTIF= on the kernel command line */
-   bool no_mem_attr;          /* Do not pass extended attr in the MBI mmap */
-   bool is_network_boot;      /* Is the boot process via network */
-   bool is_mutiboot;          /* Is the kernel a Mutiboot kernel */
+   bool no_mem_attr;          /* Do not pass extended attr in Multiboot mmap */
+   bool is_network_boot;      /* Is the boot process via network? */
+   bool is_esxbootinfo;       /* Is the kernel an ESXBootInfo kernel? */
    bool no_quirks;            /* Do not work around platform quirks */
    bool no_rts;               /* Disable UEFI runtime services support */
    bool serial;               /* Is the serial log enabled? */
@@ -166,9 +166,9 @@ struct handoff_s {
    run_addr_t stack;          /* Trampoline stack */
    run_addr_t relocs;         /* Table of relocations */
    run_addr_t relocate;       /* Relocation routine */
-   run_addr_t mbi;            /* Mu(l)tiboot Info structure address */
+   run_addr_t ebi;            /* EFIBootInfo or Multiboot Info structure addr */
    run_addr_t kernel;         /* Kernel entry point */
-   uint32_t   mbi_magic;      /* Mu(l)tiboot magic */
+   uint32_t   ebi_magic;      /* EFIBootInfo or Multiboot magic */
 };
 #pragma pack()
 
@@ -216,48 +216,48 @@ void config_clear(void);
  */
 int check_multiboot_kernel(void *kbuf, size_t ksize);
 size_t mb_mmap_desc_size(void);
-int multiboot_set_runtime_pointers(run_addr_t *run_mbi);
+int multiboot_set_runtime_pointers(run_addr_t *run_ebi);
 int multiboot_init(void);
 int multiboot_register(void);
 
 /*
- * mutiboot.c
+ * esxbootinfo.c
  */
-int check_mutiboot_kernel(void *kbuf, size_t ksize);
-int mutiboot_set_runtime_pointers(run_addr_t *run_mbi);
-int mutiboot_init(void);
-int mutiboot_register(void);
-uint32_t mutiboot_arch_supported_req_flags(void);
-bool mutiboot_arch_check_kernel(Mutiboot_Header *mbh);
+int check_esxbootinfo_kernel(void *kbuf, size_t ksize);
+int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi);
+int esxbootinfo_init(void);
+int esxbootinfo_register(void);
+uint32_t esxbootinfo_arch_supported_req_flags(void);
+bool esxbootinfo_arch_check_kernel(ESXBootInfo_Header *ebh);
 
 /*
- * mboot supports both the Multiboot format and the homegrown Mutiboot
+ * mboot supports both the Multiboot format and the homegrown ESXBootInfo
  * one. Let's abstract this here instead of special casing all the other
  * code.
  */
 
 static INLINE size_t boot_mmap_desc_size(void)
 {
-   if (boot.is_mutiboot) {
+   if (boot.is_esxbootinfo) {
       return 0;
    } else {
       return mb_mmap_desc_size();
    }
 }
 
-static INLINE int boot_set_runtime_pointers(run_addr_t *run_mbi)
+static INLINE int boot_set_runtime_pointers(run_addr_t *run_ebi)
 {
-   if (boot.is_mutiboot) {
-      return mutiboot_set_runtime_pointers(run_mbi);
+   if (boot.is_esxbootinfo) {
+      return esxbootinfo_set_runtime_pointers(run_ebi);
    } else {
-      return multiboot_set_runtime_pointers(run_mbi);
+      return multiboot_set_runtime_pointers(run_ebi);
    }
 }
 
 static INLINE int boot_init(void)
 {
-   if (boot.is_mutiboot) {
-      return mutiboot_init();
+   if (boot.is_esxbootinfo) {
+      return esxbootinfo_init();
    } else {
       return multiboot_init();
    }
@@ -265,8 +265,8 @@ static INLINE int boot_init(void)
 
 static INLINE int boot_register(void)
 {
-   if (boot.is_mutiboot) {
-      return mutiboot_register();
+   if (boot.is_esxbootinfo) {
+      return esxbootinfo_register();
    } else {
       return multiboot_register();
    }

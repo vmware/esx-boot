@@ -4,15 +4,16 @@
  ******************************************************************************/
 
 /*
- * mboot.c -- Mu(l)tiboot loader
+ * mboot.c -- ESXBootInfo (and Multiboot) loader
  *
  *   mboot [aSstRpeVDQU] -c <FILEPATH> [KERNEL_OPTIONS]
  *
  *      OPTIONS
- *         -a             Do not pass extended attributes in the Mu(l)tiboot info
+ *         -a             Do not pass extended attributes in the Multiboot
  *                        memory map. This is necessary for kernels which do not
- *                        support Mu(l)tiboot memory map extensions, and which
- *                        hardcode the memory map entry size.
+ *                        support Multiboot memory map extensions, and which
+ *                        hardcode the memory map entry size.  This option is
+ *                        not meaningful for ESXBootInfo kernels.
  *         -c <FILEPATH>  Set the configuration file to FILEPATH.
  *         -S <1...4>     Set the default serial port (1=COM1, 2=COM2, 3=COM3,
  *                        4=COM4, 0xNNNN=hex I/O port address ).
@@ -291,7 +292,7 @@ static int ipappend_2(void)
 
 /*-- main ----------------------------------------------------------------------
  *
- *      Mu(l)tiboot loader main function.
+ *      ESXBootInfo loader main function.
  *
  * Parameters
  *      IN argc: number of arguments on the command line
@@ -307,7 +308,7 @@ int main(int argc, char **argv)
 {
    trampoline_t jump_to_trampoline;
    handoff_t *handoff;
-   run_addr_t mbi;
+   run_addr_t ebi;
    int status;
 
    status = log_init(false);
@@ -424,8 +425,8 @@ int main(int argc, char **argv)
    }
 #endif
 
-   Log(LOG_DEBUG, "Initializing Mu%stiboot standard...\n",
-       boot.is_mutiboot ? "" : "l");
+   Log(LOG_DEBUG, "Initializing %s standard...\n",
+       boot.is_esxbootinfo ? "ESXBootInfo" : "Multiboot");
 
    status = boot_init();
    if (status != ERR_SUCCESS) {
@@ -438,7 +439,7 @@ int main(int argc, char **argv)
                          &boot.efi_info)                 != ERR_SUCCESS
     || boot_register()                                   != ERR_SUCCESS
     || compute_relocations(boot.mmap, boot.mmap_count)   != ERR_SUCCESS
-    || boot_set_runtime_pointers(&mbi)                   != ERR_SUCCESS
+    || boot_set_runtime_pointers(&ebi)                   != ERR_SUCCESS
     || relocate_runtime_services(&boot.efi_info,
                                  boot.no_rts, boot.no_quirks) != ERR_SUCCESS
     || install_trampoline(&jump_to_trampoline, &handoff) != ERR_SUCCESS) {
@@ -448,9 +449,9 @@ int main(int argc, char **argv)
    }
 
    Log(LOG_INFO, "Relocating modules and starting up the kernel...\n");
-   handoff->mbi = mbi;
+   handoff->ebi = ebi;
    handoff->kernel = boot.kernel.entry;
-   handoff->mbi_magic = boot.is_mutiboot ? MUTIBOOT_MAGIC : MBI_MAGIC;
+   handoff->ebi_magic = boot.is_esxbootinfo ? ESXBOOTINFO_MAGIC : MBI_MAGIC;
    jump_to_trampoline(handoff);
 
    NOT_REACHED();

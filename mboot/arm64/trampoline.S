@@ -1,5 +1,5 @@
 #******************************************************************************
-# Copyright (c) 2016 VMware, Inc.  All rights reserved.
+# Copyright (c) 2016,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #******************************************************************************
 
@@ -27,8 +27,8 @@
 
 #-- trampoline ----------------------------------------------------------------
 #
-#      This is the function that actually processes the relocations, sets up a
-#      Mutiboot compliant environment and jumps to the kernel.
+#      This is the function that actually processes the relocations, sets up an
+#      ESXBootInfo compliant environment and jumps to the kernel.
 #
 # Prototype
 #      void relocate(handoff_t *handoff);

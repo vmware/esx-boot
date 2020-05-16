@@ -5,3 +5,5 @@ TAGS
 efiboot*.tgz
 nohup.out
 build
+Makefile
+env/toolchain.mk

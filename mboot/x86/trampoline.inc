@@ -57,9 +57,9 @@
 %define OFFSET_STACK       (0 * SIZEOF_RUNADDR) ; handoff->stack
 %define OFFSET_RELOCS      (1 * SIZEOF_RUNADDR) ; handoff->relocs
 %define OFFSET_RELOCATE    (2 * SIZEOF_RUNADDR) ; handoff->relocate
-%define OFFSET_MBI         (3 * SIZEOF_RUNADDR) ; handoff->mbi
+%define OFFSET_EBI         (3 * SIZEOF_RUNADDR) ; handoff->ebi
 %define OFFSET_KERNEL      (4 * SIZEOF_RUNADDR) ; handoff->kernel
-%define OFFSET_MAGIC       (5 * SIZEOF_RUNADDR) ; handoff->mbi_magic
+%define OFFSET_MAGIC       (5 * SIZEOF_RUNADDR) ; handoff->ebi_magic
 
 ;;
 ;; Long Mode control

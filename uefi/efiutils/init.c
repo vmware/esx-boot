@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -262,7 +262,7 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
  *  (3) The existing tables may be in EfiBootServicesData memory that we will
  *      be reusing.  In particular, if any boot module is linked to load at
  *      a fixed address, we must ensure the page tables don't wind up at that
- *      address (PR 2170718).  On x86 the mutiboot "kernel" (vmkBoot) is
+ *      address (PR 2170718).  On x86 the ESXBootInfo "kernel" (vmkBoot) is
  *      currently linked at a fixed address.  (That could be changed in the
  *      future, but mboot needs to be backward compatible -- a newer mboot must
  *      be able to boot an older system -- so we still have to handle the fixed

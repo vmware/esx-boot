@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2017 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -17,8 +17,8 @@ SRC         := config.c              \
                load.c                \
                mboot.c               \
                $(IARCH)/multiboot.c  \
-               mutiboot.c            \
-               $(IARCH)/mutiboot_arch.c \
+               esxbootinfo.c         \
+               $(IARCH)/esxbootinfo_arch.c \
                reloc.c               \
                secure.c              \
                system.c              \

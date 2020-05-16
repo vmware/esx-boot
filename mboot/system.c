@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -189,7 +189,8 @@ static int system_blacklist_memory(e820_range_t *mmap, size_t count)
  *
  *     Shutdown the boot services:
  *       - Get the run-time E820 memory map (and request some extra memory for
- *         converting it later to the possibly bigger Mu(l)tiboot format).
+ *         converting it later to the possibly bigger ESXBootInfo or Multiboot
+ *         format).
  *
  *       - Record some EFI-specific information if possible.
  *

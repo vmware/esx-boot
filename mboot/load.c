@@ -454,10 +454,10 @@ static int load_module(unsigned int n)
 
    if (n == 0) {
       /*
-       * On x86, kernel can be Multiboot or Mutiboot.
-       * On AArch64, kernel can only be Mutiboot.
+       * On x86, kernel can be Multiboot or ESXBootInfo.
+       * On AArch64, kernel can only be ESXBootInfo.
        */
-      status = check_mutiboot_kernel(addr, size);
+      status = check_esxbootinfo_kernel(addr, size);
       if (status != ERR_SUCCESS) {
          status = check_multiboot_kernel(addr, size);
          if (status != ERR_SUCCESS) {
@@ -467,10 +467,10 @@ static int load_module(unsigned int n)
                 status, error_str[status], filepath);
             return status;
          } else {
-            boot.is_mutiboot = false;
+            boot.is_esxbootinfo = false;
          }
       } else {
-         boot.is_mutiboot = true;
+         boot.is_esxbootinfo = true;
       }
    }
 

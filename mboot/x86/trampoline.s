@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016 VMware, Inc.  All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2020 VMware, Inc.  All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -22,8 +22,8 @@ SECTION .trampoline
 
 ;;-- trampoline ----------------------------------------------------------------
 ;;
-;;      This is the function that actually processes the relocations, sets up a
-;;      Mu(l)tiboot compliant environment and jumps to the kernel.
+;;      This is the function that actually processes the relocations, sets up an
+;;      ESXBootInfo or Multiboot compliant environment and jumps to the kernel.
 ;;
 ;; STACK USAGE
 ;;      The trampoline allocates dynamic memory from the stack. This memory is
@@ -72,9 +72,9 @@ trampoline:
       mov     rdi, [r12 + OFFSET_RELOCS]  ; RDI = handoff->reloc_table
       call    [r12 + OFFSET_RELOCATE]     ; handoff->do_reloc(RDI)
 
-      mov     rbx, [r12 + OFFSET_MBI]     ; RBX = handoff->mbi
+      mov     rbx, [r12 + OFFSET_EBI]     ; RBX = handoff->ebi
       mov     rbp, [r12 + OFFSET_KERNEL]  ; RBP = handoff->kernel
-      mov     rdx, [r12 + OFFSET_MAGIC]   ; RDX = handoff->mbi_magic
+      mov     rdx, [r12 + OFFSET_MAGIC]   ; RDX = handoff->ebi_magic
 
       and     rsp, ~(GDT_DESC_SIZE - 1)   ; Align the GDT on 8 bytes
       pushq   GDT_DESC_4GB_FLAT_DATA32    ; GDT[2] = Data Segment Descriptor
@@ -110,9 +110,9 @@ trampoline:
       add     esp, 4                      ; Adjust the stack (pop ARG1)
       pop     esi                         ; Restore ESI from the stack
 
-      mov     ebx, [esi + OFFSET_MBI]     ; EBX = handoff->mbi
+      mov     ebx, [esi + OFFSET_EBI]     ; EBX = handoff->ebi
       mov     ebp, [esi + OFFSET_KERNEL]  ; EBP = handoff->kernel
-      mov     edx, [esi + OFFSET_MAGIC]   ; EDX = handoff->mbi_magic
+      mov     edx, [esi + OFFSET_MAGIC]   ; EDX = handoff->ebi_magic
 
       and     esp, ~(GDT_DESC_SIZE - 1)   ; Align the GDT on 8 bytes
       pushq   GDT_DESC_4GB_FLAT_DATA32    ; GDT[2] = Data Segment Descriptor
@@ -137,7 +137,7 @@ trampoline:
 ;;      We are either in compatibility mode, or in protected mode.
 ;;      New GDT is up, and describes a 4-Gb flat 32-bit memory.
 ;;
-;;      EBX = Mu(l)tiboot Info structure address
+;;      EBX = ESXBootInfo or Multiboot Info structure address
 ;;      EBP = kernel entry point
 ;;------------------------------------------------------------------------------
 .disable_paging:
@@ -147,13 +147,13 @@ trampoline:
       mov      cr0, eax                   ; Disable paging and clear EFER.LMA
 
 %if IS_64_BIT
-      mov      esi, edx                   ; Mu(l)tiboot Magic, before we clobber
+      mov      esi, edx                   ; Save ESXBootInfo or Multiboot magic
                                           ; EDX via rdmsr for 64-bit.
       mov      ecx, MSR_EFER              ; ECX selects MSR EFER
       rdmsr                               ; EDX:EAX = MSR EFER
       btr      eax, MSR_EFER_LME_BIT      ; Clear (disable) Long Mode bit
       wrmsr                               ; MSR EFER = EDX:EAX
-      mov      edx, esi                   ; Restore Mu(l)tiboot Magic
+      mov      edx, esi                   ; Restore ESXBootInfo magic
 %endif
 
 ;;
@@ -166,8 +166,8 @@ trampoline:
       mov      gs, ax                     ; GS = BOOT_DS
       mov      ss, ax                     ; SS = BOOT_DS
 
-      mov      eax, edx                   ; EAX = Mu(l)tiboot Magic
-                                          ; MBI address is already in EBX
+      mov      eax, edx                   ; EAX = ESXBootInfo or Multiboot magic
+                                          ; EBI address is already in EBX
       call     ebp                        ; handoff->kernel()
 
 ;;

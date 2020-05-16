@@ -4,13 +4,13 @@
  ******************************************************************************/
 
 /*
- * mutiboot.c -- Mutiboot support
+ * esxbootinfo.c -- ESXBootInfo support
  */
 
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
-#include <mutiboot.h>
+#include <esxbootinfo.h>
 #include <stdbool.h>
 #include <e820.h>
 #include <boot_services.h>
@@ -19,65 +19,65 @@
 #include "mboot.h"
 
 /* Flags 0-15 are required and must be supported */
-#define MUTIBOOT_FLAGS_REQ_MASK    0x0000FFFF
+#define ESXBOOTINFO_FLAGS_REQ_MASK    0x0000FFFF
 
-#define MUTIBOOT_GET_REQ_FLAGS(flags) \
-   ( (flags) & MUTIBOOT_FLAGS_REQ_MASK )
+#define ESXBOOTINFO_GET_REQ_FLAGS(flags) \
+   ( (flags) & ESXBOOTINFO_FLAGS_REQ_MASK )
 
-/* We support only these Mutiboot Header flags */
-#define MUTIBOOT_FLAGS_SUPPORTED    (MUTIBOOT_FLAG_VIDEO | \
-                                     mutiboot_arch_supported_req_flags())
+/* We support only these ESXBootInfo Header flags */
+#define ESXBOOTINFO_FLAGS_SUPPORTED    (ESXBOOTINFO_FLAG_VIDEO | \
+                                        esxbootinfo_arch_supported_req_flags())
 
 /*
  * This may become unnecessary at some point, once we're sure
  * we've fully understood and categorized changes in the UEFI
- * memory map between mutiboot_init and e820_to_mutiboot.
+ * memory map between esxbootinfo_init and e820_to_esxbootinfo.
  */
 #define NUM_E820_SLACK  20
 
-static Mutiboot_Info *mb_info;      /* The Mutiboot Info structure */
-static size_t size_mbi;
-static Mutiboot_Elmt *next_elmt;    /* Next Mutiboot element to use */
+static ESXBootInfo *eb_info;        /* The ESXBootInfo structure */
+static size_t size_ebi;
+static ESXBootInfo_Elmt *next_elmt; /* Next ESXBootInfo element to use */
 static char **cmdlines;
 static vbe_info_t vbe;              /* VBE information */
 
-/*-- mutiboot_scan -------------------------------------------------------------
+/*-- esxbootinfo_scan ----------------------------------------------------------
  *
- *      Locates the Mutiboot Header within a given buffer.
+ *      Locates the ESXBootInfo Header within a given buffer.
  *
- *      Mutiboot uses a header similar to Multiboot. The header is located
- *      within the first MUTIBOOT_SEARCH bytes of the first (as in
- *      lowest-loaded) ELF segment. The Mutiboot header must be 64-bit aligned.
+ *      ESXBootInfo uses a header similar to Multiboot. The header is located
+ *      within the first ESXBOOTINFO_SEARCH bytes of the first (as in
+ *      lowest-loaded) ELF segment. The ESXBootInfo header must be 64-bit aligned.
  *
  * Parameters
  *      IN buffer: pointer to the buffer to search in
  *      IN buflen: buffer size, in bytes
  *
  * Results
- *      A pointer to the Mutiboot header, or NULL if the header was not found.
+ *      A pointer to the ESXBootInfo header, or NULL if the header was not found.
  *----------------------------------------------------------------------------*/
-static INLINE Mutiboot_Header *mutiboot_scan(void *buffer, size_t buflen)
+static INLINE ESXBootInfo_Header *esxbootinfo_scan(void *buffer, size_t buflen)
 {
-   Mutiboot_Header *mbh = buffer;
+   ESXBootInfo_Header *mbh = buffer;
 
-   for (buflen = MIN(buflen, MUTIBOOT_SEARCH); buflen >= sizeof (Mutiboot_Header);
-        buflen -= MUTIBOOT_ALIGNMENT) {
+   for (buflen = MIN(buflen, ESXBOOTINFO_SEARCH); buflen >= sizeof (ESXBootInfo_Header);
+        buflen -= ESXBOOTINFO_ALIGNMENT) {
 
-      if ((mbh->magic == MUTIBOOT_MAGIC) &&
+      if ((mbh->magic == ESXBOOTINFO_MAGIC) &&
           ((mbh->magic + mbh->flags + mbh->checksum) == 0)) {
          return mbh;
       }
 
-      mbh = (Mutiboot_Header *)((char *)mbh + MUTIBOOT_ALIGNMENT);
+      mbh = (ESXBootInfo_Header *)((char *)mbh + ESXBOOTINFO_ALIGNMENT);
    }
 
    return NULL;
 }
 
-static void mb_mmap_sanity_check(void)
+static void eb_mmap_sanity_check(void)
 {
    uint64_t max_base, max_limit;
-   Mutiboot_MemRange *mbi_mem;
+   ESXBootInfo_MemRange *ebi_mem;
    bool error = false;
    bool overlap = false;
    size_t i;
@@ -85,19 +85,19 @@ static void mb_mmap_sanity_check(void)
    max_base = 0;
    max_limit = 0;
    i = 0;
-   FOR_EACH_MUTIBOOT_ELMT_TYPE_DO(mb_info, MUTIBOOT_MEMRANGE_TYPE, mbi_mem) {
+   FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE, ebi_mem) {
       uint64_t base, len, limit;
       const char *msg = NULL;
 
-      base = mbi_mem->startAddr;
-      len = mbi_mem->len;
+      base = ebi_mem->startAddr;
+      len = ebi_mem->len;
       limit = base + len - 1;
 
       if (base < max_base) {
          error = true;
-         msg = "Mutiboot MemMap is not sorted";
+         msg = "ESXBootInfo MemMap is not sorted";
          Log(LOG_ERR, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u: %s.\n",
-             i, base, limit, mbi_mem->memType, msg);
+             i, base, limit, ebi_mem->memType, msg);
       }
 
       if (len > 0 && limit < max_limit) {
@@ -107,46 +107,46 @@ static void mb_mmap_sanity_check(void)
       max_base = base;
       max_limit = limit;
       i++;
-   } FOR_EACH_MUTIBOOT_ELMT_TYPE_DONE(mb_info, mbi_mem);
+   } FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DONE(eb_info, ebi_mem);
 
    if (overlap || error) {
-      FOR_EACH_MUTIBOOT_ELMT_TYPE_DO(mb_info, MUTIBOOT_MEMRANGE_TYPE, mbi_mem) {
+      FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE, ebi_mem) {
          uint64_t base, len, limit;
 
-         base = mbi_mem->startAddr;
-         len = mbi_mem->len;
+         base = ebi_mem->startAddr;
+         len = ebi_mem->len;
          limit = base + len - 1;
 
          Log(LOG_DEBUG, "mmap[%zu]: %"PRIx64" - %"PRIx64" type %u\n",
-             i, base, limit, mbi_mem->memType);
-      } FOR_EACH_MUTIBOOT_ELMT_TYPE_DONE(mb_info, mbi_mem);
+             i, base, limit, ebi_mem->memType);
+      } FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DONE(eb_info, ebi_mem);
 
       if (overlap) {
-         Log(LOG_WARNING, "Mutiboot MemMap contains overlapping ranges.\n");
+         Log(LOG_WARNING, "ESXBootInfo MemMap contains overlapping ranges.\n");
       }
 
       if (error) {
-         Log(LOG_ERR, "Mutiboot MemMap is corrupted.\n");
+         Log(LOG_ERR, "ESXBootInfo MemMap is corrupted.\n");
          PANIC();
       }
    }
 }
 
-/*-- mb_advance_next_elmt-------------------------------------------------------
+/*-- eb_advance_next_elmt-------------------------------------------------------
  *
- *      Advance next_elmt to next free space in mb_info buffer.  Does
- *      not check for overflow; use mb_check_space as soon as the
+ *      Advance next_elmt to next free space in eb_info buffer.  Does
+ *      not check for overflow; use eb_check_space as soon as the
  *      required size for the next element is known.
  *----------------------------------------------------------------------------*/
-static void mb_advance_next_elmt(void)
+static void eb_advance_next_elmt(void)
 {
-   mb_info->numMutibootElmt++;
-   next_elmt = (Mutiboot_Elmt *)((uint8_t *)next_elmt + next_elmt->elmtSize);
+   eb_info->numESXBootInfoElmt++;
+   next_elmt = (ESXBootInfo_Elmt *)((uint8_t *)next_elmt + next_elmt->elmtSize);
 }
 
-/*-- mb_check_space ------------------------------------------------------------
+/*-- eb_check_space ------------------------------------------------------------
  *
- *      Check for available space in mb_info at next_elmt.
+ *      Check for available space in eb_info at next_elmt.
  *
  * Parameters
  *      IN size:       amount of space needed
@@ -154,21 +154,21 @@ static void mb_advance_next_elmt(void)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mb_check_space(size_t size)
+static int eb_check_space(size_t size)
 {
-   size_t used = (uint8_t *)next_elmt - (uint8_t *)mb_info;
+   size_t used = (uint8_t *)next_elmt - (uint8_t *)eb_info;
 
-   if (size <= size_mbi - used) {
+   if (size <= size_ebi - used) {
       return ERR_SUCCESS;
    }
-   Log(LOG_ERR, "Mutiboot buffer is too small (wanted %zu, have %zu/%zu).\n",
-       size, size_mbi - used, size_mbi);
+   Log(LOG_ERR, "ESXBootInfo buffer is too small (wanted %zu, have %zu/%zu).\n",
+       size, size_ebi - used, size_ebi);
    return ERR_BUFFER_TOO_SMALL;
 }
 
-/*-- mb_set_mmap_entry ---------------------------------------------------------
+/*-- eb_set_mmap_entry ---------------------------------------------------------
  *
- *      Setup a Mutiboot memory map entry.
+ *      Setup a ESXBootInfo memory map entry.
  *
  * Parameters
  *      IN base:       memory region starting address
@@ -178,30 +178,30 @@ static int mb_check_space(size_t size)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mb_set_mmap_entry(uint64_t base, uint64_t len, uint32_t type)
+static int eb_set_mmap_entry(uint64_t base, uint64_t len, uint32_t type)
 {
    int status;
-   Mutiboot_MemRange *memRange = (Mutiboot_MemRange *)next_elmt;
+   ESXBootInfo_MemRange *memRange = (ESXBootInfo_MemRange *)next_elmt;
 
-   status = mb_check_space(sizeof(Mutiboot_MemRange));
+   status = eb_check_space(sizeof(ESXBootInfo_MemRange));
    if (status != ERR_SUCCESS) {
       return status;
    }
 
-   memRange->type = MUTIBOOT_MEMRANGE_TYPE;
-   memRange->elmtSize = sizeof(Mutiboot_MemRange);
+   memRange->type = ESXBOOTINFO_MEMRANGE_TYPE;
+   memRange->elmtSize = sizeof(ESXBootInfo_MemRange);
 
    memRange->startAddr = base;
    memRange->len = len;
    memRange->memType = type;
 
-   mb_advance_next_elmt();
+   eb_advance_next_elmt();
    return ERR_SUCCESS;
 }
 
-/*-- check_mutiboot_kernel ----------------------------------------------------
+/*-- check_esxbootinfo_kernel ----------------------------------------------------
  *
- *      Check whether the given buffer contains a valid Mutiboot kernel.
+ *      Check whether the given buffer contains a valid ESXBootInfo kernel.
  *
  * Parameters
  *      IN kbuf:  pointer to the kernel buffer
@@ -210,9 +210,9 @@ static int mb_set_mmap_entry(uint64_t base, uint64_t len, uint32_t type)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int check_mutiboot_kernel(void *kbuf, size_t ksize)
+int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
 {
-   Mutiboot_Header *mbh;
+   ESXBootInfo_Header *mbh;
    int status;
    size_t i;
    Elf_CommonAddr base;
@@ -221,7 +221,7 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
       return ERR_INVALID_PARAMETER;
    }
 
-   if (ksize < sizeof (Mutiboot_Header)) {
+   if (ksize < sizeof (ESXBootInfo_Header)) {
       Log(LOG_ERR, "Kernel is too small.\n");
       return ERR_BAD_TYPE;
    }
@@ -235,13 +235,13 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
    }
 
    /*
-    * We'll actually hunt for the mutiboot header
+    * We'll actually hunt for the esxbootinfo header
     * in the first program header. On ARM64 there's
     * crazy 64-kb alignment that removes any chances
     * of actually locating the header in the first 8kb.
     */
-   for (i = 0; i < MUTIBOOT_ALIGNMENT; i++) {
-      mbh = mutiboot_scan((char *) (uintptr_t) base + i,
+   for (i = 0; i < ESXBOOTINFO_ALIGNMENT; i++) {
+      mbh = esxbootinfo_scan((char *) (uintptr_t) base + i,
                           ksize - i - (base - (uintptr_t) kbuf));
       if (mbh != NULL) {
          break;
@@ -249,27 +249,27 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
    }
 
    if (mbh == NULL) {
-      Log(LOG_DEBUG, "Mutiboot header is not found.\n");
+      Log(LOG_DEBUG, "ESXBootInfo header is not found.\n");
       return ERR_BAD_TYPE;
    }
 
    if (i > 0) {
-      Log(LOG_ERR, "Mutiboot header is not %u-bytes aligned.\n",
-          MUTIBOOT_ALIGNMENT);
+      Log(LOG_ERR, "ESXBootInfo header is not %u-bytes aligned.\n",
+          ESXBOOTINFO_ALIGNMENT);
       return ERR_BAD_TYPE;
    }
 
-   if ((MUTIBOOT_GET_REQ_FLAGS(mbh->flags) & ~MUTIBOOT_FLAGS_SUPPORTED) != 0) {
-      Log(LOG_ERR, "Mutiboot header contains unsupported flags.\n");
+   if ((ESXBOOTINFO_GET_REQ_FLAGS(mbh->flags) & ~ESXBOOTINFO_FLAGS_SUPPORTED) != 0) {
+      Log(LOG_ERR, "ESXBootInfo header contains unsupported flags.\n");
       Log(LOG_ERR, "req. flags set: 0x%x (supported 0x%x) \n",
-          MUTIBOOT_GET_REQ_FLAGS(mbh->flags),
-          MUTIBOOT_FLAGS_SUPPORTED);
+          ESXBOOTINFO_GET_REQ_FLAGS(mbh->flags),
+          ESXBOOTINFO_FLAGS_SUPPORTED);
       return ERR_BAD_TYPE;
    }
 
-   if (!mutiboot_arch_check_kernel(mbh)) {
+   if (!esxbootinfo_arch_check_kernel(mbh)) {
       /*
-       * mutiboot_arch_check_kernel will log as appropriate.
+       * esxbootinfo_arch_check_kernel will log as appropriate.
        */
       return ERR_BAD_TYPE;
    }
@@ -277,7 +277,7 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
    boot.efi_info.rts_size = 0;
    boot.efi_info.rts_vaddr = 0;
    boot.efi_info.caps |= EFI_RTS_CAP_RTS_SIMPLE;
-   if ((mbh->flags & MUTIBOOT_FLAG_EFI_RTS_OLD) != 0) {
+   if ((mbh->flags & ESXBOOTINFO_FLAG_EFI_RTS_OLD) != 0) {
       boot.efi_info.rts_vaddr = mbh->rts_vaddr;
       /*
        * Legacy code for a deprecated version of RTS support.  Compute
@@ -287,7 +287,7 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
       boot.efi_info.rts_size = (64UL*1024*1024*1024*1024);
    }
 
-   if ((mbh->flags & MUTIBOOT_FLAG_EFI_RTS) != 0) {
+   if ((mbh->flags & ESXBOOTINFO_FLAG_EFI_RTS) != 0) {
       boot.efi_info.rts_vaddr = mbh->rts_vaddr;
       boot.efi_info.rts_size = mbh->rts_size;
       boot.efi_info.caps |= EFI_RTS_CAP_RTS_SPARSE |
@@ -298,9 +298,9 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
    return ERR_SUCCESS;
 }
 
-/*-- mbi_set_modules_info ------------------------------------------------------
+/*-- ebi_set_modules_info ------------------------------------------------------
  *
- *      Set modules-related fields in the MBI. This includes the modules command
+ *      Set modules-related fields in the EBI. This includes the modules command
  *      lines and locations, as well as the modules table itself.
  *
  * Parameters
@@ -310,17 +310,17 @@ int check_mutiboot_kernel(void *kbuf, size_t ksize)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mbi_set_modules_info(module_t *mods, unsigned int mods_count)
+static int ebi_set_modules_info(module_t *mods, unsigned int mods_count)
 {
    run_addr_t addr, cmdline;
    unsigned int i;
    int status;
 
    for (i = 0; i < mods_count; i++) {
-      Mutiboot_Module *mod = (Mutiboot_Module *)next_elmt;
+      ESXBootInfo_Module *mod = (ESXBootInfo_Module *)next_elmt;
 
-      status = mb_check_space(sizeof(Mutiboot_Module) +
-                              sizeof(Mutiboot_ModuleRange));
+      status = eb_check_space(sizeof(ESXBootInfo_Module) +
+                              sizeof(ESXBootInfo_ModuleRange));
       if (status != ERR_SUCCESS) {
          return status;
       }
@@ -330,8 +330,8 @@ static int mbi_set_modules_info(module_t *mods, unsigned int mods_count)
          return status;
       }
 
-      mod->type = MUTIBOOT_MODULE_TYPE;
-      mod->elmtSize = sizeof(Mutiboot_Module);
+      mod->type = ESXBOOTINFO_MODULE_TYPE;
+      mod->elmtSize = sizeof(ESXBootInfo_Module);
 
       mod->string = cmdline;
       mod->moduleSize = mods[i].size;
@@ -345,31 +345,31 @@ static int mbi_set_modules_info(module_t *mods, unsigned int mods_count)
          mod->ranges[0].startPageNum = addr / PAGE_SIZE;
          mod->ranges[0].numPages = PAGE_ALIGN_UP(mods[i].size) / PAGE_SIZE;
 
-         mod->elmtSize += sizeof(Mutiboot_ModuleRange);
+         mod->elmtSize += sizeof(ESXBootInfo_ModuleRange);
       } else {
          addr = 0;
          mod->numRanges = 0;
       }
 
-      mb_advance_next_elmt();
+      eb_advance_next_elmt();
    }
 
    return status;
 }
 
-/*-- mbi_set_kernel_info -------------------------------------------------------
+/*-- ebi_set_kernel_info -------------------------------------------------------
  *
- *      Set kernel-related fields in the MBI.
+ *      Set kernel-related fields in the EBI.
  *
  *      This is just the kernel command line today.
  *
  * Parameters
- *      IN mbi:    pointer to the Mutiboot Info structure
+ *      IN ebi:    pointer to the ESXBootInfo structure
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mbi_set_kernel_info(Mutiboot_Info *mbi)
+static int ebi_set_kernel_info(ESXBootInfo *ebi)
 {
    run_addr_t addr;
    int status;
@@ -379,19 +379,19 @@ static int mbi_set_kernel_info(Mutiboot_Info *mbi)
       return status;
    }
 
-   if (!(strlen(cmdlines[0]) < MUTIBOOT_MAXCMDLINE)) {
+   if (!(strlen(cmdlines[0]) < ESXBOOTINFO_MAXCMDLINE)) {
       Log(LOG_CRIT, "Boot command line exceeds maximum supported length.");
       return ERR_UNSUPPORTED;
    }
 
-   mbi->cmdline = addr;
+   ebi->cmdline = addr;
 
    return status;
 }
 
-/*-- mbi_set_vbe_info ----------------------------------------------------------
+/*-- ebi_set_vbe_info ----------------------------------------------------------
  *
- *      Set VBE-related fields in the MBI.
+ *      Set VBE-related fields in the EBI.
  *
  * Parameters
  *      IN vbe_info:  pointer to the VBE controller info structure
@@ -403,15 +403,15 @@ static int mbi_set_kernel_info(Mutiboot_Info *mbi)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mbi_set_vbe_info(vbe_t *vbe_info,
+static int ebi_set_vbe_info(vbe_t *vbe_info,
                             vbe_mode_id_t *vbe_modes, vbe_mode_t *mode_info,
                             vbe_mode_id_t mode_id, uintptr_t fb_addr)
 {
    run_addr_t info, mode, modes_list;
    int status;
-   Mutiboot_Vbe *mb_vbe = (Mutiboot_Vbe *)next_elmt;
+   ESXBootInfo_Vbe *eb_vbe = (ESXBootInfo_Vbe *)next_elmt;
 
-   status = mb_check_space(sizeof(Mutiboot_Vbe));
+   status = eb_check_space(sizeof(ESXBootInfo_Vbe));
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -431,22 +431,22 @@ static int mbi_set_vbe_info(vbe_t *vbe_info,
 
    vbe_info->VideoModePtr = (uint32_t)modes_list;
 
-   mb_vbe->type = MUTIBOOT_VBE_TYPE;
-   mb_vbe->elmtSize = sizeof(Mutiboot_Vbe);
+   eb_vbe->type = ESXBOOTINFO_VBE_TYPE;
+   eb_vbe->elmtSize = sizeof(ESXBootInfo_Vbe);
 
-   mb_vbe->vbe_control_info = info;
-   mb_vbe->vbe_mode_info = mode;
-   mb_vbe->vbe_mode = mode_id;
-   mb_vbe->vbe_flags = MUTIBOOT_VBE_FB64;
-   mb_vbe->fbBaseAddress = fb_addr;
+   eb_vbe->vbe_control_info = info;
+   eb_vbe->vbe_mode_info = mode;
+   eb_vbe->vbe_mode = mode_id;
+   eb_vbe->vbe_flags = ESXBOOTINFO_VBE_FB64;
+   eb_vbe->fbBaseAddress = fb_addr;
 
-   mb_advance_next_elmt();
+   eb_advance_next_elmt();
    return ERR_SUCCESS;
 }
 
 /*-- set_efi_info -------------------------------------------------------------
  *
- *      Set EFI-related fields in the MBI.
+ *      Set EFI-related fields in the EBI.
  *
  * Parameters
  *      IN systab:         Address of the EFI systab.
@@ -467,22 +467,22 @@ static int set_efi_info(uint64_t systab,
                         bool secure_boot)
 {
    int status;
-   Mutiboot_Efi *mbefi = (Mutiboot_Efi *)next_elmt;
+   ESXBootInfo_Efi *mbefi = (ESXBootInfo_Efi *)next_elmt;
 
-   status = mb_check_space(sizeof(Mutiboot_Efi));
+   status = eb_check_space(sizeof(ESXBootInfo_Efi));
    if (status != ERR_SUCCESS) {
       return status;
    }
 
-   mbefi->type = MUTIBOOT_EFI_TYPE;
-   mbefi->elmtSize = sizeof(Mutiboot_Efi);
+   mbefi->type = ESXBOOTINFO_EFI_TYPE;
+   mbefi->elmtSize = sizeof(ESXBootInfo_Efi);
 
-   mbefi->efi_flags = MUTIBOOT_EFI_MMAP;
+   mbefi->efi_flags = ESXBOOTINFO_EFI_MMAP;
    if (arch_is_64) {
-      mbefi->efi_flags |= MUTIBOOT_EFI_ARCH64;
+      mbefi->efi_flags |= ESXBOOTINFO_EFI_ARCH64;
    }
    if (secure_boot) {
-      mbefi->efi_flags |= MUTIBOOT_EFI_SECURE_BOOT;
+      mbefi->efi_flags |= ESXBOOTINFO_EFI_SECURE_BOOT;
    }
 
    mbefi->efi_systab = systab;
@@ -491,13 +491,13 @@ static int set_efi_info(uint64_t systab,
    mbefi->efi_mmap_desc_size = mmap_desc_size;
    mbefi->efi_mmap_version = mmap_version;
 
-   mb_advance_next_elmt();
+   eb_advance_next_elmt();
    return ERR_SUCCESS;
 }
 
-/*-- e820_to_mutiboot ---------------------------------------------------------
+/*-- e820_to_esxbootinfo ---------------------------------------------------------
  *
- *      Convert a E820 memory map to the Mutiboot memory map format.
+ *      Convert a E820 memory map to the ESXBootInfo memory map format.
  *
  * Parameters
  *      IN e820:      E820 memory map
@@ -511,7 +511,7 @@ static int set_efi_info(uint64_t systab,
  *      changed to the E820_TYPE_AVAILABLE type and coalesced (merged).
  *      The modified E820 map is used to generate the converted memory map.
  *----------------------------------------------------------------------------*/
-static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
+static int e820_to_esxbootinfo(e820_range_t *e820, size_t *count)
 {
    e820_range_t *range = e820;
    e820_range_t *last = range + *count;
@@ -538,7 +538,7 @@ static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
       base = E820_BASE(e820);
       length = E820_LENGTH(e820);
 
-      status = mb_set_mmap_entry(base, length, e820->type);
+      status = eb_set_mmap_entry(base, length, e820->type);
       if (status != ERR_SUCCESS) {
          return status;
       }
@@ -548,47 +548,47 @@ static int e820_to_mutiboot(e820_range_t *e820, size_t *count)
    return ERR_SUCCESS;
 }
 
-/*-- mutiboot_set_runtime_pointers --------------------------------------------
+/*-- esxbootinfo_set_runtime_pointers --------------------------------------------
  *
- *      1) Convert boot.mmap from e820 format to mutiboot format.
+ *      1) Convert boot.mmap from e820 format to esxbootinfo format.
  *
- *      2) Setup the Mutiboot Info structure internal pointers to their
+ *      2) Setup the ESXBootInfo structure internal pointers to their
  *      run-time (relocated) values.
  *
  * Parameters
- *      OUT run_mbi: address of the relocated Mutiboot Info structure.
+ *      OUT run_ebi: address of the relocated ESXBootInfo structure.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int mutiboot_set_runtime_pointers(run_addr_t *run_mbi)
+int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi)
 {
    int status;
 
-   Log(LOG_DEBUG, "Converting e820 map to Mutiboot format...\n");
+   Log(LOG_DEBUG, "Converting e820 map to ESXBootInfo format...\n");
 
-   status = e820_to_mutiboot(boot.mmap, &boot.mmap_count);
+   status = e820_to_esxbootinfo(boot.mmap, &boot.mmap_count);
    if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Mutiboot memory map error.\n");
+      Log(LOG_ERR, "ESXBootInfo memory map error.\n");
       return status;
    }
 
-   mb_mmap_sanity_check();
+   eb_mmap_sanity_check();
 
-   Log(LOG_DEBUG, "Setting up Mutiboot runtime references...\n");
+   Log(LOG_DEBUG, "Setting up ESXBootInfo runtime references...\n");
 
-   status = mbi_set_modules_info(&boot.modules[1], boot.modules_nr - 1);
+   status = ebi_set_modules_info(&boot.modules[1], boot.modules_nr - 1);
    if (status != ERR_SUCCESS) {
       return status;
    }
 
-   status = mbi_set_kernel_info(mb_info);
+   status = ebi_set_kernel_info(eb_info);
    if (status != ERR_SUCCESS) {
       return status;
    }
 
    if (vbe.modes_list != NULL) {
-      status = mbi_set_vbe_info(&vbe.controller, vbe.modes_list,
+      status = ebi_set_vbe_info(&vbe.controller, vbe.modes_list,
                                 &vbe.mode, vbe.current_mode, vbe.fb_addr);
       if (status != ERR_SUCCESS) {
          return status;
@@ -613,7 +613,7 @@ int mutiboot_set_runtime_pointers(run_addr_t *run_mbi)
       }
    }
 
-   return runtime_addr(mb_info, run_mbi);
+   return runtime_addr(eb_info, run_ebi);
 }
 
 /*-- vbe_register --------------------------------------------------------------
@@ -651,20 +651,20 @@ static int vbe_register(void)
    return ERR_SUCCESS;
 }
 
-/*-- mutiboot_register -------------------------------------------------------
+/*-- esxbootinfo_register -------------------------------------------------------
  *
  *      Register the objects that will need to be relocated.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int mutiboot_register(void)
+int esxbootinfo_register(void)
 {
    module_t *mod;
    unsigned int i;
    int status;
 
-   Log(LOG_DEBUG, "Registering Mutiboot info...\n");
+   Log(LOG_DEBUG, "Registering ESXBootInfo...\n");
 
    status = elf_register(boot.modules[0].addr, &boot.kernel.entry);
    if (status != ERR_SUCCESS) {
@@ -673,9 +673,9 @@ int mutiboot_register(void)
    }
 
    /*
-    * Ensure the MBI and all subsequent system objects start on a page boundary.
+    * Ensure the EBI and all subsequent system objects start on a page boundary.
     */
-   status = add_sysinfo_object(mb_info, size_mbi, ALIGN_PAGE);
+   status = add_sysinfo_object(eb_info, size_ebi, ALIGN_PAGE);
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -727,12 +727,12 @@ int mutiboot_register(void)
    return ERR_SUCCESS;
 }
 
-/*-- mutiboot_init_vbe --------------------------------------------------------
+/*-- esxbootinfo_init_vbe --------------------------------------------------------
  *
  *      Set the kernel preferred video mode, and query the VBE information.
- *      By default, mboot discards the Mutiboot video info, and toggles to VGA
+ *      By default, mboot discards the ESXBootInfo video info, and toggles to VGA
  *      text mode before jumping to the kernel. Mboot only provides the VBE
- *      information when the kernel Mutiboot headers specify a VBE mode to be
+ *      information when the kernel ESXBootInfo headers specify a VBE mode to be
  *      setup.
  *
  * Parameters
@@ -742,9 +742,9 @@ int mutiboot_register(void)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int mutiboot_init_vbe(void *kbuf, size_t ksize)
+static int esxbootinfo_init_vbe(void *kbuf, size_t ksize)
 {
-   Mutiboot_Header *mbh;
+   ESXBootInfo_Header *mbh;
    int status;
    bool text_mode;
 
@@ -758,14 +758,14 @@ static int mutiboot_init_vbe(void *kbuf, size_t ksize)
       return status;
    }
 
-   mbh = mutiboot_scan(kbuf, ksize);
+   mbh = esxbootinfo_scan(kbuf, ksize);
 
    text_mode = true;
    if (mbh != NULL &&
-       ((mbh->flags & MUTIBOOT_FLAG_VIDEO) == MUTIBOOT_FLAG_VIDEO) &&
-       (mbh->mode_type == MUTIBOOT_VIDEO_GRAPHIC)) {
+       ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO) == ESXBOOTINFO_FLAG_VIDEO) &&
+       (mbh->mode_type == ESXBOOTINFO_VIDEO_GRAPHIC)) {
       unsigned int min_width, min_height, min_depth;
-      if ((mbh->flags & MUTIBOOT_FLAG_VIDEO_MIN) == MUTIBOOT_FLAG_VIDEO_MIN) {
+      if ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO_MIN) == ESXBOOTINFO_FLAG_VIDEO_MIN) {
          min_width = mbh->min_width;
          min_height = mbh->min_height;
          min_depth = mbh->min_depth;
@@ -794,7 +794,7 @@ static int mutiboot_init_vbe(void *kbuf, size_t ksize)
    }
 
    if (mbh != NULL &&
-       ((mbh->flags & MUTIBOOT_FLAG_VIDEO) == MUTIBOOT_FLAG_VIDEO)) {
+       ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO) == ESXBOOTINFO_FLAG_VIDEO)) {
       int get_info_status = video_get_vbe_info(&vbe);
       if (get_info_status != ERR_SUCCESS) {
          Log(LOG_WARNING, "Error getting video info: %s", error_str[status]);
@@ -807,14 +807,14 @@ static int mutiboot_init_vbe(void *kbuf, size_t ksize)
    return status;
 }
 
-/*-- mutiboot_init ------------------------------------------------------------
+/*-- esxbootinfo_init ------------------------------------------------------------
  *
- *      Allocate the Mutiboot Info structure.
+ *      Allocate the ESXBootInfo structure.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int mutiboot_init(void)
+int esxbootinfo_init(void)
 {
    size_t size_mod;
    unsigned int i;
@@ -834,33 +834,33 @@ int mutiboot_init(void)
        num_e820_ranges, NUM_E820_SLACK);
    free_memory_map(e820, &boot.efi_info);
 
-   size_mod = sizeof(Mutiboot_Module) + sizeof(Mutiboot_ModuleRange);
+   size_mod = sizeof(ESXBootInfo_Module) + sizeof(ESXBootInfo_ModuleRange);
 
-   size_mbi  = sizeof(Mutiboot_Info);
-   size_mbi += sizeof(Mutiboot_MemRange) * (num_e820_ranges + NUM_E820_SLACK);
-   size_mbi += size_mod * boot.modules_nr;
-   size_mbi += sizeof(Mutiboot_Vbe);
+   size_ebi  = sizeof(ESXBootInfo);
+   size_ebi += sizeof(ESXBootInfo_MemRange) * (num_e820_ranges + NUM_E820_SLACK);
+   size_ebi += size_mod * boot.modules_nr;
+   size_ebi += sizeof(ESXBootInfo_Vbe);
 
 #ifndef __COM32__
    /*
     * UEFI is being used.
     */
-   size_mbi += sizeof(Mutiboot_Efi);
+   size_ebi += sizeof(ESXBootInfo_Efi);
 #endif
 
-   mb_info = sys_malloc(size_mbi);
-   if (mb_info == NULL) {
+   eb_info = sys_malloc(size_ebi);
+   if (eb_info == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
    cmdlines = sys_malloc(boot.modules_nr * sizeof (char *));
    if (cmdlines == NULL) {
-      sys_free(mb_info);
+      sys_free(eb_info);
       return ERR_OUT_OF_RESOURCES;
    }
 
-   mb_info->numMutibootElmt = 0;
-   next_elmt = &mb_info->elmts[0];
+   eb_info->numESXBootInfoElmt = 0;
+   next_elmt = &eb_info->elmts[0];
 
    for (i = 0; i < boot.modules_nr; i++) {
       int retval;
@@ -874,21 +874,21 @@ int mutiboot_init(void)
       }
 
       // cmdlines[0] includes boot cmd line
-      if ( (retval >= MUTIBOOT_MAXMODNAME) && (i != 0) ){
+      if ( (retval >= ESXBOOTINFO_MAXMODNAME) && (i != 0) ){
          Log(LOG_CRIT, "Boot module string exceeds maximum supported length.");
          return ERR_UNSUPPORTED;
       }
 
       if (retval == -1) {
          sys_free(cmdlines);
-         sys_free(mb_info);
+         sys_free(eb_info);
          return ERR_OUT_OF_RESOURCES;
       }
    }
 
    if (!boot.headless) {
       // Ignore errors; they have been logged already
-      (void) mutiboot_init_vbe(boot.modules[0].addr, boot.modules[0].size);
+      (void) esxbootinfo_init_vbe(boot.modules[0].addr, boot.modules[0].size);
    }
 
    return ERR_SUCCESS;
