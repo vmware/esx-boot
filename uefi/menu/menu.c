@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -30,6 +30,12 @@
  *                        8: Wait for keypress before displaying menu.
  *                        16: Wait for keypress before reading menu.
  *                        32: Wait for keypress before trying each location.
+ *         -N <N>         Set criteria for using native UEFI HTTP to N.
+ *                        0: Never use native UEFI HTTP.
+ *                        1: Use native UEFI HTTP only if menu.efi itself was
+ *                           loaded via native UEFI HTTP.
+ *                        2: Use native UEFI HTTP if it allows plain http URLs.
+ *                        3: Always use native UEFI HTTP.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -68,41 +74,43 @@
  *      but it seems to be safe to put it into menus that are shared with
  *      pxelinux, as pxelinux ignores lines starting with an unknown keyword.
  *
- *      #s             - Comment.
- *      DEFAULT s      - Ignored if any MENU keywords occur in the file.
- *                         Otherwise gives label of default item
- *                         or default command line to chain to.
- *      TIMEOUT n      - Automatically boot the default item in n/10 seconds.
- *      NOHALT n       - Ignored.
- *      PROMPT n       - Ignored.
- *      MENU TITLE s   - Give the menu a title.
- *      MENU HIDDEN    - Don't display the menu until a key is pressed.
- *      EFI DEBUG n    - Set debug flags to n.
- *      EFI SERIAL p b - Debug log to serial port p, baud b (both optional).
- *      EFI VERBOSE n  - Show Log(LOG_DEBUG, ...) messages on screen.
- *      EFI HOMEDIR s  - Change the directory for interpreting relative paths.
- *      EFI HTTP s     - Evaluate s if HTTP loading is available.
- *      EFI NOHTTP s   - Evaluate s if HTTP loading is not available.
- *      EFI s          - Evaluate s (ignored if pxelinux parses the menu).
+ *      #s                - Comment.
+ *      DEFAULT s         - Ignored if any MENU keywords occur in the file.
+ *                            Otherwise gives label of default item
+ *                            or default command line to chain to.
+ *      TIMEOUT n         - Automatically boot default item in n/10 seconds.
+ *      NOHALT n          - Ignored.
+ *      PROMPT n          - Ignored.
+ *      MENU TITLE s      - Give the menu a title.
+ *      MENU HIDDEN       - Don't display the menu until a key is pressed.
+ *      EFI DEBUG n       - Set debug flags to n.
+ *      EFI SERIAL p b    - Debug log to serial port p, baud b (both optional).
+ *      EFI VERBOSE n     - Show Log(LOG_DEBUG, ...) messages on screen.
+ *      EFI HOMEDIR s     - Set the directory for interpreting relative paths.
+ *      EFI HTTP s        - Evaluate s if HTTP loading is available.
+ *      EFI NOHTTP s      - Evaluate s if HTTP loading is not available.
+ *      EFI NATIVEHTTP n  - Set the criteria for using native UEFI HTTP to n.
+ *                            See list of values under the -N option above.
+ *      EFI s             - Evaluate s (ignored if pxelinux parses the menu).
  *
- *      LABEL s        - Starts and names a menu item.  The following
- *                         keywords are recognized only within items.
- *      KERNEL s       - The EFI app (possibly with arguments) to chain to.
- *      APPEND s       - Command line arguments (added after any in KERNEL).
- *      IPAPPEND n     - Ignored.
- *      LOCALBOOT n    - Return from the menu program, with failure if
- *                         n = -1, success if n = -2.  Other values of n are
- *                         reserved but treated as -1 for now.  If menu.efi
- *                         was invoked directly by the UEFI boot manager, -1
- *                         should go on to the next boot option in the UEFI
- *                         boot order, while -2 should stop in the UEFI UI.
- *      CONFIG s       - Restart with s as the menu.
- *      MENU HIDE      - Don't display this item.
- *      MENU LABEL s   - Display this string instead of the item's label.
- *      MENU DEFAULT   - Make this item the default.
- *      MENU SEPARATOR - Display a blank line under this item.
- *      TEXT HELP ...  - Display text up to ENDTEXT while this item is selected.
- *      ENDTEXT        - Terminates TEXT HELP.
+ *      LABEL s           - Starts and names a menu item.  The following
+ *                            keywords are recognized only within items.
+ *      KERNEL s          - The EFI app (possibly with arguments) to chain to.
+ *      APPEND s          - Command line arguments (added after any in KERNEL).
+ *      IPAPPEND n        - Ignored.
+ *      LOCALBOOT n       - Return from the menu program, with failure if
+ *                            n = -1, success if n = -2.  Other values of n are
+ *                            reserved but treated as -1 for now.  If menu.efi
+ *                            was invoked directly by the UEFI boot manager, -1
+ *                            should go on to the next boot option in the UEFI
+ *                            boot order, while -2 should stop in the UEFI UI.
+ *      CONFIG s          - Restart with s as the menu.
+ *      MENU HIDE         - Don't display this item.
+ *      MENU LABEL s      - Display this string instead of the item's label.
+ *      MENU DEFAULT      - Make this item the default.
+ *      MENU SEPARATOR    - Display a blank line under this item.
+ *      TEXT HELP ...     - Display text up to ENDTEXT while item is selected.
+ *      ENDTEXT           - Terminates TEXT HELP.
  *
  *      If multiple KERNEL (or EFI KERNEL) options are given in an item, only
  *      the last is effective, and similarly for APPEND (or EFI APPEND).  If
@@ -193,9 +201,6 @@ EFI_HANDLE Volume;
 unsigned debug = 0;
 bool verbose = false;
 
-#define DEFAULT_SERIAL_COM      1       /* Default serial port (COM1) */
-#define DEFAULT_SERIAL_BAUDRATE 115200  /* Default serial baud rate */
-
 int do_menu(const char *filename);
 int do_item(Menu *menu, MenuItem *item);
 int chain_to(const char *program, const char *arguments);
@@ -206,7 +211,7 @@ void set_verbose(bool verbose);
  *      Set home directory.
  *
  * Results
- *      ERR_SUCCESS or generic error.
+ *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 int set_homedir(const char *dir)
 {
@@ -408,7 +413,7 @@ char *parse_str(Menu *menu)
    ret = malloc(menu->parse - start + 1);
    memcpy(ret, start, menu->parse - start);
    ret[menu->parse - start] = '\0';
-   
+
    skip_white(menu);
 
    return ret;
@@ -459,7 +464,7 @@ int parse_text_subcommand(Menu *menu, char **text)
       return ERR_SYNTAX;
    }
    start = menu->parse;
-   
+
    while (menu->remaining > 0) {
       skip_line(menu);
       end = menu->parse;
@@ -470,7 +475,7 @@ int parse_text_subcommand(Menu *menu, char **text)
          return ERR_SUCCESS;
       }
    }
-   
+
    log_syntax_error(menu, "expected", "ENDTEXT");
    return ERR_SYNTAX;
 }
@@ -529,11 +534,9 @@ int parse_menu_subcommand(Menu *menu)
  *----------------------------------------------------------------------------*/
 bool parse_efi_subcommand(Menu *menu)
 {
-   bool inItem = menu->last != NULL;
-
    if (match_token(menu, "DEBUG")) {
       debug = parse_int(menu);
-            
+
    } else if (match_token(menu, "SERIAL")) {
       int port = parse_int(menu);
       int baud = parse_int(menu);
@@ -549,27 +552,30 @@ bool parse_efi_subcommand(Menu *menu)
    } else if (match_token(menu, "VERBOSE")) {
       set_verbose(parse_int(menu));
 
+   } else if (match_token(menu, "HOMEDIR")) {
+      char *str = parse_str(menu);
+      int status = set_homedir(str);
+      if (status != ERR_SUCCESS) {
+         Log(LOG_WARNING, "Cannot set homedir to %s: %s",
+             str, error_str[status]);
+      }
+
    } else if (match_token(menu, "HTTP")) {
-      if (is_http_boot() || has_gpxe_download_proto(Volume)) {
+      if (has_gpxe_download_proto(Volume) || has_http(Volume)) {
          return false;
       } else {
          skip_line(menu);
       }
 
    } else if (match_token(menu, "NOHTTP")) {
-      if (is_http_boot() || has_gpxe_download_proto(Volume)) {
+      if (has_gpxe_download_proto(Volume) || has_http(Volume)) {
          skip_line(menu);
       } else {
          return false;
       }
 
-   } else if (inItem && match_token(menu, "HOMEDIR")) {
-      char *str = parse_str(menu);
-      int status = set_homedir(str);
-      if (status != ERR_SUCCESS) {
-         Log(LOG_WARNING, "Failed to set homedir to %s: %s",
-             str, error_str[status]);
-      }
+   } else if (match_token(menu, "NATIVEHTTP")) {
+      set_http_criteria(parse_int(menu));
 
    } else {
       // This "EFI" is just hiding a command from pxelinux
@@ -672,7 +678,7 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
          menu->last->ipappend = parse_int(menu);
 
       } else if (menu->last && match_token(menu, "LOCALBOOT")) {
-         // argument (type of localboot) 
+         // argument (type of localboot)
          menu->last->localboot = parse_int(menu);
 
       } else if (menu->last && match_token(menu, "CONFIG")) {
@@ -777,7 +783,7 @@ int file_load_wrapper(int volid, const char *filename, int (*callback)(size_t),
  *      OUT sizeOut: size of file.
  *
  * Results
- *      ERR_SUCCESS or generic error.
+ *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
 {
@@ -869,7 +875,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
- *      Generic error code on error.
+ *      Generic error status on error.
  *----------------------------------------------------------------------------*/
 int run_menu(Menu *menu)
 {
@@ -949,7 +955,7 @@ int run_menu(Menu *menu)
          } else {
             continue;
          }
-         
+
       } else if (key.sym == KEYSYM_DOWN) {
          item = selection->next;
          while (item && item->hide) {
@@ -1009,7 +1015,7 @@ int run_menu(Menu *menu)
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
- *      Generic error code on error.
+ *      Generic error status on error.
  *----------------------------------------------------------------------------*/
 int do_item(Menu *menu, MenuItem *item)
 {
@@ -1139,7 +1145,7 @@ int do_item(Menu *menu, MenuItem *item)
  *      IN arguments: command-line arguments.
  *
  * Results
- *      Generic error code on error.  Otherwise does not return.
+ *      Generic error status on error.  Otherwise does not return.
  *----------------------------------------------------------------------------*/
 int chain_to(const char *program, const char *arguments)
 {
@@ -1147,28 +1153,8 @@ int chain_to(const char *program, const char *arguments)
    void *image;
    size_t imgsize;
    EFI_HANDLE ChildHandle;
-   EFI_DEVICE_PATH *ChildPath;
-   EFI_HANDLE ChildDH;
-   EFI_LOADED_IMAGE *Child;
-   EFI_STATUS Status;
-   CHAR16 *LoadOptions;
-   UINTN ExitDataSize;
-   CHAR16 *ExitData;
 
    Log(LOG_DEBUG, "chain_to program=%s arguments=%s", program, arguments);
-
-   /* This is messy because the Load File Protocol can't load files
-    * from the network; see comment at top of tftpfile.c.  Instead, we
-    * read the file into memory using our own function, then invoke
-    * bs->LoadImage on that.
-    */
-
-   /* Convert arguments to UCS2 LoadOptions */
-   LoadOptions = NULL;
-   Status = ascii_to_ucs2(arguments, &LoadOptions);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
-   }
 
    /*
     * Search for and read the image into memory.  Sets "program" to the
@@ -1179,57 +1165,11 @@ int chain_to(const char *program, const char *arguments)
       return status;
    }
 
-   /*
-    * Compute values to pass in the DevicePath argument to LoadImage
-    * (ChildPath) and in ChildHandle->DeviceHandle (ChildDH).
-    */
-   if (is_http_boot()) {
-      Status = make_http_child_dh(program, &ChildDH);
-      if (EFI_ERROR(Status)) {
-         return error_efi_to_generic(Status);
-      }
-      Status = devpath_get(ChildDH, &ChildPath);
-      if (EFI_ERROR(Status)) {
-         return error_efi_to_generic(Status);
-      }
-   } else {
-      CHAR16 *Program = NULL;
-      Status = ascii_to_ucs2(program, &Program);
-      if (EFI_ERROR(Status)) {
-         return error_efi_to_generic(Status);
-      }
-      Status = file_devpath(Volume, Program, &ChildPath);
-      if (EFI_ERROR(Status)) {
-         return error_efi_to_generic(Status);
-      }
-      ChildDH = Volume;
+   status = firmware_image_load(program, arguments, image, imgsize,
+                                &ChildHandle);
+   if (status != ERR_SUCCESS) {
+      return status;
    }
-
-   /* Use the form of LoadImage that takes a memory buffer */
-   ChildHandle = NULL;
-   Status = bs->LoadImage(FALSE, ImageHandle, ChildPath,
-                          image, imgsize, &ChildHandle);
-   if (EFI_ERROR(Status)) {
-      if (ChildHandle != NULL) {
-         bs->UnloadImage(ChildHandle);
-      }
-      return error_efi_to_generic(Status);
-   }
-
-   /* Pass the command line, system table, and boot volume to the child */
-   Status = image_get_info(ChildHandle, &Child);
-   if (EFI_ERROR(Status)) {
-      bs->UnloadImage(ChildHandle);
-      return error_efi_to_generic(Status);
-   }
-
-   Child->LoadOptions = LoadOptions;
-   Child->LoadOptionsSize = UCS2SIZE(LoadOptions);
-   Child->SystemTable = st;
-   Child->DeviceHandle = ChildDH;
-
-   Log(LOG_DEBUG, "Image loaded at %p (size 0x%"PRIx64")",
-       Child->ImageBase, Child->ImageSize);
 
    if (debug & DEBUG_PAUSE_BEFORE_START_IMAGE) {
       if (await_keypress() == ERR_ABORTED) {
@@ -1237,19 +1177,11 @@ int chain_to(const char *program, const char *arguments)
       }
    }
 
-   /* Transfer control to the Child */
-   Status = bs->StartImage(ChildHandle, &ExitDataSize, &ExitData);
-   if (EFI_ERROR(Status) && ExitData != NULL) {
-      Log(LOG_ERR, "StartImage returned Status 0x%zx", Status);
-      st->ConOut->OutputString(st->ConOut, ExitData);
-   }
-   free(ExitData);
-
    /*
-    * Typically the child is a bootloader, in which case we won't get
-    * here.
+    * Start the child.  Typically the child is a bootloader, in which case it
+    * won't return.
     */
-   return error_efi_to_generic(Status);
+   return firmware_image_start(ChildHandle);
 }
 
 /*-- do_menu -------------------------------------------------------------------
@@ -1264,7 +1196,7 @@ int chain_to(const char *program, const char *arguments)
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
- *      Generic error code on error.
+ *      Generic error status on error.
  *----------------------------------------------------------------------------*/
 int do_menu(const char *filename)
 {
@@ -1341,7 +1273,7 @@ void set_verbose(bool state)
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
- *      Generic error code on error.
+ *      Generic error status on error.
  *----------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
@@ -1364,12 +1296,17 @@ int main(int argc, char **argv)
    debug = DEBUG_STRICT_SYNTAX;
 #endif /* DEBUG */
 
+   status = log_init(verbose);
+   if (status != ERR_SUCCESS) {
+      goto out;
+   }
+
    if (argc > 0) {
       int opt;
 
       optind = 1;
       do {
-         opt = getopt(argc, argv, "D:S:s:VH:");
+         opt = getopt(argc, argv, "D:S:s:VH:N:");
          switch (opt) {
          case 'D': /* debug flags */
             debug = atoi(optarg);
@@ -1388,9 +1325,12 @@ int main(int argc, char **argv)
          case 'H': /* homedir */
             status = set_homedir(optarg);
             if (status != ERR_SUCCESS) {
-               Log(LOG_WARNING, "Failed to set homedir to %s: %s",
+               Log(LOG_WARNING, "Cannot set homedir to %s: %s",
                    optarg, error_str[status]);
             }
+            break;
+         case 'N': /* nativehttp */
+            set_http_criteria(atoi(optarg));
             break;
          case -1:
             break;
@@ -1433,7 +1373,7 @@ int main(int argc, char **argv)
       }
       status = set_homedir(bootdir);
       if (status != ERR_SUCCESS) {
-         Log(LOG_WARNING, "Failed to set homedir to %s: %s",
+         Log(LOG_WARNING, "Cannot set homedir to %s: %s",
              bootdir, error_str[status]);
       }
       free(bootdir);

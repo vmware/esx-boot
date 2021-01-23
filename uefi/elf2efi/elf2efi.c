@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015,2019 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -38,6 +38,8 @@
 #include <libgen.h>
 #undef VA_START
 #include <bfd.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
 
 #define eprintf(...) fprintf ( stderr, __VA_ARGS__ )
 
@@ -114,6 +116,9 @@ struct options {
 
 unsigned int verbose;
 unsigned int fatalCount = 0;
+unsigned long reloc_copy_size = 0;
+unsigned int insert_hash;
+#define HASH_SIZE (512/8)
 
 /**
  * Allocate memory
@@ -155,6 +160,7 @@ static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
 	unsigned long start_rva;
 	uint16_t reloc;
 	struct pe_relocs *pe_rel;
+        struct pe_relocs **next_pe_rel = pe_reltab;
 	uint16_t *relocs;
 
 	/* Construct */
@@ -177,14 +183,14 @@ static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
 
 	/* Locate or create PE relocation table */
 	for ( pe_rel = *pe_reltab ; pe_rel ; pe_rel = pe_rel->next ) {
+                next_pe_rel = &pe_rel->next;
 		if ( pe_rel->start_rva == start_rva )
 			break;
 	}
 	if ( ! pe_rel ) {
 		pe_rel = xmalloc ( sizeof ( *pe_rel ) );
 		memset ( pe_rel, 0, sizeof ( *pe_rel ) );
-		pe_rel->next = *pe_reltab;
-		*pe_reltab = pe_rel;
+                *next_pe_rel = pe_rel;
 		pe_rel->start_rva = start_rva;
 	}
 
@@ -209,7 +215,7 @@ static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
 }
 
 /**
- * Calculate size of binary PE relocation table
+ * Create and/or calculate size of binary PE relocation table.
  *
  * @v pe_reltab		PE relocation table
  * @v buffer		Buffer to contain binary table, or NULL
@@ -352,8 +358,8 @@ static struct pe_section * process_section ( bfd *bfd,
 	unsigned long data_end;
 	unsigned long start;
 	unsigned long end;
-	unsigned long *applicable_start;
-	unsigned long *applicable_end;
+	unsigned long *applicable_start = NULL;
+	unsigned long *applicable_end = NULL;
 
 	/* Extract current RVA limits from file header */
 	code_start = pe_header->nt.OptionalHeader.BaseOfCode;
@@ -511,17 +517,30 @@ static void process_reloc ( bfd *bfd, asection *section, arelent *rel,
                  * too, assuming that our linker script has checked
                  * that there isn't really a PLT.
                  */
-		if (verbose) {
+		if (verbose >= 2) {
                         eprintf ( "Warning: relocation type %s for %s\n",
                                   howto->name, sym->name );
                 }
-	} else if ( ( strcmp ( howto->name, "R_AARCH64_LD_PREL_LO19" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_AARCH64_CALL26" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_AARCH64_JUMP26" ) == 0 ) ) {
-		if ( rel->addend != 0 ) {
-			eprintf ( "Unsupported addend for relo %s for sym %s\n", howto->name, sym->name );
-			exit ( 1 );
-		}
+	} else if ( ( strcmp ( howto->name, "R_AARCH64_CALL26" ) == 0 ) ||
+		    ( strcmp ( howto->name, "R_AARCH64_JUMP26" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_ADR_PREL_LO21" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_ADR_PREL_PG_HI21" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_ADD_ABS_LO12_NC" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_LDST8_ABS_LO12_NC" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_LDST16_ABS_LO12_NC" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_LDST32_ABS_LO12_NC" ) == 0 ) ||
+		    ( strcmp ( howto->name,
+                               "R_AARCH64_LDST64_ABS_LO12_NC" ) == 0 ) ) {
+		/*
+		 * Skip PC-relative relocations; all relative offsets remain
+		 * unaltered when the object is loaded.
+		 */
 	} else {
 		eprintf ( "Unrecognised relocation type %s\n", howto->name );
                 fatalCount++;
@@ -630,6 +649,160 @@ create_debug_section ( struct pe_header *pe_header, const char *filename ) {
 	debugdir->Size = debug->hdr.Misc.VirtualSize;
 
 	return debug;
+}
+
+/**
+ * Search symbol table for given name; exit with error if not found.
+ */
+static asymbol *find_symbol(const char *symname, asymbol **symtab)
+{
+        unsigned int i;
+
+        for (i = 0; symtab[i] != NULL; i++) {
+                if (strcmp(symtab[i]->name, symname) == 0) {
+                        return symtab[i];
+                }
+        }
+        eprintf("Symbol %s not found\n", symname);
+        exit(1);
+}
+
+/**
+ * Search for pe section by name; exit with error if not found.
+ */
+static struct pe_section *find_section(const char *secname,
+                                       struct pe_section *pe_sections)
+{
+        struct pe_section *cur;
+
+        for (cur = pe_sections; cur; cur = cur->next) {
+                if (strncmp((const char *)cur->hdr.Name, secname,
+                            sizeof(cur->hdr.Name)) == 0) {
+                        return cur;
+                }
+        }
+        eprintf("Required section %s not found\n", secname);
+        exit(1);
+}
+
+
+/**
+ * Write an extra copy of the .reloc section into space preallocated at symbol
+ * "_reloc_copy", of given max_size.
+ */
+static void copy_pe_reloc(unsigned long max_size, asymbol **symtab,
+                          struct pe_section *pe_sections)
+{
+        struct pe_section *reloc, *dest;
+        asymbol *sym;
+
+        reloc = find_section(".reloc", pe_sections);
+        sym = find_symbol("_reloc_copy", symtab);
+        dest = find_section(sym->section->name, pe_sections);
+
+        if (reloc->hdr.Misc.VirtualSize > max_size) {
+                eprintf("Reloc section size %u too large; max is %lu bytes\n",
+                        reloc->hdr.Misc.VirtualSize, max_size);
+                exit(1);
+        }
+
+        if (verbose) {
+                eprintf("Copying %.*s to %s at 0x%"PRIx64" from start of %s\n",
+                        (int)sizeof(dest->hdr.Name), dest->hdr.Name,
+                        sym->name, sym->value,
+                        sym->section->name);
+        }
+
+        memcpy(dest->contents + sym->value,
+               reloc->contents, reloc->hdr.Misc.VirtualSize);
+}
+
+/**
+ * Compute an HMAC-SHA2-512 hash of the .text, .rodata, and .data sections,
+ * excluding the space preallocated for the hash at symbol "_expected_hash",
+ * which is assumed to be at the end of a section.  Write the hash into the
+ * preallocated space.
+ */
+static void insert_pe_hash(asymbol **symtab, struct pe_section *pe_sections)
+{
+        asymbol *key_sym, *hash_sym;
+        struct pe_section *key_sec, *hash_sec;
+        const char *sec_name[] = { ".text", ".rodata", ".data", NULL };
+        unsigned i;
+        uint8_t hash[HASH_SIZE];
+        EVP_PKEY *pkey;
+        EVP_MD_CTX *ctx;
+        int rc;
+        size_t siglen;
+
+        key_sym = find_symbol("_hmac_key", symtab);
+        key_sec = find_section(key_sym->section->name, pe_sections);
+        hash_sym = find_symbol("_expected_hash", symtab);
+        hash_sec = find_section(hash_sym->section->name, pe_sections);
+
+        if (verbose) {
+                eprintf("Copying key from %s at 0x%"PRIx64" from start of %s\n",
+                        key_sym->name, key_sym->value,
+                        key_sym->section->name);
+        }
+
+        pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                                            key_sec->contents + key_sym->value,
+                                            HASH_SIZE);
+        if (pkey == NULL) {
+                eprintf("EVP_PKEY_new_raw_private_key error 0x%lx\n",
+                        ERR_get_error());
+                exit(1);
+        }
+
+        ctx = EVP_MD_CTX_new();
+        if (ctx == NULL) {
+                eprintf("EVP_MD_CTX_new error 0x%lx\n", ERR_get_error());
+                exit(1);
+        }
+
+        rc = EVP_DigestSignInit(ctx, NULL, EVP_sha512(), NULL, pkey);
+        if (rc != 1) {
+                eprintf("EVP_DigestSignInit error 0x%lx\n", ERR_get_error());
+                exit(1);
+        }
+
+        for (i = 0; sec_name[i] != NULL; i++) {
+                struct pe_section *sec;
+                uint32_t len;
+
+                sec = find_section(sec_name[i], pe_sections);
+                if (sec == hash_sec) {
+                        len = hash_sym->value;
+                } else {
+                        len = sec->hdr.Misc.VirtualSize;
+                }
+
+                rc = EVP_DigestSignUpdate(ctx, sec->contents, len);
+                if (rc != 1) {
+                        eprintf("EVP_DigestSignUpdate error 0x%lx\n",
+                                ERR_get_error());
+                        exit(1);
+                }
+        }
+
+        siglen = HASH_SIZE;
+        rc = EVP_DigestSignFinal(ctx, hash, &siglen);
+        if (rc != 1) {
+                eprintf("EVP_DigestSignFinal error 0x%lx\n", ERR_get_error());
+                exit(1);
+        }
+
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(ctx);
+
+        if (verbose) {
+                eprintf("Copying hash to %s at 0x%"PRIx64" from start of %s\n",
+                        hash_sym->name, hash_sym->value,
+                        hash_sym->section->name);
+        }
+
+        memcpy(hash_sec->contents + hash_sym->value, hash, HASH_SIZE);
 }
 
 /**
@@ -748,19 +921,28 @@ static void elf2pe ( const char *elf_name, const char *pe_name,
 	next_pe_section = &(*next_pe_section)->next;
 
 	/* Create the .debug section */
-#if 0
         /*
          * An empty .debug section confuses pedump and other MS tools,
          * and the section does not seem to be needed, so let's not
          * create it.
          */
-	*(next_pe_section) = create_debug_section ( &pe_header,
-						    basename ( pe_name_tmp ) );
-	next_pe_section = &(*next_pe_section)->next;
-#endif
+        if (0) {
+                *(next_pe_section) =
+                        create_debug_section ( &pe_header,
+                                               basename ( pe_name_tmp ) );
+                next_pe_section = &(*next_pe_section)->next;
+        }
 
         if (fatalCount > 0) {
                 exit(1);
+        }
+
+        if (reloc_copy_size != 0) {
+                copy_pe_reloc(reloc_copy_size, symtab, pe_sections);
+        }
+
+        if (insert_hash) {
+                insert_pe_hash(symtab, pe_sections);
         }
 
 	/* Write out PE file */
@@ -805,10 +987,12 @@ static int parse_options ( const int argc, char **argv,
 			{ "subsystem", required_argument, NULL, 's' },
 			{ "help", 0, NULL, 'h' },
 			{ "verbose", 0, NULL, 'v' },
+                        { "copy-reloc", required_argument, NULL, 'r' },
+                        { "insert-hash", 0, NULL, 'i' },
 			{ 0, 0, 0, 0 }
 		};
 
-		if ( ( c = getopt_long ( argc, argv, "s:hv:",
+		if ( ( c = getopt_long ( argc, argv, "s:hvr:i",
 					 long_options,
 					 &option_index ) ) == -1 ) {
 			break;
@@ -827,8 +1011,14 @@ static int parse_options ( const int argc, char **argv,
 			print_help ( argv[0] );
 			exit ( 0 );
 		case 'v':
-			verbose = 1;
+			verbose++;
 		        break;
+                case 'r':
+                        reloc_copy_size = strtoul(optarg, NULL, 0);
+                        break;
+                case 'i':
+                        insert_hash++;
+                        break;
 		case '?':
 		default:
 			exit ( 2 );

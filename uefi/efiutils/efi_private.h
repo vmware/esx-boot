@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015-2018,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -113,6 +113,13 @@ EFI_STATUS gop_init(resolution_t **res, unsigned int *n);
 EFI_STATUS uga_get_fb_info(resolution_t *res, framebuffer_t *fb);
 EFI_STATUS uga_set_video_mode(unsigned int w, unsigned int h, unsigned int bpp);
 EFI_STATUS uga_init(resolution_t **res, unsigned int *n);
+
+/*
+ * tcg2.c
+ */
+EFI_STATUS tcg2_get_event_log(const uint8_t **address, uint32_t *size,
+                              bool *truncated);
+void tcg2_init(void);
 
 /*
  * net.c

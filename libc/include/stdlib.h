@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -22,5 +22,8 @@ EXTERN long strtol(const char *, char **, int);
 EXTERN void *malloc(size_t);
 EXTERN void *calloc(size_t, size_t);
 EXTERN void free(void *);
+
+EXTERN int atexit(void (*func)(void));
+EXTERN void do_atexit(void);
 
 #endif /* !_STDLIB_H */

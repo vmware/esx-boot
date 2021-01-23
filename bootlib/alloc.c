@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -47,7 +47,7 @@ typedef struct {
 static addr_range_t allocs[MAX_ALLOCS_NR];   /* The table of allocations */
 static int alloc_count = 0;                  /* Number of allocations */
 
-void alloc_sanity_check(void)
+void alloc_sanity_check(bool verbose)
 {
    uint64_t base, len, limit, max_limit;
    bool error;
@@ -55,7 +55,7 @@ void alloc_sanity_check(void)
    int i;
 
    if (alloc_count < 1) {
-      Log(LOG_ERR, "Allocation table is empty.\n");
+      Log(LOG_ERR, "Allocation table is empty.");
       while (1);
    }
 
@@ -73,7 +73,8 @@ void alloc_sanity_check(void)
 
       if (len == 0) {
          msg = "zero-length allocation";
-      } else if (!(i + 1 == alloc_count && base + len == 0) && base + len <= base) {
+      } else if (!(i + 1 == alloc_count && base + len == 0) &&
+                 base + len <= base) {
          msg = "Allocation range overflow";
       } else if ((i > 0 && base <= max_limit) || limit < max_limit) {
          msg = "Allocation table is not sorted";
@@ -81,23 +82,25 @@ void alloc_sanity_check(void)
 
       if (msg != NULL) {
          error = true;
-         Log(LOG_ERR, "%"PRIx64" - %"PRIx64" (%"PRIu64" bytes): %s.\n",
+         Log(LOG_ERR, "%"PRIx64" - %"PRIx64" (%"PRIu64" bytes): %s.",
              base, limit, len, msg);
       }
 
       max_limit = limit;
    }
 
-   if (error) {
+   if (error || verbose) {
       for (i = 0; i < alloc_count; i++) {
          base = allocs[i].base;
          len = allocs[i].len;
          limit = base + len - 1;
-         Log(LOG_DEBUG, "%"PRIx64" - %"PRIx64" (%"PRIu64")\n",
+         Log(LOG_DEBUG, "%"PRIx64" - %"PRIx64" (%"PRIu64")",
              base, limit, len);
       }
+   }
 
-      Log(LOG_ERR, "Allocation table is corrupted.\n");
+   if (error) {
+      Log(LOG_ERR, "Allocation table is corrupted.");
       while (1);
    }
 }
@@ -117,7 +120,7 @@ void alloc_sanity_check(void)
 static int alloc_insert(uint64_t base, uint64_t len, int index)
 {
    if (alloc_count >= MAX_ALLOCS_NR) {
-      Log(LOG_ERR, "Allocation table is full.\n");
+      Log(LOG_ERR, "Allocation table is full.");
       return ERR_OUT_OF_RESOURCES;
    }
 
@@ -278,6 +281,7 @@ static int find_free_mem(uint64_t size, size_t align,
       hole_base = allocs[i].base + allocs[i].len;
    }
 
+   Log(LOG_ERR, "No free memory to alloc 0x%"PRIx64" bytes", size);
    return ERR_OUT_OF_RESOURCES;
 }
 
@@ -313,6 +317,9 @@ int alloc(uint64_t *addr, uint64_t size, size_t align, int option)
 
    if (size > 0) {
       if (option == ALLOC_FIXED && !is_free_mem(*addr, size)) {
+         alloc_sanity_check(true);
+         Log(LOG_ERR, "Fixed addr 0x%"PRIx64" (size 0x%"PRIx64") is not free",
+             *addr, size);
          return ERR_OUT_OF_RESOURCES;
       }
 
@@ -321,12 +328,14 @@ int alloc(uint64_t *addr, uint64_t size, size_t align, int option)
       } else {
          status = find_free_mem(size, align, option, &base);
          if (status != ERR_SUCCESS) {
+            alloc_sanity_check(true);
             return status;
          }
       }
 
       status = alloc_add(base, size);
       if (status != ERR_SUCCESS) {
+         alloc_sanity_check(true);
          return status;
       }
    }

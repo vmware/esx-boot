@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -292,6 +292,55 @@ int argv_to_str(int argc, char **argv, char **s)
    }
 
    *s = str;
+
+   return ERR_SUCCESS;
+}
+
+/*-- file_sanitize_path --------------------------------------------------------
+ *
+ *      Sanitize a UNIX-style or URL-style path
+ *        - the first :// sequence, if any, keeps its //
+ *        - other multiple-separator / occurrences are merged
+ *        - whitespace characters are removed (XXX why?)
+ *
+ * Parameters
+ *      IN  filepath: pointer to the UNIX/Protocol path
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *
+ * Side Effects
+ *      Input pathname is modified in place
+ *----------------------------------------------------------------------------*/
+int file_sanitize_path(char *filepath)
+{
+   const char *p;
+   bool slash;
+   int i, j;
+
+   if (filepath == NULL) {
+      return ERR_INVALID_PARAMETER;
+   }
+
+   slash = false;
+   p = strstr(filepath, "://");
+   j = 0;
+
+   for (i = 0; filepath[i] != '\0'; i++) {
+      if (isspace(filepath[i])) {
+         continue;
+      } else if (filepath[i] == '/' || filepath[i] == '\\') {
+         if (!slash || ((p != NULL) && (&filepath[i] < (p + 3)))) {
+            filepath[j++] = '/';
+            slash = true;
+         }
+      } else {
+         filepath[j++] = filepath[i];
+         slash = false;
+      }
+   }
+
+   filepath[j] = '\0';
 
    return ERR_SUCCESS;
 }

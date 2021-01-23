@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -71,8 +71,12 @@ EFI_STATUS has_ipv4_addr(EFI_HANDLE NicHandle)
 
    Local = Info->StationAddress;
    if (memcmp(&Local, &Zero, sizeof(Local)) != 0) {
-      Log(LOG_DEBUG, "Existing local IPv4 address = %u.%u.%u.%u",
-          Local.Addr[0], Local.Addr[1], Local.Addr[2], Local.Addr[3]);
+      static bool logged = false;
+      if (!logged) {
+         Log(LOG_DEBUG, "Existing local IPv4 address = %u.%u.%u.%u",
+             Local.Addr[0], Local.Addr[1], Local.Addr[2], Local.Addr[3]);
+         logged = true;
+      }
    } else {
       Log(LOG_DEBUG, "No existing local IPv4 address");
       Status = EFI_NO_MAPPING;

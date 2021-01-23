@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015,2017-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015,2017-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -108,7 +108,7 @@ static int get_module_size(unsigned int n, size_t *size)
 
    status = file_get_size_hint(boot.volid, filepath, &filesize);
    if (status != ERR_SUCCESS) {
-      Log(LOG_DEBUG, "%s: %s", filepath, error_str[status]);
+      Log(LOG_DEBUG, "No size hint for %s: %s", filepath, error_str[status]);
       return status;
    }
 

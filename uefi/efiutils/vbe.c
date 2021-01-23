@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -8,6 +8,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 #include <vbe.h>
 #include "efi_private.h"
 
@@ -154,6 +155,7 @@ static EFI_STATUS efi_init_vbe(void)
       return Status;
    }
 
+   atexit(efi_clean_vbe);
    return EFI_SUCCESS;
 }
 

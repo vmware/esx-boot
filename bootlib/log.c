@@ -1,15 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2014,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * log.c -- Logging support
  *
- *   Logs are written into a log buffer that rotates when it is full. Consoles
- *   may subscribe to the log system (see log_subscribe()) in order to be
- *   notified each time a new log is added to the log buffer. Alternatively,
- *   consoles can directly read the log buffer (see log_buffer_addr()).
+ *   Consoles may subscribe to the log system (see log_subscribe()) in order to
+ *   be notified each time a new message is logged.
  *
  *   Logs format and severity levels are following the syslog interface:
  *
@@ -27,8 +25,8 @@
  *          A fatal error occurred but has been caught properly. The program
  *          cannot resume its execution, but can exit or reboot the system.
  *
- *      LOG_CRITICAL
- *         Not used.
+ *      LOG_CRIT
+ *         Other critical error, such as command line syntax error.
  *
  *      LOG_ERR
  *          An error occurred and has been caught properly. The program can
@@ -57,7 +55,6 @@
 #include <bootlib.h>
 
 #define CONSOLES_MAX_NR       2     /* Framebuffer, serial */
-#define LOG_BUFFER_SIZE       4096  /* We do not buffer more than 4kb */
 #define LOG_MAX_LEN           1024  /* A single message cannot exceed 1kb */
 #define SYSLOG_EMPTY_MSG_SIZE 5     /* STRSIZE("<x>\n") */
 
@@ -66,7 +63,6 @@ typedef struct {
    int maxlevel;
 } console_t;
 
-static char syslogbuf[LOG_BUFFER_SIZE];       /* The log buffer */
 static char message[LOG_MAX_LEN];             /* Message buffer */
 static console_t consoles[CONSOLES_MAX_NR];
 
@@ -144,39 +140,9 @@ static size_t syslog_vformat(char *msgbuf, size_t buflen, int level,
    return len;
 }
 
-/*-- syslog_rotate -------------------------------------------------------------
- *
- *      Delete the oldest syslog message from the log buffer.
- *
- * Parameters
- *      IN buffer: the log buffer
- *      IN buflen: log buffer size, in bytes
- *----------------------------------------------------------------------------*/
-static void syslog_rotate(char *logbuf, size_t buflen)
-{
-   char *next = NULL;
-   size_t i;
-
-   if (buflen > 4) {
-      for (i = 0; i < buflen - 4 && logbuf[i] != '\0'; i++) {
-         if (logbuf[i] == '\n' && is_syslog_message(&logbuf[i + 1])) {
-            next = &logbuf[i + 1];
-            break;
-         }
-      }
-   }
-
-   if (next != NULL) {
-      memmove(logbuf, next, STRSIZE(next));
-   } else {
-      logbuf[0] = '\0';
-   }
-}
-
 /*-- Log -----------------------------------------------------------------------
  *
- *      Add a log message to the log buffer and send it to the registered
- *      consoles. Logs rotate when the log buffer is full.
+ *      Send a log message to the registered consoles.
  *
  * Parameters
  *      IN level: message severity (range from 0 to 7)
@@ -185,7 +151,7 @@ static void syslog_rotate(char *logbuf, size_t buflen)
  *----------------------------------------------------------------------------*/
 void Log(int level, const char *fmt, ...)
 {
-   size_t size, offset;
+   size_t size;
    va_list ap;
    int i;
 
@@ -200,33 +166,11 @@ void Log(int level, const char *fmt, ...)
       return;
    }
 
-   offset = strlen(syslogbuf);
-   while (LOG_BUFFER_SIZE - offset < size) {
-      syslog_rotate(syslogbuf, LOG_BUFFER_SIZE);
-      offset = strlen(syslogbuf);
-   }
-
-   strcpy(syslogbuf + offset, message);
-
    for (i = 0; i < CONSOLES_MAX_NR; i++) {
-      if (consoles[i].notify != NULL) {
-         if (level <= consoles[i].maxlevel) {
-            consoles[i].notify(message);
-         }
+      if (consoles[i].notify != NULL && level <= consoles[i].maxlevel) {
+         consoles[i].notify(message);
       }
    }
-}
-
-/*-- log_buffer_addr -----------------------------------------------------------
- *
- *      Get the log buffer base address.
- *
- * Results
- *      A pointer to the log buffer.
- *----------------------------------------------------------------------------*/
-const char *log_buffer_addr(void)
-{
-   return syslogbuf;
 }
 
 /*-- log_subscribe -------------------------------------------------------------
@@ -249,8 +193,9 @@ int log_subscribe(log_callback_t callback, int maxlevel)
       maxlevel = LOG_DEBUG;
    }
 
+   log_unsubscribe(callback);
    for (i = 0; i < CONSOLES_MAX_NR; i++) {
-      if (consoles[i].notify == NULL || consoles[i].notify == callback) {
+      if (consoles[i].notify == NULL) {
          consoles[i].notify = callback;
          consoles[i].maxlevel = maxlevel;
          return ERR_SUCCESS;
@@ -285,15 +230,17 @@ void log_unsubscribe(log_callback_t callback)
  *      Initialize the logging system. Logs get redirected to the firmware by
  *      default.
  *
+ *      It is harmless to call this function repeatedly to change the verbosity
+ *      level at which firmware_print is registered, but do not call it after
+ *      firmware_print is no longer safe or after the firmware log callback
+ *      should no longer be Log().
+ *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 int log_init(bool verbose)
 {
    int status;
-
-   memset(consoles, 0, sizeof (consoles));
-   syslogbuf[0] = '\0';
 
    status = log_subscribe(firmware_print, verbose ? LOG_DEBUG : LOG_INFO);
    if (status != ERR_SUCCESS) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2015,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -25,6 +25,7 @@ SECTIONS {
    . = ALIGN(SECTION_ALIGNMENT);
    .text : {
       PROVIDE(__executable_start = .);
+      PROVIDE(_text = .);
       *(.text)
       *(.text.*)
       PROVIDE(_trampoline_start = .);
@@ -35,10 +36,19 @@ SECTIONS {
 
    . = ALIGN(SECTION_ALIGNMENT);
    .rodata : {
+      PROVIDE(_rodata = .);
       *(.rodata)
       *(.rodata.*)
 
-     /*
+      /*
+       * Place the expected value of the integrity hash, if any, at the
+       * end of the .rodata section, so that it's easy to skip while
+       * computing the actual value of the hash.
+       */
+      PROVIDE(_integrity = .);
+      *(.integrity)
+
+      /*
        * The linker output had better not contain any .got* sections.
        * ld -q does not emit any relocations for GOT entries, so it
        * doesn't work to simply emit the GOT into the .rodata section,
@@ -48,26 +58,30 @@ SECTIONS {
        * is sometimes seen, consisting of 24 bytes of 00's, should be
        * harmless), for even stronger reasons.
        */
-      _rodata_end = .;
+      PROVIDE(_erodata = .);
       *(.got)
-      ASSERT(. == _rodata_end, "elf2efi cannot relocate GOT entries");
+      ASSERT(. == _erodata, "elf2efi cannot relocate GOT entries");
       *(.got.plt)
-      ASSERT(. == _rodata_end, "elf2efi cannot handle a PLT");
+      ASSERT(. == _erodata, "elf2efi cannot handle a PLT");
    }
 
    . = ALIGN(SECTION_ALIGNMENT);
    .data : {
+      PROVIDE(_data = .);
       *(.data)
       *(.data.*)
+      PROVIDE(_edata = .);
    }
 
    . = ALIGN(SECTION_ALIGNMENT);
    .bss : {
+      PROVIDE(_bss = .);
       *(.bss)
       *(.bss.*)
       *(COMMON)
-      PROVIDE(_end = .);
+      PROVIDE(_ebss = .);
    }
+   PROVIDE(_end = .);
 
    /* Discard other sections */
     /DISCARD/ : {

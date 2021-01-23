@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -165,7 +165,7 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
       return status;
    }
 
-   len = asprintf(&chainload, " -R \"%s%s%s -r -m %s\"",
+   len = asprintf(&chainload, "-R \"%s%s%s -r -m %s\"",
                   safeboot_path,
                   safeboot.verbose ? " -V" : "",
                   safeboot.serial ? serial_opts : "",
@@ -178,9 +178,8 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
       return ERR_OUT_OF_RESOURCES;
    }
 
-   len = asprintf(&cmdline, "%s%s%s -p %d -c %s%s%s -t \"%s\"%s bootUUID=%s%s",
-                  next_loader,
-                  (chainload != NULL) ? chainload : "",
+   len = asprintf(&cmdline, "%s%s -p %d -c %s%s%s -t \"%s\"%s bootUUID=%s%s",
+                  chainload,
                   safeboot.verbose ? " -V" : "",
                   bank->volid,
                   SAFEBOOT_CFG,

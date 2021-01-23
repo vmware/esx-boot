@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -150,6 +150,27 @@ EXTERN int kbd_waitkey_timeout(key_code_t *key, uint16_t nsec);
 EXTERN int kbd_init(void);
 
 /*
+ * TPM
+ */
+typedef struct {
+   const uint8_t *address;
+   uint32_t size;
+   bool truncated;
+} tpm_event_log_t;
+
+#ifdef __COM32__
+static INLINE int tpm_get_event_log(tpm_event_log_t *log)
+{
+   log->address = NULL;
+   log->size = 0;
+   log->truncated = false;
+   return ERR_NOT_FOUND;
+}
+#else
+EXTERN int tpm_get_event_log(tpm_event_log_t *log);
+#endif
+
+/*
  * Logging
  */
 EXTERN void set_firmware_log_callback(void (*callback)(int, const char *, ...));
@@ -161,7 +182,8 @@ EXTERN int firmware_print(const char *str);
 typedef enum {
    SERIAL_NS16550,
    SERIAL_PL011,
-   SERIAL_LAST = SERIAL_PL011,
+   SERIAL_TMFIFO,
+   SERIAL_LAST = SERIAL_TMFIFO,
 } serial_type_t;
 #define SERIAL_BAUDRATE_UNKNOWN 0
 EXTERN int get_serial_port(int com, serial_type_t *type,
@@ -182,5 +204,18 @@ EXTERN int secure_boot_check(void);
 
 EXTERN void check_efi_quirks(efi_info_t *efi_info);
 EXTERN int relocate_page_tables2(void);
+
+typedef enum {
+   http_never = 0,
+   http_if_http_booted = 1,
+   http_if_plain_http_allowed = 2,
+   http_always = 3,
+} http_criteria_t;
+
+#ifdef __COM32__
+#   define set_http_criteria(mode)
+#else
+EXTERN void set_http_criteria(http_criteria_t mode);
+#endif
 
 #endif /* !BOOT_SERVICES_H_ */

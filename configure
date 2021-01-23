@@ -1,11 +1,11 @@
 #!/bin/sh
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2019 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
 copyright='#*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2018 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 '
@@ -73,9 +73,9 @@ all: $(SUBDIRS)
 com32:
 	$(MAKE) -f Makefile.main BUILDENV=$@
 
-# KEY is a list of keys that .efi binaries produced by this package
-# are signed with for UEFI Secure Boot purposes, separated by '+'
-# signs.
+# KEY is a list of one or more keys that .efi binaries produced by
+# this package are signed with, for UEFI Secure Boot purposes,
+# separated by '+' signs.
 #
 # EKEY may be either "test" or "official".  It selects which
 # list of public keys is embedded in mboot.  When booting in Secure Boot
@@ -84,9 +84,9 @@ com32:
 #
 uefi64 uefi32 uefiarm64:
 	$(MAKE) -f Makefile.main BUILDENV=$@ \
-		KEY=elfsign_test+test_sb2017 EKEY=test
+		KEY=test_sb2017 EKEY=test
 	$(MAKE) -f Makefile.main BUILDENV=$@ \
-		KEY=elfsign_test+test_sb2017 EKEY=official
+		KEY=test_sb2017 EKEY=official
 
 clean:
 	$(MAKE) -f Makefile.main clean'

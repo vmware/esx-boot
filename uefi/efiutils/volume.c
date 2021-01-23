@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2016,2019 VMware, Inc.
+ * Copyright (c) 2008-2011,2013-2014,2016,2019-2020 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -28,9 +28,6 @@
 #include <libgen.h>
 #include "efi_private.h"
 
-EFI_GUID BlockIoProto = BLOCK_IO_PROTOCOL;
-EFI_GUID DiskIoProto = DISK_IO_PROTOCOL;
-
 /*-- get_boot_file ------------------------------------------------------------
  *
  *      Get the pathname of the boot file.
@@ -50,7 +47,7 @@ int get_boot_file(char **buffer)
    EFI_PXE_BASE_CODE *Pxe;
    EFI_STATUS Status;
    CHAR16 *Path;
-   char *path;
+   char *path, *p;
    int i;
 
    if (is_http_boot()) {
@@ -93,6 +90,19 @@ int get_boot_file(char **buffer)
          path = strdup("");
       }
 
+      /*
+       * If the path was a URL, it may have been damaged by the round-trip
+       * conversion from ASCII to a devpath and back.  For example, a leading
+       * http:// may have become \http:\.  Repair it as best we can.
+       */
+      if (path[0] == '\\' && (p = strstr(path, ":\\")) != NULL) {
+         /*
+          * Copy the URL scheme, colon, and single trailing backslash one byte
+          * backward, thus overwriting the unwanted leading backslash and
+          * leaving two trailing backslashes.
+          */
+         memmove(path, path + 1, p - path + 1);
+      }
       for (i = 0; path[i] != '\0'; i++) {
          if (path[i] == '\\') {
             path[i] = '/';
@@ -164,10 +174,6 @@ EFI_STATUS get_boot_volume(EFI_HANDLE *Volume)
 {
    EFI_LOADED_IMAGE *Image;
    EFI_STATUS Status;
-
-   if (is_http_boot()) {
-      return get_http_boot_volume(Volume);
-   }
 
    Status = image_get_info(ImageHandle, &Image);
    if (EFI_ERROR(Status)) {

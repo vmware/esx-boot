@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2014-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2014-2015,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -85,13 +85,10 @@ int serial_log_init(int com, uint32_t baudrate)
    }
 
    if (arch_is_arm64) {
-      /*
-       * At some point we'll add the ability to reconfigure the baudrate
-       * and to patch SPCR.
-       */
-      if (baudrate != original_baudrate) {
+      if (baudrate != original_baudrate &&
+          original_baudrate != SERIAL_BAUDRATE_UNKNOWN) {
          baudrate = original_baudrate;
-         Log(LOG_WARNING, "Cannot override baud rate on ARM yet: using %u\n",
+         Log(LOG_WARNING, "Cannot override baud rate on Arm: using %u\n",
              baudrate);
       }
    }

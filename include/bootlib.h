@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -75,7 +75,7 @@ typedef struct {
 #define PAGE_ADDR(_addr_)      ((_addr_) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(_addr_)  PAGE_ADDR((_addr_) + PAGE_SIZE - 1)
 
-void alloc_sanity_check(void);
+void alloc_sanity_check(bool verbose);
 int alloc(uint64_t *addr, uint64_t size, size_t align, int option);
 
 #define runtime_alloc_fixed(_addr_, _size_)                          \
@@ -207,13 +207,15 @@ EXTERN void Log(int level, const char *fmt, ...)
 
 EXTERN int log_subscribe(log_callback_t callback, int maxlevel);
 EXTERN void log_unsubscribe(log_callback_t callback);
-EXTERN const char *log_buffer_addr(void);
 EXTERN int log_init(bool verbose);
 EXTERN int syslog_get_message_level(const char *msg, int *level);
 
 /*
  * Serial port
  */
+#define DEFAULT_SERIAL_COM      1       /* Default serial port (COM1) */
+#define DEFAULT_SERIAL_BAUDRATE 115200  /* Default serial baud rate */
+
 EXTERN int serial_log_init(int com, uint32_t baudrate);
 
 /*
@@ -249,8 +251,9 @@ typedef union {
 typedef struct {
    const char *key;
    const char *separator;
-   option_value_t value;
+   option_value_t default_value;
    option_type_t type;
+   option_value_t value;
 } option_t;
 
 EXTERN int parse_config_file(int volid, const char *filename,

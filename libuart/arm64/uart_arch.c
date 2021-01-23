@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -13,6 +13,7 @@
 
 int pl011_init(const uart_t *dev);
 int ns16550_init(const uart_t *dev);
+int tmfifo_init(const uart_t *dev);
 
 /*-- uart_init -----------------------------------------------------------------
  *
@@ -31,16 +32,14 @@ int ns16550_init(const uart_t *dev);
  *----------------------------------------------------------------------------*/
 int uart_init(const uart_t *dev)
 {
-   int status;
-
-   status = pl011_init(dev);
-   if (status != ERR_SUCCESS) {
-      /*
-       * Some pre-SBSA ARM64 servers may use a 16550/8250-like UART, as may
-       * some non-SBSA ARM64 hardware.
-       */
-      status = ns16550_init(dev);
+   switch (dev->type) {
+   case SERIAL_NS16550:
+     return ns16550_init(dev);
+   case SERIAL_PL011:
+     return pl011_init(dev);
+   case SERIAL_TMFIFO:
+     return tmfifo_init(dev);
+   default:
+     return ERR_UNSUPPORTED;
    }
-
-   return status;
 }

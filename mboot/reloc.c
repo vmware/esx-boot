@@ -145,7 +145,7 @@ static void reloc_sanity_check(reloc_t *objs, size_t count)
    bool error;
    size_t i;
 
-   alloc_sanity_check();
+   alloc_sanity_check(false);
 
    if (count < 2) {
       Log(LOG_ERR, "Relocation table is empty.\n");
@@ -525,7 +525,9 @@ static int break_reloc_deadlock(reloc_t *rel)
 
    status = alloc(&addr, size, ALIGN_ANY, ALLOC_ANY);
    if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Failed to resolve circular relocation.\n");
+      Log(LOG_DEBUG, "...unable to move %p (size 0x%"PRIx64")",
+          rel[smallest].src, size);
+      Log(LOG_ERR, "Error resolving relocations: %s", error_str[status]);
       return status;
    }
    if (boot.debug) {

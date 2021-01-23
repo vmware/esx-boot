@@ -17,7 +17,9 @@ SRC         := asn1parse.c \
                oid.c \
                rsa.c \
                sha256.c \
-               sha512.c
+               sha512.c \
+               platform_util.c \
+               rsa_internal.c
 
 BASENAME    := mbedtls
 TARGETTYPE  := lib

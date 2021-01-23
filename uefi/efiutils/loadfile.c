@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -8,8 +8,6 @@
  */
 
 #include "efi_private.h"
-
-static EFI_GUID LoadFileProto = LOAD_FILE_PROTOCOL;
 
 /*-- load_file_get_size --------------------------------------------------------
  *

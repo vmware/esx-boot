@@ -616,6 +616,41 @@ int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi)
    return runtime_addr(eb_info, run_ebi);
 }
 
+/*-- esxbootinfo_set_tpm -------------------------------------------------------
+ *
+ *      Set TPM related fields in the EBI.
+ *
+ * Parameters
+ *      IN log:  The TPM event log details.
+ *
+ * Results
+ *      None.
+ *----------------------------------------------------------------------------*/
+static void esxbootinfo_set_tpm(const tpm_event_log_t *log)
+{
+   ESXBootInfo_Tpm *tpm = (ESXBootInfo_Tpm *)next_elmt;
+   int status;
+
+   if (log->size == 0) {
+      return;
+   }
+
+   status = eb_check_space(sizeof(ESXBootInfo_Tpm) + log->size);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_DEBUG, "Insufficient space for TPM info in ESXBootInfo");
+      return;
+   }
+
+   tpm->type = ESXBOOTINFO_TPM_TYPE;
+   tpm->flags = log->truncated ? ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED : 0;
+   tpm->elmtSize = sizeof(ESXBootInfo_Tpm) + log->size;
+   tpm->eventLogSize = log->size;
+
+   memcpy(tpm->eventLog, log->address, log->size);
+
+   eb_advance_next_elmt();
+}
+
 /*-- vbe_register --------------------------------------------------------------
  *
  *      Register VBE structures for relocation.
@@ -821,6 +856,7 @@ int esxbootinfo_init(void)
    int status;
    e820_range_t *e820;
    size_t num_e820_ranges;
+   tpm_event_log_t tpm_event_log;
 
    /*
     * Let's estimate the numbers of memory ranges we would have to
@@ -834,12 +870,20 @@ int esxbootinfo_init(void)
        num_e820_ranges, NUM_E820_SLACK);
    free_memory_map(e820, &boot.efi_info);
 
+   status = tpm_get_event_log(&tpm_event_log);
+   if (status != ERR_SUCCESS) {
+      tpm_event_log.size = 0;
+   }
+
    size_mod = sizeof(ESXBootInfo_Module) + sizeof(ESXBootInfo_ModuleRange);
 
    size_ebi  = sizeof(ESXBootInfo);
    size_ebi += sizeof(ESXBootInfo_MemRange) * (num_e820_ranges + NUM_E820_SLACK);
    size_ebi += size_mod * boot.modules_nr;
    size_ebi += sizeof(ESXBootInfo_Vbe);
+   if (tpm_event_log.size != 0) {
+      size_ebi += sizeof(ESXBootInfo_Tpm) + tpm_event_log.size;
+   }
 
 #ifndef __COM32__
    /*
@@ -889,6 +933,10 @@ int esxbootinfo_init(void)
    if (!boot.headless) {
       // Ignore errors; they have been logged already
       (void) esxbootinfo_init_vbe(boot.modules[0].addr, boot.modules[0].size);
+   }
+
+   if (tpm_event_log.size != 0) {
+      esxbootinfo_set_tpm(&tpm_event_log);
    }
 
    return ERR_SUCCESS;

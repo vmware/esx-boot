@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,22 +11,6 @@
 #include <sm_bios.h>
 
 #include "efi_private.h"
-
-/*-- efi_guid_cmp --------------------------------------------------------------
- *
- *      Compare to EFI GUID.
- *
- * Parameters
- *      IN Guid1: pointer to the first GUID
- *      IN Guid2: pointer to the second GUID
- *
- * Results
- *      0 if both GUID's are equal, a non-zero value otherwise.
- *----------------------------------------------------------------------------*/
-int efi_guid_cmp(EFI_GUID *guid1, EFI_GUID *guid2)
-{
-    return memcmp(guid1, guid2, sizeof (EFI_GUID)) ? 1 : 0;
-}
 
 /*-- efi_get_system_config_table -----------------------------------------------
  *

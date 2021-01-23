@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,11 +11,6 @@
 
 /* File loads are in units of this much */
 #define SIMPLEFILE_READ_BUFSIZE (1024 * 1024)
-
-EFI_GUID SimpleFileSystemProto = SIMPLE_FILE_SYSTEM_PROTOCOL;
-EFI_GUID GenericFileInfoId = EFI_FILE_INFO_ID;
-EFI_GUID FileSystemInfoId = EFI_FILE_SYSTEM_INFO_ID;
-EFI_GUID FileSystemVolumeLabelInfoId = EFI_FILE_SYSTEM_VOLUME_LABEL_ID;
 
 /*-- simple_file_volume_open ---------------------------------------------------
  *

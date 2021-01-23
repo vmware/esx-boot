@@ -23,8 +23,8 @@ OBJECTS     := $(call objects,$(SRC),$(ODIR)/)
 CFLAGS      += $(patsubst %,-D%,$(CDEF)) $(patsubst %,-I%,$(STDINC) $(INC))
 
 # Makefile rules
+.SECONDARY:
 .SUFFIXES: .c .s .S .o .a .elf .efi $(APP_EXT)
-.PRECIOUS: $(OBJECTS) $(TARGET)
 
 $(ODIR)/%.o: %.c
 	$(call printcmd,CC)
@@ -42,7 +42,6 @@ $(ODIR)/%.a: $(OBJECTS)
 	$(call printcmd,AR)
 	$(AR) crs $@ $^
 
-.PRECIOUS: $(ODIR)/%.elf
 $(ODIR)/%.elf: $(OBJECTS) $(LIBS)
 	$(call printcmd,LD)
 	$(LD) $(LDFLAGS) -o $@ $(OBJECTS) -\( $(LIBS) -\)
@@ -58,7 +57,6 @@ ifeq ($(FIRMWARE),uefi)
    endif
    endif
 
-.PRECIOUS: %.efi
 %.efi: %.elf
 	$(call printcmd,ELF2EFI)
 	$(ELF2EFI) --subsystem=$(EFISUBSYSTEM) $(ELF2EFIFLAGS) $< $@

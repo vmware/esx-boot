@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2014,2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2014,2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -26,16 +26,18 @@
  * new boot.cfg.  See bora/apps/pythonroot/vmware/esximage/Utils/BootCfg.py.
  */
 static option_t mboot_options[] = {
-   {"kernel", "=", {NULL}, OPT_STRING},
-   {"kernelopt", "=", {NULL}, OPT_STRING},
-   {"modules", "=", {NULL}, OPT_STRING},
-   {"title", "=", {NULL}, OPT_STRING},
-   {"prefix", "=", {NULL}, OPT_STRING},
-   {"nobootif", "=", {NULL}, OPT_INTEGER},
-   {"timeout", "=", {.integer = 5}, OPT_INTEGER}, // default to 5 seconds
-   {"noquirks", "=", {.integer = 0}, OPT_INTEGER},
-   {"norts", "=", {.integer = 0}, OPT_INTEGER},
-   {NULL, NULL, {NULL}, OPT_INVAL}
+   {"kernel", "=", {NULL}, OPT_STRING, {0}},
+   {"kernelopt", "=", {NULL}, OPT_STRING, {0}},
+   {"modules", "=", {NULL}, OPT_STRING, {0}},
+   {"title", "=", {NULL}, OPT_STRING, {0}},
+   {"prefix", "=", {NULL}, OPT_STRING, {0}},
+   {"nobootif", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"timeout", "=", {.integer = 5}, OPT_INTEGER, {0}},
+   {"noquirks", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"norts", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"nativehttp", "=", {.integer = -1}, OPT_INTEGER, {0}},
+   {"crypto", "=", {NULL}, OPT_STRING, {0}},
+   {NULL, NULL, {NULL}, OPT_INVAL, {0}}
 };
 
 /*-- config_usage --------------------------------------------------------------
@@ -45,29 +47,34 @@ static option_t mboot_options[] = {
 static void config_usage(void)
 {
    Log(LOG_INFO, "Configuration file syntax:\n"
-       "   kernel=<FILEPATH>\n"
-       "      Set the kernel filename.\n"
-       "   kernelopt=<OPTION_STRING>\n"
-       "      Append OPTION_STRING to the kernel command line.\n"
-       "   modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>\n"
-       "      List of modules separated by \"---\".\n"
-       "   title=<TITLE>\n"
-       "      Set the bootloader banner title.\n"
-       "   prefix=<DIRECTORY>\n"
-       "      Set default directory from which kernel and modules are loaded\n"
-       "      (if their filenames are relative). Default: the directory\n"
-       "      containing the configuration file.\n"
-       "   nobootif=<0...1>\n"
-       "      If N is 1, do not add BOOTIF=<MAC_addr> to the kernel command\n"
-       "      line. Default: 0.\n"
-       "   timeout=<SECONDS>\n"
-       "      Set the bootloader autoboot timeout, in seconds. Default: 5.\n"
-       "   noquirks=<0...1>\n"
-       "      If N is 1, disable workarounds for platform quirks. Default:\n"
-       "      if -Q is on the command line, 1; otherwise 0.\n"
-       "   norts=<0...1>\n"
-       "      If N is 1, disable support for UEFI Runtime Services. Default:\n"
-       "      if -U is on the command line, 1; otherwise 0.\n"
+       "kernel=<FILEPATH>\n"
+       "   Kernel filename.\n"
+       "kernelopt=<OPTION_STRING>\n"
+       "   Append OPTION_STRING to kernel command line.\n"
+       "modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>\n"
+       "   Module list separated by \"---\".\n"
+       "title=<TITLE>\n"
+       "   Bootloader banner title.\n"
+       "prefix=<DIRECTORY>\n"
+       "   Directory from which kernel and modules are loaded (if\n"
+       "   filenames are relative). Default: directory containing\n"
+       "   this configuration file.\n"
+       "nobootif=<0|1>\n"
+       "   1: do not add BOOTIF=<MAC_addr> to kernel command line.\n"
+       "   Default: 0.\n"
+       "timeout=<SECONDS>\n"
+       "   Bootloader autoboot timeout, in seconds. Default: 5.\n"
+       "noquirks=<0|1>\n"
+       "   1: disable workarounds for platform quirks. Default:\n"
+       "   if -Q is on the command line, 1; else 0.\n"
+       "norts=<0|1>\n"
+       "   1: disable support for UEFI Runtime Services. Default:\n"
+       "   if -U is on the command line, 1; else 0.\n"
+       "nativehttp=<0|1|2|3>\n"
+       "   Use native UEFI HTTP. 0: never, 1: if HTTP booted (default),\n"
+       "   2: if plain http:// URLs are allowed, 3: always.\n"
+       "crypto=<FILEPATH>\n"
+       "   Crypto module filename.\n"
        );
 }
 
@@ -457,10 +464,12 @@ int parse_config(const char *filename)
 
    status = locate_config_file(filename, &path);
    if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Could not locate config file %s: %s",
+          filename, error_str[status]);
       return status;
    }
 
-   Log(LOG_DEBUG, "Config: %s\n", path);
+   Log(LOG_INFO, "Loading %s\n", path);
 
    status = parse_config_file(boot.volid, path, mboot_options);
    if (status != ERR_SUCCESS) {
@@ -483,6 +492,10 @@ int parse_config(const char *filename)
    boot.timeout = mboot_options[6].value.integer;
    boot.no_quirks |= mboot_options[7].value.integer;
    boot.no_rts |= mboot_options[8].value.integer;
+   if (mboot_options[9].value.integer >= 0) {
+      set_http_criteria(mboot_options[9].value.integer);
+   }
+   boot.crypto = mboot_options[10].value.str;
 
    if (kernel == NULL) {
       config_usage();
@@ -504,6 +517,7 @@ int parse_config(const char *filename)
    }
 
    Log(LOG_DEBUG, "Prefix: %s\n", (prefix[0] != '\0') ? prefix : "(None)");
+   boot.prefix = prefix;
    status = parse_cmdlines(prefix, kernel, kopts, mod_list);
 
  error:
@@ -512,7 +526,6 @@ int parse_config(const char *filename)
    sys_free(mboot_options[1].value.str);   /* Kernel options */
    sys_free(mboot_options[2].value.str);   /* List of modules */
    sys_free(mboot_options[3].value.str);   /* Title string */
-   sys_free(mboot_options[4].value.str);   /* Path prefix */
 
    if (status == ERR_SUCCESS) {
       status = get_load_size_hint();

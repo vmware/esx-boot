@@ -39,14 +39,20 @@ endif
 TARGETTYPE  := app
 INC += .
 
+LIBS := $(BOOTLIB) $(ENV_LIB)
+
 ifeq (,$(EKEY))
    BASENAME := mboot
-   LIBS     := $(BOOTLIB) $(ENV_LIB)
 else
    BASENAME := mboot-$(EKEY)
-   INC      += $(CRYPTOINC)
    CFLAGS   += -D$(EKEY) -DSECURE_BOOT
-   LIBS     := $(BOOTLIB) $(CRYPTOLIB) $(ENV_LIB)
+   INC      += $(UEFIINC) $(CRYPTOINC)
+
+   ifeq ($(CRYPTO_MODULE), 1)
+      CFLAGS += -DCRYPTO_MODULE
+   else
+      LIBS   += $(CRYPTOLIB)
+   endif
 endif
 
 include rules.mk

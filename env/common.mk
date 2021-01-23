@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015,2019 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2015,2019,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -165,7 +165,7 @@ ZLIB_INC   := $(TOPDIR)/zlib
 LIBFAT_INC := $(TOPDIR)/libfat
 EDK2INC    := $(TOPDIR)/uefi/edk2/MdePkg
 UEFIINC    := $(TOPDIR)/uefi $(EDK2INC)/Include $(EDK2INC)/Include/Protocol
-CRYPTOINC  := $(TOPDIR)/mbedtls/polarssl
+CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 
 ifeq ($(ARCH),arm64)
    UEFIINC    += $(EDK2INC)/Include/AArch64

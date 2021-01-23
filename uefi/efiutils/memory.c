@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,7 +14,7 @@
 
 UINTN MapKey;
 
-static EFI_MEMORY_TYPE ImageDataType = EfiMaxMemoryType;
+static EFI_MEMORY_TYPE ImageDataType = EfiReservedMemoryType;
 
 /*-- efi_get_memory_map --------------------------------------------------------
  *

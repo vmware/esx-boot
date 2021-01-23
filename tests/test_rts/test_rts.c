@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2016-2017,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -32,9 +32,6 @@
 
 static int serial_com;
 static int serial_speed;
-
-#define DEFAULT_SERIAL_COM      1       /* Default serial port (COM1) */
-#define DEFAULT_SERIAL_BAUDRATE 115200  /* Default serial baud rate */
 
 #define DEFAULT_PROG_NAME       "test_rts"
 

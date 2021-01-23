@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -31,7 +31,6 @@ typedef struct {
  *----------------------------------------------------------------------------*/
 bool has_gpxe_download_proto(EFI_HANDLE Volume)
 {
-   EFI_GUID GpxeDownloadProto = GPXE_DOWNLOAD_PROTOCOL_GUID;
    GPXE_DOWNLOAD_PROTOCOL *gpxe;
    EFI_STATUS Status;
 
@@ -137,7 +136,6 @@ EFI_STATUS gpxe_file_load(EFI_HANDLE Volume, const char *filepath,
                           int (*callback)(size_t), VOID **Buffer,
                           UINTN *BufSize)
 {
-   EFI_GUID GpxeDownloadProto = GPXE_DOWNLOAD_PROTOCOL_GUID;
    GPXE_DOWNLOAD_PROTOCOL *gpxe;
    GPXE_DOWNLOAD_FILE file;
    GpxeCallbackContext context;

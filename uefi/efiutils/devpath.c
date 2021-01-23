@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,7 +11,6 @@
 #include "efi_private.h"
 #include "DevicePathToText.h"
 
-static EFI_GUID DevicePathProto = DEVICE_PATH_PROTOCOL;
 static EFI_GUID DevicePathToTextProto = EFI_DEVICE_PATH_TO_TEXT_PROTOCOL_GUID;
 
 /*-- devpath_get ---------------------------------------------------------------
@@ -515,8 +514,7 @@ void log_handle_devpath(int level, const char *prefix, EFI_HANDLE handle)
 
    Status = devpath_get(handle, &DevPath);
    if (EFI_ERROR(Status)) {
-      Log(level, "%s: error getting devpath: %s",
-          prefix, error_str[error_efi_to_generic(Status)]);
+      Log(level, "%s: EFI error getting devpath: %zx", prefix, Status);
       return;
    }
 

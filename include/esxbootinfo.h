@@ -115,6 +115,7 @@ typedef enum ESXBootInfo_Type {
    ESXBOOTINFO_EFI_TYPE,
    ESXBOOTINFO_LOADESX_TYPE,
    ESXBOOTINFO_LOADESX_CHECKS_TYPE,
+   ESXBOOTINFO_TPM_TYPE,
    NUM_ESXBOOTINFO_TYPE
 } ESXBootInfo_Type;
 
@@ -188,8 +189,6 @@ typedef struct ESXBootInfo_Efi {
 } __attribute__((packed)) ESXBootInfo_Efi;
 
 /* LoadESX Flags */
-#define ESXBOOTINFO_LOADESX_ENABLE           (1<<0)  /* Enable LoadESX */
-#define ESXBOOTINFO_LOADESX_IGNORE_PRECHECK  (1<<1)  /* Ignore Prechecks */
 #define ESXBOOTINFO_LOADESX_USES_MEMXFERFS   (1<<2)  /* LoadESX uses MemXferFS */
 
 typedef struct ESXBootInfo_LoadESX {
@@ -197,10 +196,8 @@ typedef struct ESXBootInfo_LoadESX {
    uint64_t elmtSize;
 
    uint64_t flags;
-   /* Set if flags & ESXBOOTINFO_LOADESX_ENABLE */
-   uint8_t enableLoadESX;
-   /* Set if flags & ESXBOOTINFO_LOADESX_IGNORE_PRECHECK */
-   uint8_t ignorePrecheck;
+   /* Currently unused; set to 0. */
+   uint16_t padding;
    /* Set if flags & ESXBOOTINFO_LOADESX_USES_MEMXFERFS */
    uint64_t memXferFsStartMPN;
 } __attribute__((packed)) ESXBootInfo_LoadESX;
@@ -218,6 +215,19 @@ typedef struct ESXBootInfo_LoadESXChecks {
    uint8_t numLoadESXChecks;
    ESXBootInfo_LoadESXCheck loadESXChecks[0];
 } __attribute__((packed)) ESXBootInfo_LoadESXChecks;
+
+/* TPM Flags */
+#define ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED  (1<<0)
+
+typedef struct ESXBootInfo_Tpm {
+   ESXBootInfo_Type type;
+   uint64_t elmtSize;
+
+   uint32_t flags;
+
+   uint32_t eventLogSize;
+   uint8_t eventLog[0];
+} __attribute__((packed)) ESXBootInfo_Tpm;
 
 typedef struct ESXBootInfo {
    uint64_t cmdline;

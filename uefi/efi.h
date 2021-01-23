@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -31,6 +31,7 @@
 #include <Protocol/ComponentName.h>
 #include <Protocol/DriverBinding.h>
 #include <Protocol/ShellParameters.h>
+#include <Protocol/Tcg2Protocol.h>
 #include <Guid/FileInfo.h>
 #include <Guid/FileSystemInfo.h>
 #include <Guid/FileSystemVolumeLabelInfo.h>

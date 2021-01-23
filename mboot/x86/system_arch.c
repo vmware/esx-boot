@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2017,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -101,7 +101,7 @@ int system_arch_blacklist_memory(void)
 {
    int status;
 
-   status = blacklist_runtime_mem(0, LOW_IBM_PC_MEGABYTE);
+   status = blacklist_runtime_mem(0, LOW_IBM_PC_MEGABYTE - 0);
 
    if (status != ERR_SUCCESS) {
       return status;
@@ -111,7 +111,8 @@ int system_arch_blacklist_memory(void)
       Log(LOG_DEBUG, "Intel Skylake Arch detected, applying HLE workaround.\n");
 
       status = blacklist_runtime_mem(SKYLAKE_HLE_BLACKLIST_MA_LOW,
-                                     SKYLAKE_HLE_BLACKLIST_MA_HIGH);
+                                     (SKYLAKE_HLE_BLACKLIST_MA_HIGH -
+                                      SKYLAKE_HLE_BLACKLIST_MA_LOW));
 
       if (status != ERR_SUCCESS) {
          Log(LOG_DEBUG, "Unable to apply HLE workaround.\n");

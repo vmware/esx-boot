@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2017,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015-2017,2019-2020 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -178,7 +179,7 @@ int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
  *----------------------------------------------------------------------------*/
 int chainload_parent(const char *cmdline)
 {
-   char *bin, *p;
+   char *bin, *options;
    int status;
 
    bin = strdup(cmdline);
@@ -186,12 +187,12 @@ int chainload_parent(const char *cmdline)
       return ERR_OUT_OF_RESOURCES;
    }
 
-   p = strchr(bin, ' ');
-   if (p != NULL) {
-      *p = '\0';
+   options = strchr(bin, ' ');
+   if (options != NULL) {
+      *options++ = '\0';
    }
 
-   status = firmware_file_exec(bin, cmdline);
+   status = firmware_file_exec(bin, options);
    sys_free(bin);
 
    return status;

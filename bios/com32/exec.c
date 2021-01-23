@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -121,17 +121,17 @@ static int com32_run_kernel_image(const char *filepath, const char *options,
  *
  * Parameters
  *      IN filepath: absolute path to the file
- *      IN options:  pointer to the command line options
+ *      IN options:  pointer to the command line options (not including
+ *                   the command name).
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 int firmware_file_exec(const char *filepath, const char *options)
 {
-   if (options != NULL) {
-      options = strchr(options, ' ');
+   if (options == NULL) {
+      options = "";
    }
-   options = (options == NULL) ? "" : options + 1;
 
    com32_run_kernel_image(filepath, options, 0, KT_COM32);
 

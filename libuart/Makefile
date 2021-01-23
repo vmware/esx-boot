@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2011,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -16,6 +16,7 @@ SRC         := uart.c \
 
 ifeq ($(ARCH),arm64)
 SRC += $(ARCH)/pl011.c
+SRC += $(ARCH)/tmfifo.c
 endif
 
 BASENAME    := uart

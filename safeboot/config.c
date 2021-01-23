@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -17,11 +17,11 @@
  * safeboot configuration file options.
  */
 static option_t opts[] = {
-   {"build", "=", {NULL}, OPT_STRING},
-   {"updated", "=", {NULL}, OPT_INTEGER},
-   {"bootstate", "=", {NULL}, OPT_INTEGER},
-   {"quickboot", "=", {NULL}, OPT_INTEGER},
-   {NULL, NULL, {NULL}, OPT_INVAL}
+   {"build", "=", {NULL}, OPT_STRING, {0}},
+   {"updated", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"bootstate", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"quickboot", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {NULL, NULL, {NULL}, OPT_INVAL, {0}}
 };
 
 /*-- bank_get_config -----------------------------------------------------------

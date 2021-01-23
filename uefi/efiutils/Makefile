@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2015-2016,2019 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2015-2016,2019-2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -16,10 +16,13 @@ SRC         := console.c    \
                disk.c       \
                efi_secure.c \
                error.c      \
+               exitboot.c   \
                file.c       \
                gop.c        \
                gpxefile.c   \
+               guid.c       \
                httpfile.c   \
+               ishttp.c     \
                image.c      \
                init.c       \
                keyboard.c   \
@@ -27,6 +30,7 @@ SRC         := console.c    \
                memory.c     \
                net.c        \
                protocol.c   \
+               quirks.c     \
                runtime.c    \
                runtime_generic.c \
                runtime_simple.c \
@@ -35,13 +39,14 @@ SRC         := console.c    \
                runtime_contig.c \
                simplefile.c \
                systab.c     \
+               tcg2.c       \
                tftpfile.c   \
                timer.c      \
+               tpm.c        \
                ucs2.c       \
                uga.c        \
                vbe.c        \
                volume.c     \
-               quirks.c     \
                $(IARCH)/console_arch.c \
                $(IARCH)/init_arch.c \
 

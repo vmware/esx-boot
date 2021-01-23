@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -28,12 +28,12 @@
  *----------------------------------------------------------------------------*/
 char *dirname(char *path)
 {
-   static char slashdot[4] = {'/', '\0', '.', '\0'};
+   static const char slashdot[4] = {'/', '\0', '.', '\0'};
    char *p;
 
    /* Return "." for NULL or empty strings */
    if (path == NULL || (*path == '\0')) {
-      return &slashdot[2];
+      return (char *)&slashdot[2];
    }
 
    /* Remove trailing slashes */
@@ -54,7 +54,7 @@ char *dirname(char *path)
 
    if (p == path) {
       /* Either the dir is "/" or there are no slashes */
-      return &slashdot[(*p == '/') ? 0 : 2];
+      return (char *)&slashdot[(*p == '/') ? 0 : 2];
    }
 
    *++p = '\0';
@@ -81,12 +81,12 @@ char *dirname(char *path)
  *----------------------------------------------------------------------------*/
 char *basename(char *path)
 {
-   static char slashdot[4] = {'/', '\0', '.', '\0'};
+   static const char slashdot[4] = {'/', '\0', '.', '\0'};
    char *p;
 
    /* Return "." for NULL or empty strings */
    if (path == NULL || (*path == '\0')) {
-      return &slashdot[2];
+      return (char *)&slashdot[2];
    }
 
    /* Remove trailing slashes */
@@ -98,7 +98,7 @@ char *basename(char *path)
 
    if (p == path) {
       /* Either the path is "/" or there are no slashes */
-      return (*p == '/' ? &slashdot[0] : path);
+      return (*p == '/' ? (char *)&slashdot[0] : path);
    }
 
    p = path + strlen(path) - 1;

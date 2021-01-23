@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015,2017-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015,2017-2018,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -54,9 +54,11 @@
 #include "boot_services.h"
 #include "libgen.h"
 
+#include <efiutils.h>
 #include <sha256.h>
 #include <sha512.h>
 #include <rsa.h>
+#include <protocol/MbedTls.h>
 
 #define SHA256_DIGEST_LENGTH (256 / 8)
 #define SHA512_DIGEST_LENGTH (512 / 8)
@@ -70,6 +72,8 @@
  * nicer error messages on failure.
  */
 #define V1_KEYID_LEN 16
+
+static EFI_MBEDTLS_PROTOCOL *mbedtls = NULL;
 
 typedef struct {
    const char *name;
@@ -124,12 +128,12 @@ typedef struct {
    /*
     * Message digest algorithm to be used in signatures with this key.
     */
-   md_type_t digest;
+   mbedtls_md_type_t digest;
    /*
     * Parsed form; valid if parsed = TRUE.
     */
    bool parsed;
-   rsa_context rsa;
+  mbedtls_rsa_context rsa;
 } RawRSAKey;
 
 RawRSAKey pubkeys[] = {
@@ -147,7 +151,7 @@ RawRSAKey pubkeys[] = {
       "ebc1a6f974bea947f4587f007eaa7901253ee02ad71e5663bc78d6a5a142"
       "cb00429b82038dba69718dd7e2866f28cb",
       0x10001,
-      POLARSSL_MD_SHA256,
+      MBEDTLS_MD_SHA256,
       false,
       { 0 }
    },
@@ -173,7 +177,7 @@ RawRSAKey pubkeys[] = {
       "8319f57646fddebab57640407b567e36801deff2e86001f16a2439287d1e"
       "769301",
       0x10001,
-      POLARSSL_MD_SHA512,
+      MBEDTLS_MD_SHA512,
       false,
       { 0 }
    },
@@ -192,7 +196,7 @@ RawRSAKey pubkeys[] = {
       "885da1941286d4f1531cabc9e4dfa26dafe09c953c75c6211879f62cb0f6"
       "badca8b35db8b47a407fe6c402b05a137f",
       0x3,
-      POLARSSL_MD_SHA256,
+      MBEDTLS_MD_SHA256,
       false,
       { 0 }
    },
@@ -218,7 +222,7 @@ RawRSAKey pubkeys[] = {
       "f0912c58748de0123a49a934c7c6bdabcb9339554e6d13a19c1daa41793c"
       "8d4b03",
       0x3,
-      POLARSSL_MD_SHA512,
+      MBEDTLS_MD_SHA512,
       false,
       { 0 }
    },
@@ -400,11 +404,11 @@ static bool secure_boot_check_sig(uint32_t schema,
 
    if (!pubkey->parsed) {
       Log(LOG_DEBUG, "Parsing keyid %s", pubkey->keyid);
-      rsa_init(&pubkey->rsa, RSA_PKCS_V15, POLARSSL_MD_NONE);
+      mbedtls->RsaInit(&pubkey->rsa, MBEDTLS_RSA_PKCS_V15, MBEDTLS_MD_NONE);
       pubkey->rsa.len = pubkey->bits / 8;
-      errcode = mpi_read_string(&pubkey->rsa.N, 16, pubkey->modulus);
+      errcode = mbedtls->MpiReadString(&pubkey->rsa.N, 16, pubkey->modulus);
       if (!errcode) {
-         errcode = mpi_lset(&pubkey->rsa.E, pubkey->exponent);
+         errcode = mbedtls->MpiLset(&pubkey->rsa.E, pubkey->exponent);
       }
       if (errcode) {
          Log(LOG_WARNING, "Error parsing public key %s: -0x%x",
@@ -421,18 +425,20 @@ static bool secure_boot_check_sig(uint32_t schema,
    }
 
    switch (pubkey->digest) {
-   case POLARSSL_MD_SHA256:
-      sha256(data, dataLen, md, 0);
-      errcode = rsa_pkcs1_verify(&pubkey->rsa, NULL, NULL, RSA_PUBLIC,
-                                 pubkey->digest, SHA256_DIGEST_LENGTH, md,
-                                 (uint8_t*)sig + V1_KEYID_LEN);
+   case MBEDTLS_MD_SHA256:
+      mbedtls->Sha256Ret(data, dataLen, md, 0);
+      errcode = mbedtls->RsaPkcs1Verify(&pubkey->rsa, NULL, NULL,
+                                        MBEDTLS_RSA_PUBLIC, pubkey->digest,
+                                        SHA256_DIGEST_LENGTH, md,
+                                        (uint8_t*)sig + V1_KEYID_LEN);
       break;
 
-   case POLARSSL_MD_SHA512:
-      sha512(data, dataLen, md, 0);
-      errcode = rsa_pkcs1_verify(&pubkey->rsa, NULL, NULL, RSA_PUBLIC,
-                                 pubkey->digest, SHA512_DIGEST_LENGTH, md,
-                                 (uint8_t*)sig + V1_KEYID_LEN);
+   case MBEDTLS_MD_SHA512:
+      mbedtls->Sha512Ret(data, dataLen, md, 0);
+      errcode = mbedtls->RsaPkcs1Verify(&pubkey->rsa, NULL, NULL,
+                                        MBEDTLS_RSA_PUBLIC, pubkey->digest,
+                                        SHA512_DIGEST_LENGTH, md,
+                                        (uint8_t*)sig + V1_KEYID_LEN);
       break;
 
    default:
@@ -468,6 +474,35 @@ int secure_boot_check(void)
    unsigned i;
    unsigned errors;
    NamedModule *named;
+
+#ifdef CRYPTO_MODULE
+   EFI_STATUS Status;
+   EFI_GUID MbedTlsProto = VMW_MBEDTLS_PROTOCOL_GUID;
+   Status = LocateProtocol(&MbedTlsProto, (void **)&mbedtls);
+   if (EFI_ERROR(Status)) {
+      Log(LOG_WARNING, "Error locating protocol MbedTls: %s",
+                        error_str[error_efi_to_generic(Status)]);
+      return false;
+   }
+   Log(LOG_DEBUG, "MbedTls protocol located");
+   if (mbedtls->Version != MBEDTLS_CURRENT_VERSION) {
+      Log(LOG_ERR, "Incorrect MbedTls protocol version: %u", mbedtls->Version);
+      return false;
+   }
+#else
+   static EFI_MBEDTLS_PROTOCOL MbedTls = {
+      MBEDTLS_CURRENT_VERSION,
+      mbedtls_rsa_init,
+      mbedtls_rsa_pkcs1_verify,
+      mbedtls_mpi_lset,
+      mbedtls_mpi_read_binary,
+      mbedtls_mpi_read_string,
+      mbedtls_sha256_ret,
+      mbedtls_sha512_ret,
+      /* mbedtls_hmac_ret wrapper; currently not used */ NULL,
+   };
+   mbedtls = &MbedTls;
+#endif
 
    status = secure_boot_parse_module(boot.modules[0].addr,
                                      boot.modules[0].size,
@@ -534,7 +569,7 @@ int secure_boot_check(void)
             needsig = false;
             break;
          case ERR_ALREADY_STARTED:
-            Log(LOG_WARNING, "More than one module named %s\n", mod->filename);
+            Log(LOG_WARNING, "More than one module named %s", mod->filename);
             errors++;
             needsig = true;
             break;

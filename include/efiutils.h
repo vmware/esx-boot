@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -75,19 +75,30 @@ EXTERN EFI_STATUS error_generic_to_efi(int err);
 /*
  * guid.c
  */
+EXTERN EFI_GUID BlockIoProto;
+EXTERN EFI_GUID ComponentNameProto;
+EXTERN EFI_GUID DevicePathProto;
+EXTERN EFI_GUID DiskIoProto;
+EXTERN EFI_GUID DriverBindingProto;
+EXTERN EFI_GUID FileSystemInfoId;
+EXTERN EFI_GUID FileSystemVolumeLabelInfoId;
+EXTERN EFI_GUID GenericFileInfoId;
+EXTERN EFI_GUID GpxeDownloadProto;
+EXTERN EFI_GUID LoadFileProto;
+EXTERN EFI_GUID SimpleFileSystemProto;
+
 EXTERN int efi_guid_cmp(EFI_GUID *guid1, EFI_GUID *guid2);
 
 /*
  * protocol.c
  */
-EXTERN EFI_GUID ComponentNameProto;
-EXTERN EFI_GUID DriverBindingProto;
-
 EXTERN EFI_STATUS get_protocol_interface(EFI_HANDLE Handle, EFI_GUID *Protocol,
                                          void **Interface);
 EXTERN EFI_STATUS LocateHandleByProtocol(EFI_GUID *Protocol, UINTN *count,
                                          EFI_HANDLE **Handles);
 EXTERN EFI_STATUS LocateProtocol(EFI_GUID *Protocol, void **Interface);
+EXTERN void log_protocols_on_handle(int level, const char *label,
+                                    EFI_HANDLE Handle);
 
 /*
  * init.c
@@ -163,9 +174,6 @@ EXTERN void log_handle_devpath(int level, const char *prefix,
 /*
  * volume.c
  */
-EXTERN EFI_GUID BlockIoProto;
-EXTERN EFI_GUID DiskIoProto;
-
 EXTERN EFI_STATUS get_boot_volume(EFI_HANDLE *Volume);
 EXTERN EFI_STATUS get_boot_device(EFI_HANDLE *device);
 
@@ -180,11 +188,6 @@ EXTERN VOID efi_free(VOID *ptr);
 /*
  * simplefile.c
  */
-EXTERN EFI_GUID SimpleFileSystemProto;
-EXTERN EFI_GUID GenericFileInfoId;
-EXTERN EFI_GUID FileSystemInfoId;
-EXTERN EFI_GUID FileSystemVolumeLabelInfoId;
-
 EXTERN EFI_STATUS simple_file_get_size(EFI_HANDLE Volume,
                                        const char *filepath, UINTN *FileSize);
 EXTERN EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
@@ -205,9 +208,12 @@ EXTERN bool has_gpxe_download_proto(EFI_HANDLE Volume);
  * httpfile.c
  */
 EXTERN bool is_http_boot(void);
+EXTERN bool has_http(EFI_HANDLE Volume);
 EXTERN int get_http_boot_url(char **buffer);
-EXTERN EFI_STATUS get_http_boot_volume(EFI_HANDLE *Volume);
-EXTERN EFI_STATUS make_http_child_dh(const char *url, EFI_HANDLE *ChildDH);
+EXTERN EFI_STATUS get_http_nic_and_ipv(EFI_HANDLE Volume, EFI_HANDLE *Nic,
+                                       int *ipv);
+EXTERN EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
+                                     EFI_HANDLE *ChildDH);
 EXTERN EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
                                  int (*callback)(size_t), VOID **Buffer,
                                  UINTN *BufSize);
@@ -244,6 +250,11 @@ EXTERN bool is_pxe_boot(EFI_PXE_BASE_CODE **Pxe);
  */
 EXTERN EFI_STATUS filepath_unix_to_efi(const char *unix_path,
                                        CHAR16 **uefi_path);
+EXTERN bool last_file_read_via_http(void);
+EXTERN int firmware_image_load(const char *filepath, const char *options,
+                               void *image, size_t imgsize,
+                               EFI_HANDLE *ChildHandle);
+EXTERN int firmware_image_start(EFI_HANDLE ChildHandle);
 
 /*
  * image.c

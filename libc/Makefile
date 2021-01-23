@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2011,2014 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2011,2014,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -10,7 +10,9 @@
 TOPDIR       := ..
 include common.mk
 
-SRC         := ctypes.c          \
+SRC         := \
+               atexit.c          \
+               ctypes.c          \
                generic.c         \
                getopt.c          \
                inet_pton.c       \

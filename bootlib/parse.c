@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -158,17 +158,7 @@ int parse_config_file(int volid, const char *filename, option_t *options)
    }
 
    for (opt = options; opt->type != OPT_INVAL; opt++) {
-      switch (opt->type) {
-      case OPT_STRING:
-         opt->value.str = NULL;
-         break;
-      case OPT_INTEGER:
-         opt->value.integer = 0;
-         break;
-      case OPT_INVAL:
-         // not reached
-         break;
-      }
+      opt->value = opt->default_value;
    }
 
    status = 0;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -17,7 +17,6 @@
 
 static EFI_GUID SimpleNetworkProto = EFI_SIMPLE_NETWORK_PROTOCOL_GUID;
 static EFI_GUID PciIoProto = EFI_PCI_IO_PROTOCOL_GUID;
-static EFI_GUID GpxeDownloadProto = GPXE_DOWNLOAD_PROTOCOL_GUID;
 
 static char ipappend[BOOTIF_OPTION_SIZE];
 
@@ -35,6 +34,10 @@ bool is_network_boot(void)
    EFI_HANDLE BootVolume;
    EFI_STATUS Status;
    VOID *Proto;
+
+   if (is_http_boot()) {
+      return true;
+   }
 
    Status = get_boot_volume(&BootVolume);
    if (EFI_ERROR(Status)) {
@@ -69,7 +72,8 @@ bool is_network_boot(void)
 int get_bootif_option(const char **bootif)
 {
    EFI_SIMPLE_NETWORK *Network;
-   EFI_HANDLE BootVolume;
+   EFI_HANDLE BootVolume, Nic;
+   int ipv;
    EFI_STATUS Status;
 
    Status = get_boot_volume(&BootVolume);
@@ -77,7 +81,16 @@ int get_bootif_option(const char **bootif)
       return error_efi_to_generic(Status);
    }
 
-   Status = get_protocol_interface(BootVolume, &SimpleNetworkProto,
+   if (is_http_boot()) {
+      Status = get_http_nic_and_ipv(BootVolume, &Nic, &ipv);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+   } else {
+      Nic = BootVolume;
+   }
+
+   Status = get_protocol_interface(Nic, &SimpleNetworkProto,
                                    (VOID **)&Network);
    if (EFI_ERROR(Status)) {
       return error_efi_to_generic(Status);

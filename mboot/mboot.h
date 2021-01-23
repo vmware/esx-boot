@@ -98,9 +98,6 @@ int elf_register(void *buffer, Elf_CommonAddr *entry);
 #define MBOOT_ID_SIZE   6
 #define TITLE_MAX_LEN   128
 
-#define DEFAULT_SERIAL_COM      1       /* Default serial port (COM1) */
-#define DEFAULT_SERIAL_BAUDRATE 115200  /* Default serial baud rate */
-
 static inline void PANIC(void)
 {
    for (;;) {
@@ -130,6 +127,8 @@ typedef struct {
    char name[MBOOT_ID_SIZE];  /* Bootloader identification string */
    char title[TITLE_MAX_LEN]; /* Title string */
    char *cfgfile;             /* Configuration filename */
+   char *prefix;              /* Module path prefix */
+   char *crypto;              /* Crypto module filename */
    int volid;                 /* Volume to load the kernel/modules from */
    kernel_t kernel;           /* Kernel information */
    unsigned int modules_nr;   /* Number of modules */

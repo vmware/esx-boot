@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -445,24 +445,24 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
 
    status = get_boot_disk(&disk);
    if (status != ERR_SUCCESS) {
-      Log(LOG_DEBUG, "file_overwrite: get_boot_disk returned %d\n", status);
+      Log(LOG_DEBUG, "file_overwrite: get_boot_disk returned %d", status);
       return status;
    }
 
    if (buflen > disk.bytes_per_sector || volid == FIRMWARE_BOOT_VOLUME) {
-      Log(LOG_DEBUG, "file_overwrite: buflen=%zd volid=%d\n", buflen, volid);
+      Log(LOG_DEBUG, "file_overwrite: buflen=%zd volid=%d", buflen, volid);
       return ERR_UNSUPPORTED;
    }
 
    status = fat_file_open(volid, filepath, &fs, &sector, &size);
    if (status != ERR_SUCCESS) {
-      Log(LOG_DEBUG, "file_overwrite: fat_file_open returned %d\n", status);
+      Log(LOG_DEBUG, "file_overwrite: fat_file_open returned %d", status);
       return status;
    }
 
    sectorbuf = sys_malloc(disk.bytes_per_sector);
    if (sectorbuf == NULL) {
-      Log(LOG_DEBUG, "file_overwrite: sys_malloc failed\n");
+      Log(LOG_DEBUG, "file_overwrite: sys_malloc failed");
       libfat_close(fs);
       return ERR_OUT_OF_RESOURCES;
    }
@@ -470,13 +470,13 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
    sector += dfd.partition->info.start_lba;
    status = disk_read(dfd.disk, sectorbuf, sector, 1);
    if (status != ERR_SUCCESS) {
-      Log(LOG_DEBUG, "file_overwrite: disk_read returned %d\n", status);
+      Log(LOG_DEBUG, "file_overwrite: disk_read returned %d", status);
 
    } else /* disk_read succeeded */ {
       memcpy(sectorbuf, buffer, buflen);
       status = disk_write(dfd.disk, sectorbuf, sector, 1);
       if (status != ERR_SUCCESS) {
-         Log(LOG_DEBUG, "file_overwrite: disk_write returned %d\n", status);
+         Log(LOG_DEBUG, "file_overwrite: disk_write returned %d", status);
       }
    }
 
@@ -484,53 +484,4 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
 
    sys_free(sectorbuf);
    return status;
-}
-
-/*-- file_sanitize_path --------------------------------------------------------
- *
- *      Sanitize a UNIX-style or URL-style path
- *        - the first :// sequence, if any, keeps its //
- *        - other multiple-separator / occurrences are merged
- *        - whitespace characters are removed (XXX why?)
- *
- * Parameters
- *      IN  filepath: pointer to the UNIX/Protocol path
- *
- * Results
- *      ERR_SUCCESS, or a generic error status.
- *
- * Side Effects
- *      Input pathname is modified in place
- *----------------------------------------------------------------------------*/
-int file_sanitize_path(char *filepath)
-{
-   const char *p;
-   bool slash;
-   int i, j;
-
-   if (filepath == NULL) {
-      return ERR_INVALID_PARAMETER;
-   }
-
-   slash = false;
-   p = strstr(filepath, "://");
-   j = 0;
-
-   for (i = 0; filepath[i] != '\0'; i++) {
-      if (isspace(filepath[i])) {
-         continue;
-      } else if (filepath[i] == '/' || filepath[i] == '\\') {
-         if (!slash || ((p != NULL) && (&filepath[i] < (p + 3)))) {
-            filepath[j++] = '/';
-            slash = true;
-         }
-      } else {
-         filepath[j++] = filepath[i];
-         slash = false;
-      }
-   }
-
-   filepath[j] = '\0';
-
-   return ERR_SUCCESS;
 }

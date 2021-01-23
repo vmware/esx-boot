@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -22,10 +22,10 @@
 
 #include "efi_private.h"
 
-/*-- get_serial_port -----------------------------------------------------------
+/*-- get_nvidia_rshim_console_port ---------------------------------------------
  *
- *      Get the I/O base address of a serial port. On ARM UEFI platforms, we
- *      have to assume a port described by ACPI SPCR.
+ *      BlueField-based platforms support a serial console over the PCIe/USB
+ *      RSHIM interface.
  *
  * Parameters
  *      IN  com:  unused
@@ -36,11 +36,53 @@
  * Results
  *      A generic error status.
  *----------------------------------------------------------------------------*/
-int get_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
-                    io_channel_t *io, uint32_t *original_baudrate)
+static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *type,
+                                         io_channel_t *io, uint32_t *original_baudrate)
 {
+   acpi_nvidia_tmff *tmff = (void *) acpi_find_sdt("TMFF");
+
+   if (tmff == NULL) {
+      return ERR_NOT_FOUND;
+   }
+
+   if ((tmff->flags & TMFIFO_CON_OVERRIDES_SPCR_FOR_EARLY_CONSOLE) == 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   io->type = IO_MEMORY_MAPPED;
+   io->channel.addr = tmff->tile_to_host_base;
+   io->offset_scaling = 1;
+   *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
+   *type = SERIAL_TMFIFO;
+
+   return ERR_SUCCESS;
+}
+
+/*-- get_serial_port -----------------------------------------------------------
+ *
+ *      Get the I/O base address of a serial port. On ARM UEFI platforms, this
+ *      is generally the SPCR. One some platforms, other ways may be preferred.
+ *
+ * Parameters
+ *      IN  com:  unused
+ *      OUT type: serial port type
+ *      OUT io:   serial port base address
+ *      OUT original_baudrate: current baudrate from SPCR
+ *
+ * Results
+ *      A generic error status.
+ *----------------------------------------------------------------------------*/
+int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
+                    uint32_t *original_baudrate)
+{
+   int status;
    EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *spcr =
       (void *) acpi_find_sdt("SPCR");
+
+   status = get_nvidia_rshim_console_port(com, type, io, original_baudrate);
+   if (status == ERR_SUCCESS) {
+      return status;
+   }
 
    if (spcr == NULL) {
       return ERR_NOT_FOUND;
