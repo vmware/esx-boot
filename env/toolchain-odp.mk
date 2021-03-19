@@ -25,6 +25,7 @@ HOST_CFLAGS     := -m32
 HOST_LIBBFDINC  := $(TCROOT)/binutils-2.17.50.0.15/x86_64-linux/include
 HOST_LIBBFD     := $(TCROOT)/binutils-2.17.50.0.15/x86_64-linux/lib/libbfd.a
 HOST_LIBERTY    := $(TCROOT)/binutils-2.17.50.0.15/lib/libiberty.a
+HOST_CRYPTO     := -lcrypto
 
 #=============================================================
 # Target definitions.

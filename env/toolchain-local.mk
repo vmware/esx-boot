@@ -23,6 +23,7 @@ HOST_CFLAGS     :=
 HOST_LIBBFDINC  := /usr/include
 HOST_LIBBFD     := -lbfd
 HOST_LIBERTY    := -liberty
+HOST_LIBCRYPTO  := -lcrypto
 
 #=============================================================
 # Target definitions.

@@ -32,6 +32,7 @@ HOST_CFLAGS     :=
 HOST_LIBBFDINC  := <Path to host bfd.h>
 HOST_LIBBFD     := <Path to host libbfd.a>
 HOST_LIBERTY    := <Path to host libiberty.a>
+HOST_LIBCRYPTO  := <Path to host libcrypto.a>
 
 #=============================================================
 # Target definitions.
