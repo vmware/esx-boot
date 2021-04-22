@@ -14,7 +14,7 @@ HOST_CFLAGS += -Wno-stringop-truncation
 
 all: $(BUILD_DIR) $(ELF2EFI)
 
-$(ELF2EFI): elf2efi.c $(HOST_LIBBFD) $(HOST_LIBERTY) $(HOST_LIBCRYPTO)
+$(ELF2EFI): elf2efi.c $(HOST_LIBBFD) $(HOST_LIBERTY) $(HOST_LIBCRYPTO) $(HOST_LIBZ)
 	$(call print,CC,$@)
 	$(HOST_CC) $(HOST_CFLAGS) -O2 $(patsubst %,-I%,$(INC)) -o $@ $^ \
 		-lpthread -ldl

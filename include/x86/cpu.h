@@ -34,9 +34,6 @@ typedef struct CPUIDRegs {
    unsigned int eax, ebx, ecx, edx;
 } CPUIDRegs;
 
-CPUIDRegs cpuid0;
-CPUIDRegs cpuid1;
-
 #define CPUID_FAMILY_P6 6
 #define CPUID_FAMILY_EXTENDED 15
 

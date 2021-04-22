@@ -80,6 +80,9 @@ CPUID_IsVendorIntel(CPUIDRegs *id0)
 void
 check_cpu_quirks(void)
 {
+   CPUIDRegs cpuid0;
+   CPUIDRegs cpuid1;
+
    __GET_CPUID(0, &cpuid0);
    __GET_CPUID(1, &cpuid1);
    is_intel_skylake = (CPUID_IsVendorIntel(&cpuid0) &&

@@ -41,6 +41,12 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
+#ifndef bfd_get_section_flags
+# define bfd_get_section_flags(bfd, section) bfd_section_flags((section))
+# define bfd_get_section_vma(bfd, section) bfd_section_vma((section))
+# define bfd_section_size(bfd, section) bfd_section_size((section))
+#endif /* ifndef bfd_get_section_flags */
+
 #define eprintf(...) fprintf ( stderr, __VA_ARGS__ )
 
 #define EFI_FILE_ALIGN 0x20
