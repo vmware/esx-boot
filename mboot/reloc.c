@@ -729,8 +729,7 @@ static int blacklist_bootloader_mem(UNUSED_PARAM(e820_range_t *mmap),
    size_t i;
 
 #if defined(__COM32__)
-   status = blacklist_runtime_mem((run_addr_t)PTR_TO_UINT(__executable_start),
-                                  _end - __executable_start);
+   status = blacklist_runtime_mem(0, PTR_TO_UINT64(_end));
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Loader memory reservation error.\n");
       return status;
