@@ -41,5 +41,6 @@
 #include <IndustryStandard/Acpi50.h>
 #include <IndustryStandard/SerialPortConsoleRedirectionTable.h>
 #include <IndustryStandard/SmBios.h>
+#include <Guid/Fdt.h>
 
 #endif /* !EFI_H_ */

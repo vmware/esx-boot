@@ -161,6 +161,28 @@ size_t strlen(const char *s)
    return i;
 }
 
+/*-- strnlen -------------------------------------------------------------------
+ *
+ *      Return the length of a string, in characters, not including the trailing
+ *      '\0', but at most maxlen.
+ *
+ * Parameters
+ *      IN s: pointer to the string
+ *
+ * Results
+ *      The length, in number of characters, up to maxlen.
+ *----------------------------------------------------------------------------*/
+size_t strnlen(const char *s, size_t maxlen)
+{
+   size_t i = 0;
+
+   while (i < maxlen && s[i] != '\0') {
+      i++;
+   }
+
+   return i;
+}
+
 /*-- strcmp --------------------------------------------------------------------
  *
  *      Compare two strings to each other.

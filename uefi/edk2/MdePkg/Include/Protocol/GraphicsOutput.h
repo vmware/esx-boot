@@ -3,14 +3,8 @@
 
   Abstraction of a very simple graphics device.
 
-  Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
@@ -33,18 +27,18 @@ typedef struct {
 
 typedef enum {
   ///
-  /// A pixel is 32-bits and byte zero represents red, byte one represents green, 
-  /// byte two represents blue, and byte three is reserved. This is the definition 
-  /// for the physical frame buffer. The byte values for the red, green, and blue 
-  /// components represent the color intensity. This color intensity value range 
+  /// A pixel is 32-bits and byte zero represents red, byte one represents green,
+  /// byte two represents blue, and byte three is reserved. This is the definition
+  /// for the physical frame buffer. The byte values for the red, green, and blue
+  /// components represent the color intensity. This color intensity value range
   /// from a minimum intensity of 0 to maximum intensity of 255.
   ///
   PixelRedGreenBlueReserved8BitPerColor,
   ///
-  /// A pixel is 32-bits and byte zero represents blue, byte one represents green, 
-  /// byte two represents red, and byte three is reserved. This is the definition 
-  /// for the physical frame buffer. The byte values for the red, green, and blue 
-  /// components represent the color intensity. This color intensity value range 
+  /// A pixel is 32-bits and byte zero represents blue, byte one represents green,
+  /// byte two represents red, and byte three is reserved. This is the definition
+  /// for the physical frame buffer. The byte values for the red, green, and blue
+  /// components represent the color intensity. This color intensity value range
   /// from a minimum intensity of 0 to maximum intensity of 255.
   ///
   PixelBlueGreenRedReserved8BitPerColor,
@@ -64,7 +58,7 @@ typedef enum {
 
 typedef struct {
   ///
-  /// The version of this data structure. A value of zero represents the 
+  /// The version of this data structure. A value of zero represents the
   /// EFI_GRAPHICS_OUTPUT_MODE_INFORMATION structure as defined in this specification.
   ///
   UINT32                     Version;
@@ -77,12 +71,12 @@ typedef struct {
   ///
   UINT32                     VerticalResolution;
   ///
-  /// Enumeration that defines the physical format of the pixel. A value of PixelBltOnly 
+  /// Enumeration that defines the physical format of the pixel. A value of PixelBltOnly
   /// implies that a linear frame buffer is not available for this mode.
   ///
   EFI_GRAPHICS_PIXEL_FORMAT  PixelFormat;
   ///
-  /// This bit-mask is only valid if PixelFormat is set to PixelPixelBitMask. 
+  /// This bit-mask is only valid if PixelFormat is set to PixelPixelBitMask.
   /// A bit being set defines what bits are used for what purpose such as Red, Green, Blue, or Reserved.
   ///
   EFI_PIXEL_BITMASK          PixelInformation;

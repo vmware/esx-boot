@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,11 +14,17 @@
 
 #define PART_TYPE_EMPTY                 0x0
 #define PART_TYPE_FAT12                 0x1
+#define PART_TYPE_FAT16_LT32MB          0x4
 #define PART_TYPE_EXTENDED              0x5
 #define PART_TYPE_FAT16                 0x6
+#define PART_TYPE_FAT32                 0xb
+#define PART_TYPE_FAT32_LBA             0xc
+#define PART_TYPE_FAT16_LBA             0xe
 #define PART_TYPE_WIN_EXTENDED          0xf
 #define PART_TYPE_LINUX_EXTENDED        0x85
-#define PART_TYPE_GPT                   0xee
+#define PART_TYPE_NON_FS                0xda
+#define PART_TYPE_GPT_PROTECTIVE        0xee
+#define PART_TYPE_EFI                   0xef
 
 #pragma pack(1)
 typedef struct {
@@ -37,7 +43,7 @@ typedef struct {
    &((mbr_part_t *)(mbr + 0x1be))[entrynum - 1];
 
 #define PART_IS_PROTECTIVE_MBR(_part_)                        \
-   ((_part_)->type == PART_TYPE_GPT &&                        \
+   ((_part_)->type == PART_TYPE_GPT_PROTECTIVE &&             \
     (_part_)->start_lba == 1 &&                               \
     (_part_)->flags == 0)
 

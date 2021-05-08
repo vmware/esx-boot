@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -73,10 +73,51 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
    uint8_t *block;
    uint8_t *uuid;
    disk_t disk;
+   partition_t partition;
    int status;
 
    if (buffer == NULL || buflen < VMWARE_FAT_UUID_LEN) {
       return ERR_INVALID_PARAMETER;
+   }
+
+   status = get_boot_disk(&disk);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
+   /*
+    * Return an error if this is not a valid partition type to contain a FAT
+    * filesystem; see PR 2678561.  Only PART_TYPE_FAT16 and PART_TYPE_EFI are
+    * really expected to contain a FAT filesystem on an ESXi-created boot disk,
+    * but we tolerate other MBR partition types that can contain FAT just in
+    * case.  For GPT, gpt_to_partinfo translates only the expected GUID
+    * partition types to PART_TYPE_FAT16 or PART_TYPE_EFI; others translate to
+    * PART_TYPE_NON_FS and thus are rejected here.
+    */
+   status = get_volume_info(&disk, volid, &partition);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+   switch (partition.info.type) {
+   case PART_TYPE_FAT16:
+   case PART_TYPE_EFI:
+      break;
+
+   case PART_TYPE_FAT12:
+   case PART_TYPE_FAT16_LT32MB:
+   case PART_TYPE_FAT32:
+   case PART_TYPE_FAT32_LBA:
+   case PART_TYPE_FAT16_LBA:
+      break;
+
+   case PART_TYPE_EMPTY:
+   case PART_TYPE_EXTENDED:
+   case PART_TYPE_WIN_EXTENDED:
+   case PART_TYPE_LINUX_EXTENDED:
+   case PART_TYPE_NON_FS:
+   case PART_TYPE_GPT_PROTECTIVE:
+   default:
+      return ERR_BAD_TYPE;
    }
 
    /*
@@ -84,17 +125,12 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
     * First determine the sector size to get the required offset
     * to read the UUID from.
     */
-   status = get_boot_disk(&disk);
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
    block = sys_malloc(disk.bytes_per_sector);
    if (block == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
-   status = volume_read(volid, block, disk.bytes_per_sector,
+   status = volume_read(&disk, &partition, block, disk.bytes_per_sector,
                         disk.bytes_per_sector);
    if (status != ERR_SUCCESS) {
       sys_free(block);

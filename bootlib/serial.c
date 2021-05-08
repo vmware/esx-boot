@@ -32,6 +32,16 @@ static int serial_log(const char *msg)
    newline = true;
    len = 0;
 
+   if ((uart_flags(&serial_dev) & UART_USE_AFTER_EXIT_BOOT_SERVICES) != 0 &&
+       in_boot_services()) {
+      /*
+       * UART doesn't want to be used until firmware is quiesced (e.g.
+       * the same UART is known to be in use by firmware leading to
+       * garbaged output).
+       */
+      return len;
+   }
+
    for ( ; *msg != '\0'; msg++) {
       if (newline && syslog_get_message_level(msg, &level) == ERR_SUCCESS) {
          msg += 3;

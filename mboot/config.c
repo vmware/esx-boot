@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2014,2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2014,2016,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -379,8 +379,7 @@ static int locate_config_file(const char *filename, char **path)
       if (is_network_boot() && use_default_config) {
          status = get_mac_address(&mac);
          if (status != ERR_SUCCESS) {
-            Log(LOG_DEBUG, "MAC address not found. Loading configuration from"
-                " %s/%s\n", bootdir, DEFAULT_CFGFILE);
+            Log(LOG_DEBUG, "MAC address not found");
          } else {
             if (asprintf(&relpath, "%s/%s", mac, DEFAULT_CFGFILE) == -1) {
                sys_free(bootdir);
@@ -401,9 +400,8 @@ static int locate_config_file(const char *filename, char **path)
                *path = cfgpath;
                return status;
             } else {
-               Log(LOG_DEBUG, "Could not read config file %s. Loading"
-                   " configuration from %s/%s\n",
-                   cfgpath, bootdir, DEFAULT_CFGFILE);
+               Log(LOG_DEBUG, "Could not read config from %s: %s",
+                   cfgpath, error_str[status]);
                sys_free(cfgpath);
             }
          }
@@ -431,8 +429,8 @@ static int locate_config_file(const char *filename, char **path)
       if (status == ERR_SUCCESS) {
          sys_free(buf);
       } else {
-         Log(LOG_DEBUG, "Could not read config file %s. Loading"
-             " configuration from /%s\n", cfgfile, filename);
+         Log(LOG_DEBUG, "Could not read config from %s: %s",
+             cfgfile, error_str[status]);
          sys_free(cfgfile);
          status = make_path("/", filename, &cfgfile);
          if (status != ERR_SUCCESS) {
@@ -521,7 +519,9 @@ int parse_config(const char *filename)
    status = parse_cmdlines(prefix, kernel, kopts, mod_list);
 
  error:
-   sys_free(path);
+   if (boot.prefix != path) {
+      sys_free(path);   // Only free if prefix wasn't derived from path.
+   }
    sys_free(mboot_options[0].value.str);   /* Kernel name */
    sys_free(mboot_options[1].value.str);   /* Kernel options */
    sys_free(mboot_options[2].value.str);   /* List of modules */

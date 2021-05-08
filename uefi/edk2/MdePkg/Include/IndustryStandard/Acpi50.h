@@ -1,14 +1,10 @@
 /** @file
-  ACPI 5.0 definitions from the ACPI Specification Revision 5.0 December 6, 2011
+  ACPI 5.0 definitions from the ACPI Specification Revision 5.0a November 13, 2013.
 
-  Copyright (c) 2011 - 2012, Intel Corporation. All rights reserved.<BR>
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  Copyright (c) 2014 Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2011 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020, ARM Ltd. All rights reserved.<BR>
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
 #ifndef _ACPI_5_0_H_
@@ -17,7 +13,7 @@
 #include <IndustryStandard/Acpi40.h>
 
 //
-// Define for Desriptor
+// Define for Descriptor
 //
 #define ACPI_SMALL_FIXED_DMA_DESCRIPTOR_NAME                         0x0A
 #define ACPI_LARGE_GPIO_CONNECTION_DESCRIPTOR_NAME                   0x0C
@@ -160,7 +156,8 @@ typedef struct {
 #define EFI_ACPI_5_0_PCI_CONFIGURATION_SPACE    2
 #define EFI_ACPI_5_0_EMBEDDED_CONTROLLER        3
 #define EFI_ACPI_5_0_SMBUS                      4
-#define EFI_ACPI_5_0_FUNCTIONAL_FIXED_HARDWARE  0x7F
+#define EFI_ACPI_5_0_PLATFORM_COMMUNICATION_CHANNEL  0x0A
+#define EFI_ACPI_5_0_FUNCTIONAL_FIXED_HARDWARE       0x7F
 
 //
 // Generic Address Space Access Sizes
@@ -1094,8 +1091,10 @@ typedef struct {
 ///
 /// BGRT Status
 ///
-#define EFI_ACPI_5_0_BGRT_STATUS_INVALID  0x00
-#define EFI_ACPI_5_0_BGRT_STATUS_VALID    0x01
+#define EFI_ACPI_5_0_BGRT_STATUS_NOT_DISPLAYED 0x00
+#define EFI_ACPI_5_0_BGRT_STATUS_DISPLAYED     0x01
+#define EFI_ACPI_5_0_BGRT_STATUS_INVALID       EFI_ACPI_5_0_BGRT_STATUS_NOT_DISPLAYED
+#define EFI_ACPI_5_0_BGRT_STATUS_VALID         EFI_ACPI_5_0_BGRT_STATUS_DISPLAYED
 
 ///
 /// BGRT Image Type
@@ -1203,7 +1202,7 @@ typedef struct {
   ///
   UINT64                                          ExitBootServicesEntry;
   ///
-  /// Timer value logged at the point just prior towhen the OS loader gaining
+  /// Timer value logged at the point just prior to when the OS loader gaining
   /// control back from calls the ExitBootServices function for UEFI compatible firmware.
   /// For non-UEFI compatible boots, this field must be zero.
   ///
@@ -1854,7 +1853,8 @@ typedef struct {
   UINT8                                    CommandComplete:1;
   UINT8                                    SciDoorbell:1;
   UINT8                                    Error:1;
-  UINT8                                    Reserved:5;
+  UINT8                                    PlatformNotification:1;
+  UINT8                                    Reserved:4;
   UINT8                                    Reserved1;
 } EFI_ACPI_5_0_PCCT_GENERIC_SHARED_MEMORY_REGION_STATUS;
 
@@ -2019,6 +2019,11 @@ typedef struct {
 #define EFI_ACPI_5_0_DMA_REMAPPING_TABLE_SIGNATURE  SIGNATURE_32('D', 'M', 'A', 'R')
 
 ///
+/// "DRTM" Dynamic Root of Trust for Measurement Table
+///
+#define EFI_ACPI_5_0_DYNAMIC_ROOT_OF_TRUST_FOR_MEASUREMENT_TABLE_SIGNATURE  SIGNATURE_32('D', 'R', 'T', 'M')
+
+///
 /// "ETDT" Event Timer Description Table
 ///
 #define EFI_ACPI_5_0_EVENT_TIMER_DESCRIPTION_TABLE_SIGNATURE  SIGNATURE_32('E', 'T', 'D', 'T')
@@ -2054,12 +2059,17 @@ typedef struct {
 #define EFI_ACPI_5_0_DATA_MANAGEMENT_TABLE_SIGNATURE  SIGNATURE_32('M', 'S', 'D', 'M')
 
 ///
+/// "PCCT" Platform Communications Channel Table
+///
+#define EFI_ACPI_5_0_PLATFORM_COMMUNICATIONS_CHANNEL_TABLE_SIGNATURE  SIGNATURE_32('P', 'C', 'C', 'T')
+
+///
 /// "SLIC" MS Software Licensing Table Specification
 ///
 #define EFI_ACPI_5_0_SOFTWARE_LICENSING_TABLE_SIGNATURE  SIGNATURE_32('S', 'L', 'I', 'C')
 
 ///
-/// "SPCR" Serial Port Concole Redirection Table
+/// "SPCR" Serial Port Console Redirection Table
 ///
 #define EFI_ACPI_5_0_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_SIGNATURE  SIGNATURE_32('S', 'P', 'C', 'R')
 
@@ -2084,9 +2094,10 @@ typedef struct {
 #define EFI_ACPI_5_0_UEFI_ACPI_DATA_TABLE_SIGNATURE  SIGNATURE_32('U', 'E', 'F', 'I')
 
 ///
-/// "WAET" Windows ACPI Enlightenment Table
+/// "WAET" Windows ACPI Emulated Devices Table
 ///
-#define EFI_ACPI_5_0_WINDOWS_ACPI_ENLIGHTENMENT_TABLE_SIGNATURE  SIGNATURE_32('W', 'A', 'E', 'T')
+#define EFI_ACPI_5_0_WINDOWS_ACPI_EMULATED_DEVICES_TABLE_SIGNATURE  SIGNATURE_32('W', 'A', 'E', 'T')
+#define EFI_ACPI_5_0_WINDOWS_ACPI_ENLIGHTENMENT_TABLE_SIGNATURE  EFI_ACPI_5_0_WINDOWS_ACPI_EMULATED_DEVICES_TABLE_SIGNATURE
 
 ///
 /// "WDAT" Watchdog Action Table

@@ -53,6 +53,7 @@
 #include "mboot.h"
 #include "boot_services.h"
 #include "libgen.h"
+#include "cert.h"
 
 #include <efiutils.h>
 #include <sha256.h>
@@ -73,7 +74,7 @@
  */
 #define V1_KEYID_LEN 16
 
-static EFI_MBEDTLS_PROTOCOL *mbedtls = NULL;
+static VMW_MBEDTLS_PROTOCOL *mbedtls = NULL;
 
 typedef struct {
    const char *name;
@@ -107,126 +108,6 @@ NamedModule v4Named[] = {
    {"esxcore", 0}, // present only in esxcore builds
    {"esxupdt", 0}, // esximage library
    {NULL, 0}
-};
-
-/*
- * RSA public key.
- */
-typedef struct {
-   const char *keyid;
-   /*
-    * Raw hex form: size, modulus, and public exponent.
-    * Obtainable from the command:
-    *
-    *    openssl rsa -pubin -text < key.public
-    *
-    * ...followed by removing the colons and newlines from the modulus.
-    */
-   unsigned bits;
-   const char *modulus;
-   uint64_t exponent;
-   /*
-    * Message digest algorithm to be used in signatures with this key.
-    */
-   mbedtls_md_type_t digest;
-   /*
-    * Parsed form; valid if parsed = TRUE.
-    */
-   bool parsed;
-  mbedtls_rsa_context rsa;
-} RawRSAKey;
-
-RawRSAKey pubkeys[] = {
-#if defined(test)
-   {
-      "elfsign_test",
-      2048,
-      "00cb5ad2434ed4f0454547fb9104404c5247b757d67bc18fa0a6184007ed"
-      "0b18e1216b3a656c6e53bfe5b97442f8a59d379f9d1686bbef573a606736"
-      "61066139164ace800b2350b753c5be579661424a605b9c80bf6db0721159"
-      "06a03146ec283010c54eb959fce7029c101380f18216f7d3d41b949d407f"
-      "fc9b549c77977df58ab7a33ba7e7c592e07cf7a656f2aa26a1bda3c9ab55"
-      "cd76e34270584a7a6c6cc34a19a8c0ff5f71cd891bf5a6e18e2cd4c11390"
-      "be08863face38fe1bc3b6cafd87bfdad4aabd8767cd20a0ab6a0c4a0c12f"
-      "ebc1a6f974bea947f4587f007eaa7901253ee02ad71e5663bc78d6a5a142"
-      "cb00429b82038dba69718dd7e2866f28cb",
-      0x10001,
-      MBEDTLS_MD_SHA256,
-      false,
-      { 0 }
-   },
-   {
-      "test_esx67",
-      4096,
-      "00a480237f1f4a1a4889a8ac18fff0f26caaf5d263f7b6a0425ae0725c74"
-      "8fc633346cd756a5f017c78c7df39745910800f727e089f786e98e4aa79c"
-      "e969344d8004bbd16cbfe08c818ecbea15709da187ac66d367c3d62a247a"
-      "dfa46c1f836d75a06e9f2b0e1a172cc1a592c3459dee72cf41d859a37652"
-      "ce1b800ccbe6bdd979628363c1d9a58b613ad8e0c6affb4b501f915e7182"
-      "b10e8e076145cce9406efa9b856170a72b93dbd008bc409de8a8c93d127a"
-      "9e352462785ff4268c2cc5323feed0e2468b5357cdd8c20dcd96a9ca3a53"
-      "cf3317ea5e7233a7c4c104a8e1c93b198108cf7024ba376f29a4864b293b"
-      "614358199feaf3f1121a9c45761436ed2bafce39c689a9dcd1b48a33936b"
-      "f8f6e36b31d8417868b6a7b61cad1738be4fc401decd534d389e9406fa42"
-      "bc4385d161a1478ef3daff6cf12f293f90631409628dddb690203acbc7fd"
-      "a052aa5adec6caa0939b3564ee9dca0f077884958b112adb9ef61b753bd4"
-      "efece4da83a47720f806253bd3fc0079b84f75522703cade9bffcd9d6fe0"
-      "b1338d467f0b9dce609a64659fe66b0c87861cf08f7612bbb6491946a9ef"
-      "02b115609c56538ec65014c70d0ffbb5dc81b0c650f1d762ecd42152f11e"
-      "9159de35c64a522b5658b7c32876813e830c9a0a459c8cbf89cfe4e7eac4"
-      "8319f57646fddebab57640407b567e36801deff2e86001f16a2439287d1e"
-      "769301",
-      0x10001,
-      MBEDTLS_MD_SHA512,
-      false,
-      { 0 }
-   },
-#endif
-#if defined(official)
-   {
-      "vmware_esx40",
-      2048,
-      "00c565a745cf677ff3152e790e7f53bbcc762796b76afa0893b2ac847459"
-      "dc3f17576de5054dfee5b9bc1d0fab80810ba4bffc64c8fe54464b5d93ff"
-      "ef3088bf3c6c250aef126f46b6dc2ee6a3da71f080e5a32122fa48358b5f"
-      "6629cfb91b73a28afe2952cda5e1d4d7f6f0b6178419438f8c963af44d67"
-      "4b48b431139cc64c8fe48344a2500aa475b39fc9b0b90c9febbcc7c78b34"
-      "2d9a25e98198a23cda2aa58fd17ff6e511143f0689141f048a1ced057f3d"
-      "b9e7dd118405b03b90b89fd418050c5e5451b4de4ea5ad04f43b8b0b8546"
-      "885da1941286d4f1531cabc9e4dfa26dafe09c953c75c6211879f62cb0f6"
-      "badca8b35db8b47a407fe6c402b05a137f",
-      0x3,
-      MBEDTLS_MD_SHA256,
-      false,
-      { 0 }
-   },
-   {
-      "vmware_esx67",
-      4096,
-      "00b7cea53a8621213db4d66708969bac03778afb9a8494bf3c3c34e4b966"
-      "432b7b5b5c64dd2ed0455117ea9af892f5cb76b951b9071721ea871863b1"
-      "d66fa4451d9f71e90803c0d45dd8632b7ec91f40501b48aea156db5139f9"
-      "bd3609ac2ed79c80d2c32475aa1514ffaa6fb5983871dafdd44efa7015c5"
-      "8eb88f0e1bc9abfd6077ed9e5d48825d81f025b7f47d35f882135c1e0aa3"
-      "fb8f95d3a4bf3034d66d0307047c6d2b254af4fa1a4565fedda6480bd077"
-      "6ee09c759335378e1799cf70d792fd7acf1863a3ce3c0f60e392f9df3eb6"
-      "d17a22135ffaabba3e8652a5541d14072c588d0f71349bf72c1e4dfdae73"
-      "a31aa4431df762c825f857ba87eb3745a16c2752f41f564df9793d1e2812"
-      "88a7f8450b4abca6778527112782cf51735c40f0511f88aafa573ddd1897"
-      "7f562dcc895d76cfedffde4dc6c8e806a217e6d4f8896d3b5ddc664be028"
-      "89486734c0a34ab1333cb38bcad422dd279dcff304f6bdf345f9f504d69c"
-      "f2a8ced26426a1b09ae01d4d3608e164f6f133ee31bd96f0b0b5dc8c64d1"
-      "1a0b6cfa18c4cdd1d615cb3c521b777ef812ef0122006a62e417cce68cc1"
-      "b7efc7b0e948c377adde8e047e3f286072a25f54ac7bdee0e03dfdf203f0"
-      "14b139bf0a12e84c31b7b6f2120b95084e16532fec8fa146381d77032975"
-      "f0912c58748de0123a49a934c7c6bdabcb9339554e6d13a19c1daa41793c"
-      "8d4b03",
-      0x3,
-      MBEDTLS_MD_SHA512,
-      false,
-      { 0 }
-   },
-#endif
 };
 
 
@@ -379,8 +260,7 @@ static bool secure_boot_check_sig(uint32_t schema,
    unsigned char md[MAX_DIGEST_LENGTH];
    int errcode;
    char keyid[V1_KEYID_LEN + 1];
-   RawRSAKey *pubkey;
-   unsigned i;
+   RawRSACert *cert;
 
    /*
     * This function works for all schema versions defined so far,
@@ -391,52 +271,64 @@ static bool secure_boot_check_sig(uint32_t schema,
    memcpy(keyid, sig, V1_KEYID_LEN);
    keyid[V1_KEYID_LEN] = '\0';
 
-   for (i = 0; i < ARRAYSIZE(pubkeys); i++) {
-      pubkey = &pubkeys[i];
-      if (strcmp(keyid, pubkey->keyid) == 0) {
+   for (cert = certs; ; ++cert) {
+      if (cert->keyid == NULL) {
+         Log(LOG_WARNING, "Signature has unexpected keyid %s", keyid);
+         return false;
+      }
+      if (strcmp(keyid, cert->keyid) == 0) {
          break;
       }
    }
-   if (i == ARRAYSIZE(pubkeys)) {
-      Log(LOG_WARNING, "Signature has unexpected keyid %s", keyid);
-      return false;
-   }
 
-   if (!pubkey->parsed) {
-      Log(LOG_DEBUG, "Parsing keyid %s", pubkey->keyid);
-      mbedtls->RsaInit(&pubkey->rsa, MBEDTLS_RSA_PKCS_V15, MBEDTLS_MD_NONE);
-      pubkey->rsa.len = pubkey->bits / 8;
-      errcode = mbedtls->MpiReadString(&pubkey->rsa.N, 16, pubkey->modulus);
+   if (!cert->parsed) {
+      Log(LOG_DEBUG, "Parsing keyid %s", cert->keyid);
+      mbedtls->RsaInit(&cert->rsa, MBEDTLS_RSA_PKCS_V15, MBEDTLS_MD_NONE);
+      /*
+       * Modulus has always MSB bit set.  To ensure it is not treated as
+       * negative number, zero byte is prepended - so modulus for RSA 2048
+       * actually has 2056 bits - 8 zero bits, 1 one bit, 2046 variable
+       * bits, and 1 one bit.
+       *
+       * So to get key length in bytes we must subtract one from modulus
+       * length in bytes.
+       */
+      cert->rsa.len = cert->modulusLength - 1;
+      errcode = mbedtls->MpiReadBinary(&cert->rsa.N,
+                                       cert->certData + cert->modulusStart,
+                                       cert->modulusLength);
       if (!errcode) {
-         errcode = mbedtls->MpiLset(&pubkey->rsa.E, pubkey->exponent);
+         errcode = mbedtls->MpiReadBinary(&cert->rsa.E,
+                                          cert->certData + cert->exponentStart,
+                                          cert->exponentLength);
       }
       if (errcode) {
          Log(LOG_WARNING, "Error parsing public key %s: -0x%x",
-             pubkey->keyid, -errcode);
+             cert->keyid, -errcode);
          return false;
       }
-      pubkey->parsed = true;
+      cert->parsed = true;
    }
 
-   if (sigLen != V1_KEYID_LEN + pubkey->rsa.len) {
+   if (sigLen != V1_KEYID_LEN + cert->rsa.len) {
       Log(LOG_WARNING, "Invalid signature length %zu, should be %zu",
-          sigLen, V1_KEYID_LEN + pubkey->rsa.len);
+          sigLen, V1_KEYID_LEN + cert->rsa.len);
       return false;
    }
 
-   switch (pubkey->digest) {
+   switch (cert->digest) {
    case MBEDTLS_MD_SHA256:
       mbedtls->Sha256Ret(data, dataLen, md, 0);
-      errcode = mbedtls->RsaPkcs1Verify(&pubkey->rsa, NULL, NULL,
-                                        MBEDTLS_RSA_PUBLIC, pubkey->digest,
+      errcode = mbedtls->RsaPkcs1Verify(&cert->rsa, NULL, NULL,
+                                        MBEDTLS_RSA_PUBLIC, cert->digest,
                                         SHA256_DIGEST_LENGTH, md,
                                         (uint8_t*)sig + V1_KEYID_LEN);
       break;
 
    case MBEDTLS_MD_SHA512:
       mbedtls->Sha512Ret(data, dataLen, md, 0);
-      errcode = mbedtls->RsaPkcs1Verify(&pubkey->rsa, NULL, NULL,
-                                        MBEDTLS_RSA_PUBLIC, pubkey->digest,
+      errcode = mbedtls->RsaPkcs1Verify(&cert->rsa, NULL, NULL,
+                                        MBEDTLS_RSA_PUBLIC, cert->digest,
                                         SHA512_DIGEST_LENGTH, md,
                                         (uint8_t*)sig + V1_KEYID_LEN);
       break;
@@ -465,7 +357,8 @@ static bool secure_boot_check_sig(uint32_t schema,
  * Results
  *      ERR_SUCCESS: signatures are valid
  *      ERR_NOT_FOUND: boot modules are unsigned (no logging)
- *      ERR_INSECURE: signature validation failed
+ *      ERR_SECURITY_VIOLATION: signature validation failed
+ *      ERR_LOAD_ERROR: crypto not available
  *----------------------------------------------------------------------------*/
 int secure_boot_check(void)
 {
@@ -480,18 +373,20 @@ int secure_boot_check(void)
    EFI_GUID MbedTlsProto = VMW_MBEDTLS_PROTOCOL_GUID;
    Status = LocateProtocol(&MbedTlsProto, (void **)&mbedtls);
    if (EFI_ERROR(Status)) {
-      Log(LOG_WARNING, "Error locating protocol MbedTls: %s",
+      Log(LOG_WARNING, "Error locating crypto module: %s",
                         error_str[error_efi_to_generic(Status)]);
-      return false;
+      return ERR_LOAD_ERROR;
    }
-   Log(LOG_DEBUG, "MbedTls protocol located");
-   if (mbedtls->Version != MBEDTLS_CURRENT_VERSION) {
-      Log(LOG_ERR, "Incorrect MbedTls protocol version: %u", mbedtls->Version);
-      return false;
+   Log(LOG_INFO, "Located crypto module: %s", mbedtls->ModuleVersion);
+   if (mbedtls->ApiVersion != MBEDTLS_CURRENT_API_VERSION) {
+      Log(LOG_WARNING, "Incorrect crypto module API version: %u",
+          mbedtls->ApiVersion);
+      return ERR_LOAD_ERROR;
    }
 #else
    static EFI_MBEDTLS_PROTOCOL MbedTls = {
       MBEDTLS_CURRENT_VERSION,
+      NULL,
       mbedtls_rsa_init,
       mbedtls_rsa_pkcs1_verify,
       mbedtls_mpi_lset,
@@ -499,7 +394,7 @@ int secure_boot_check(void)
       mbedtls_mpi_read_string,
       mbedtls_sha256_ret,
       mbedtls_sha512_ret,
-      /* mbedtls_hmac_ret wrapper; currently not used */ NULL,
+      /* mbedtls_hmac_ret wrapper; not used */ NULL,
    };
    mbedtls = &MbedTls;
 #endif
@@ -516,7 +411,7 @@ int secure_boot_check(void)
    case ERR_SYNTAX:
       Log(LOG_CRIT, "Invalid attached signature format on module 0 (%s)",
           boot.modules[0].filename);
-      return ERR_INSECURE;
+      return ERR_SECURITY_VIOLATION;
    default:
       NOT_REACHED();
    }
@@ -535,7 +430,7 @@ int secure_boot_check(void)
    default:
       Log(LOG_CRIT, "Unknown schema version %u on module 0 (%s)",
           schema0, boot.modules[0].filename);
-      return ERR_INSECURE;
+      return ERR_SECURITY_VIOLATION;
    }
 
    /*
@@ -613,7 +508,7 @@ int secure_boot_check(void)
       }
    }
 
-   return errors == 0 ? ERR_SUCCESS : ERR_INSECURE;
+   return errors == 0 ? ERR_SUCCESS : ERR_SECURITY_VIOLATION;
 }
 
 #endif

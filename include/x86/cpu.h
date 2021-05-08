@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -34,8 +34,8 @@ typedef struct CPUIDRegs {
    unsigned int eax, ebx, ecx, edx;
 } CPUIDRegs;
 
-CPUIDRegs cpuid0;
-CPUIDRegs cpuid1;
+extern CPUIDRegs cpuid0;
+extern CPUIDRegs cpuid1;
 
 #define CPUID_FAMILY_P6 6
 #define CPUID_FAMILY_EXTENDED 15

@@ -13,7 +13,7 @@
 
 #define COM32_READ_BLOCK_SIZE_MAX   (16 * 1024)
 #define COM32_READ_BLOCK_COUNT_MAX  UINT16_MAX
-#define REALLOC_CHUNK_SIZE          (1024 * 1024)
+#define REALLOC_CHUNK_SIZE          READ_CHUNK_SIZE
 
 #define BYTES_TO_BLOCKS(_bytes_, _blksize_) \
    (((_bytes_) + (_blksize_) - 1) / (_blksize_))
@@ -514,4 +514,27 @@ int firmware_file_read(const char *filepath, int (*callback)(size_t),
    }
 
    return status;
+}
+
+
+/*-- firmware_file_write -------------------------------------------------------
+ *
+ *      Write an entire file.
+ *
+ * Parameters
+ *      IN  filepath: absolute path of the file
+ *      IN  callback: routine to be called periodically while the file is being
+ *                    written
+ *      IN  buffer:   pointer to buffer being written
+ *      IN  bufsize:  number of bytes to write
+ *
+ * Results
+ *      ERR_UNSUPPORTED, as com32 does not support writing files.
+ *----------------------------------------------------------------------------*/
+int firmware_file_write(UNUSED_PARAM(const char *filepath),
+                        UNUSED_PARAM(int (*callback)(size_t)),
+                        UNUSED_PARAM(void *buffer),
+                        UNUSED_PARAM(size_t bufsize))
+{
+   return ERR_UNSUPPORTED;
 }

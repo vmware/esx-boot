@@ -41,6 +41,13 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
+/* binutils 2.34 have new section API */
+#ifndef bfd_get_section_flags
+#  define bfd_get_section_flags(bfd, asec) bfd_section_flags(asec)
+#  define bfd_get_section_vma(bfd, asec) bfd_section_vma(asec)
+#  define bfd_section_size(bfd, asec) bfd_section_size(asec)
+#endif
+
 #define eprintf(...) fprintf ( stderr, __VA_ARGS__ )
 
 #define EFI_FILE_ALIGN 0x20

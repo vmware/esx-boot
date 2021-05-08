@@ -6,14 +6,8 @@
   a single hardware device or a virtual device that is an aggregation
   of multiple physical devices.
 
-Copyright (c) 2006 - 2010, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials are licensed and made available under 
-the terms and conditions of the BSD License that accompanies this distribution.  
-The full text of the license may be found at
-http://opensource.org/licenses/bsd-license.php.                                          
-    
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.             
+Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
@@ -27,14 +21,14 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 ///
 /// Protocol GUID defined in EFI1.1.
-/// 
+///
 #define SIMPLE_TEXT_OUTPUT_PROTOCOL   EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID
 
 typedef struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL;
 
 ///
 /// Backward-compatible with EFI1.1.
-/// 
+///
 typedef EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL   SIMPLE_TEXT_OUTPUT_INTERFACE;
 
 //
@@ -115,7 +109,7 @@ typedef EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL   SIMPLE_TEXT_OUTPUT_INTERFACE;
 #define EFI_BROWN                 (EFI_GREEN | EFI_RED)
 #define EFI_LIGHTGRAY             (EFI_BLUE | EFI_GREEN | EFI_RED)
 #define EFI_BRIGHT                0x08
-#define EFI_DARKGRAY              (EFI_BRIGHT)
+#define EFI_DARKGRAY              (EFI_BLACK | EFI_BRIGHT)
 #define EFI_LIGHTBLUE             (EFI_BLUE | EFI_BRIGHT)
 #define EFI_LIGHTGREEN            (EFI_GREEN | EFI_BRIGHT)
 #define EFI_LIGHTCYAN             (EFI_CYAN | EFI_BRIGHT)
@@ -124,7 +118,18 @@ typedef EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL   SIMPLE_TEXT_OUTPUT_INTERFACE;
 #define EFI_YELLOW                (EFI_BROWN | EFI_BRIGHT)
 #define EFI_WHITE                 (EFI_BLUE | EFI_GREEN | EFI_RED | EFI_BRIGHT)
 
-#define EFI_TEXT_ATTR(f, b)       ((f) | ((b) << 4))
+//
+// Macro to accept color values in their raw form to create
+// a value that represents both a foreground and background
+// color in a single byte.
+// For Foreground, and EFI_* value is valid from EFI_BLACK(0x00) to
+// EFI_WHITE (0x0F).
+// For Background, only EFI_BLACK, EFI_BLUE, EFI_GREEN, EFI_CYAN,
+// EFI_RED, EFI_MAGENTA, EFI_BROWN, and EFI_LIGHTGRAY are acceptable
+//
+// Do not use EFI_BACKGROUND_xxx values with this macro.
+//
+#define EFI_TEXT_ATTR(Foreground,Background) ((Foreground) | ((Background) << 4))
 
 #define EFI_BACKGROUND_BLACK      0x00
 #define EFI_BACKGROUND_BLUE       0x10
@@ -137,7 +142,7 @@ typedef EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL   SIMPLE_TEXT_OUTPUT_INTERFACE;
 
 //
 // We currently define attributes from 0 - 7F for color manipulations
-// To internally handle the local display characteristics for a particular character, 
+// To internally handle the local display characteristics for a particular character,
 // Bit 7 signifies the local glyph representation for a character.  If turned on, glyphs will be
 // pulled from the wide glyph database and will display locally as a wide character (16 X 19 versus 8 X 19)
 // If bit 7 is off, the narrow glyph database will be used.  This does NOT affect information that is sent to
@@ -149,7 +154,7 @@ typedef EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL   SIMPLE_TEXT_OUTPUT_INTERFACE;
   Reset the text output device hardware and optionaly run diagnostics
 
   @param  This                 The protocol instance pointer.
-  @param  ExtendedVerification Driver may perform more exhaustive verfication
+  @param  ExtendedVerification Driver may perform more exhaustive verification
                                operation of the device during reset.
 
   @retval EFI_SUCCESS          The text output device was reset.
@@ -190,7 +195,7 @@ EFI_STATUS
   );
 
 /**
-  Verifies that all characters in a string can be output to the 
+  Verifies that all characters in a string can be output to the
   target device.
 
   @param  This   The protocol instance pointer.
@@ -220,7 +225,7 @@ EFI_STATUS
                      requested ModeNumber.
   @param  Rows       Returns the geometry of the text output device for the
                      requested ModeNumber.
-                                          
+
   @retval EFI_SUCCESS      The requested mode information was returned.
   @retval EFI_DEVICE_ERROR The device had an error and could not complete the request.
   @retval EFI_UNSUPPORTED  The mode number was not valid.
@@ -275,11 +280,11 @@ EFI_STATUS
   );
 
 /**
-  Clears the output device(s) display to the currently selected background 
+  Clears the output device(s) display to the currently selected background
   color.
 
   @param  This              The protocol instance pointer.
-                           
+
   @retval  EFI_SUCCESS      The operation completed successfully.
   @retval  EFI_DEVICE_ERROR The device had an error and could not complete the request.
   @retval  EFI_UNSUPPORTED  The output device is not in a valid text mode.
@@ -374,9 +379,9 @@ typedef struct {
 } EFI_SIMPLE_TEXT_OUTPUT_MODE;
 
 ///
-/// The SIMPLE_TEXT_OUTPUT protocol is used to control text-based output devices. 
-/// It is the minimum required protocol for any handle supplied as the ConsoleOut 
-/// or StandardError device. In addition, the minimum supported text mode of such 
+/// The SIMPLE_TEXT_OUTPUT protocol is used to control text-based output devices.
+/// It is the minimum required protocol for any handle supplied as the ConsoleOut
+/// or StandardError device. In addition, the minimum supported text mode of such
 /// devices is at least 80 x 25 characters.
 ///
 struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL {

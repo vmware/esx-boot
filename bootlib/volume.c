@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -114,35 +114,25 @@ int get_max_volume(disk_t *disk, int *max)
  *      returned.
  *
  * Parameters
- *      IN volid:  MBR/GPT partition number
- *      IN dest:   pointer to the output buffer
- *      IN offset: offset of the first byte to read from
- *      IN size:   number of bytes to read
+ *      IN disk:      disk to read from
+ *      IN partition: volume within disk
+ *      OUT dest:     output buffer
+ *      IN offset:    offset of the first byte to read from
+ *      IN size:      number of bytes to read
  *
  * Results
  *      ERR_SUCCESS, or a generic error code.
  *----------------------------------------------------------------------------*/
-int volume_read(int volid, void *dest, uint64_t offset, size_t size)
+int volume_read(disk_t *disk, partition_t *partition,
+                void *dest, uint64_t offset, size_t size)
 {
    size_t sector, start, bytes;
-   partition_t partition;
-   disk_t disk;
    void *buffer;
    int status;
 
-   status = get_boot_disk(&disk);
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
-   status = get_volume_info(&disk, volid, &partition);
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
-   start = ALIGN_DOWN(offset, disk.bytes_per_sector);
-   bytes = (size_t)roundup64(offset + size, disk.bytes_per_sector) - start;
-   sector = partition.info.start_lba + start / disk.bytes_per_sector;
+   start = ALIGN_DOWN(offset, disk->bytes_per_sector);
+   bytes = (size_t)roundup64(offset + size, disk->bytes_per_sector) - start;
+   sector = partition->info.start_lba + start / disk->bytes_per_sector;
 
    if (bytes > size) {
       buffer = sys_malloc(size);
@@ -153,7 +143,7 @@ int volume_read(int volid, void *dest, uint64_t offset, size_t size)
       buffer = dest;
    }
 
-   status = disk_read(&disk, buffer, sector, bytes / disk.bytes_per_sector);
+   status = disk_read(disk, buffer, sector, bytes / disk->bytes_per_sector);
 
    if (buffer != dest) {
       if (status == ERR_SUCCESS) {

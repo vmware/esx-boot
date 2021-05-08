@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2016,2019-2020 VMware, Inc.
+ * Copyright (c) 2008-2011,2013-2014,2016,2019-2021 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -150,9 +150,16 @@ int get_boot_dir(char **buffer)
       return error_efi_to_generic(EFI_OUT_OF_RESOURCES);
    }
 
-   if (strcmp(dirpath, ".") == 0) {
-      /* If the boot file name is empty, NULL or is a plain file name */
-      *dirpath = '/';
+   if (strcmp(dirpath, ".") == 0 || strcmp(dirpath, "/") == 0) {
+      /*
+       * If the dirpath is empty, use an empty string, so that we don't prepend
+       * anything when sending relative filenames to the backend.  Using "/"
+       * causes problems with fetching TFTP filenames through gpxe_file_load,
+       * with the exact problem depending on the version of iPXE in use.  Using
+       * "." seems to cause a problem with simple_file_open, where it opens an
+       * empty file instead of returning an error.
+       */
+      *dirpath = '\0';
    }
 
    *buffer = dirpath;

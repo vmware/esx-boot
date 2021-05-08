@@ -23,6 +23,8 @@ SRC         := config.c              \
                secure.c              \
                system.c              \
                $(IARCH)/system_arch.c\
+               trampoline.c          \
+               signinfo.json         \
 
 ifeq ($(IARCH),x86)
 #
@@ -56,3 +58,7 @@ else
 endif
 
 include rules.mk
+
+$(ODIR)/trampoline.o: trampoline.c
+	$(call printcmd,CC)
+	$(CC) $(CFLAGS) -fno-stack-protector -c -o $@ $<

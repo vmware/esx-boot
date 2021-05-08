@@ -131,6 +131,18 @@ int get_firmware_info(firmware_t *firmware)
    return ERR_SUCCESS;
 }
 
+/*-- in_boot_services ----------------------------------------------------------
+ *
+ *      Return true if Syslinux services are still available.
+ *
+ * Results
+ *      true or false.
+ *----------------------------------------------------------------------------*/
+bool in_boot_services(void)
+{
+   return com32.in_boot_services;
+}
+
 /*-- exit_boot_services --------------------------------------------------------
  *
  *      Exit syslinux boot services.
@@ -161,6 +173,7 @@ int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
    if (status != ERR_SUCCESS) {
       return status;
    }
+   com32.in_boot_services = false;
 
    efi_info->valid = false;
 
@@ -309,6 +322,7 @@ int com32_main(void)
    char **argv;
 
    memset(&com32, 0, sizeof (com32));
+   com32.in_boot_services = true;
 
    status = com32_get_version(&fn_max, &com32.major, &com32.minor,
                               &com32.derivative, &version, &copyright);

@@ -28,6 +28,12 @@ int dump_firmware_info(void)
       return status;
    }
 
+#if FORCE_STACK_SMASH
+   Log(LOG_WARNING, "about to smash stack");
+   (&firmware)[1] = firmware;
+   Log(LOG_WARNING, "smashed stack");
+#endif
+
    switch (firmware.interface) {
       case FIRMWARE_INTERFACE_EFI:
          Log(LOG_DEBUG, "%s v%u.%u (%s, Rev.%u)\n",

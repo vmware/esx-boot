@@ -1,14 +1,11 @@
 /** @file
-  ACPI 5.1 definitions from the ACPI Specification Revision 5.1 July, 2014.
+  ACPI 5.1 definitions from the ACPI Specification Revision 5.1 Errata B January, 2016.
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  Copyright (c) 2014 Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2014 - 2018, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+  Copyright (c) 2020, ARM Ltd. All rights reserved.<BR>
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
 #ifndef _ACPI_5_1_H_
@@ -528,8 +525,17 @@ typedef struct {
   UINT32  GicId;
   UINT64  PhysicalBaseAddress;
   UINT32  SystemVectorBase;
-  UINT32  Reserved2;
+  UINT8   GicVersion;
+  UINT8   Reserved2[3];
 } EFI_ACPI_5_1_GIC_DISTRIBUTOR_STRUCTURE;
+
+///
+/// GIC Version
+///
+#define EFI_ACPI_5_1_GIC_V1                                   0x01
+#define EFI_ACPI_5_1_GIC_V2                                   0x02
+#define EFI_ACPI_5_1_GIC_V3                                   0x03
+#define EFI_ACPI_5_1_GIC_V4                                   0x04
 
 ///
 /// GIC MSI Frame Structure
@@ -1149,7 +1155,7 @@ typedef struct {
   ///
   UINT64                                          ExitBootServicesEntry;
   ///
-  /// Timer value logged at the point just prior towhen the OS loader gaining
+  /// Timer value logged at the point just prior to when the OS loader gaining
   /// control back from calls the ExitBootServices function for UEFI compatible firmware.
   /// For non-UEFI compatible boots, this field must be zero.
   ///
@@ -1256,7 +1262,7 @@ typedef struct {
 ///
 /// GTDT Version (as defined in ACPI 5.1 spec.)
 ///
-#define EFI_ACPI_5_1_GENERIC_TIMER_DESCRIPTION_TABLE_REVISION 0x01
+#define EFI_ACPI_5_1_GENERIC_TIMER_DESCRIPTION_TABLE_REVISION 0x02
 
 ///
 /// Timer Flags.  All other bits are reserved and must be 0.
@@ -1315,8 +1321,8 @@ typedef struct {
 ///
 typedef struct {
   UINT8   Type;
-  UINT8   Length;
-  UINT16  Reserved;
+  UINT16  Length;
+  UINT8   Reserved;
   UINT64  RefreshFramePhysicalAddress;
   UINT64  WatchdogControlFramePhysicalAddress;
   UINT32  WatchdogTimerGSIV;
@@ -1863,7 +1869,8 @@ typedef struct {
   UINT8                                    CommandComplete:1;
   UINT8                                    SciDoorbell:1;
   UINT8                                    Error:1;
-  UINT8                                    Reserved:5;
+  UINT8                                    PlatformNotification:1;
+  UINT8                                    Reserved:4;
   UINT8                                    Reserved1;
 } EFI_ACPI_5_1_PCCT_GENERIC_SHARED_MEMORY_REGION_STATUS;
 
@@ -2073,12 +2080,17 @@ typedef struct {
 #define EFI_ACPI_5_1_DATA_MANAGEMENT_TABLE_SIGNATURE  SIGNATURE_32('M', 'S', 'D', 'M')
 
 ///
+/// "PCCT" Platform Communications Channel Table
+///
+#define EFI_ACPI_5_1_PLATFORM_COMMUNICATIONS_CHANNEL_TABLE_SIGNATURE  SIGNATURE_32('P', 'C', 'C', 'T')
+
+///
 /// "SLIC" MS Software Licensing Table Specification
 ///
 #define EFI_ACPI_5_1_SOFTWARE_LICENSING_TABLE_SIGNATURE  SIGNATURE_32('S', 'L', 'I', 'C')
 
 ///
-/// "SPCR" Serial Port Concole Redirection Table
+/// "SPCR" Serial Port Console Redirection Table
 ///
 #define EFI_ACPI_5_1_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_SIGNATURE  SIGNATURE_32('S', 'P', 'C', 'R')
 

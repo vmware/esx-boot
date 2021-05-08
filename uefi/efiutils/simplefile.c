@@ -9,8 +9,9 @@
 
 #include "efi_private.h"
 
-/* File loads are in units of this much */
-#define SIMPLEFILE_READ_BUFSIZE (1024 * 1024)
+/* File loads and saves are in units of this much */
+#define SIMPLEFILE_READ_BUFSIZE READ_CHUNK_SIZE
+#define SIMPLEFILE_WRITE_BUFSIZE WRITE_CHUNK_SIZE
 
 /*-- simple_file_volume_open ---------------------------------------------------
  *
@@ -200,7 +201,6 @@ EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const char *filepath,
  *      IN  callback: routine to be called periodically while the file is being
  *                    loaded
  *      IN  Buffer:   pointer to where to load the file
- *      IN  BufSize:  size of the output buffer
  *      OUT BufSize:  number of bytes that have been written into Buffer
  *
  * Results
@@ -271,5 +271,92 @@ EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
       *BufSize = total_size;
    }
 
+   return Status;
+}
+
+
+/*-- simple_file_save ----------------------------------------------------------
+ *
+ *      Save a file from memory using the Simple File Protocol. UEFI watchdog
+ *      timer is disabled during the file chunk transfers, so it does not
+ *      trigger and reboot the platform during large/slow file transfers.
+ *
+ * Parameters
+ *      IN  Volume:   handle to the volume on which the file is located
+ *      IN  filepath: absolute path to the file
+ *      IN  callback: routine to be called periodically while the file is being
+ *                    saved
+ *      IN  Buffer:   pointer to buffer being saved
+ *      IN  BufSize:  size of the buffer being saved
+ *
+ * Results
+ *      EFI_SUCCESS, or an UEFI error status.
+ *----------------------------------------------------------------------------*/
+EFI_STATUS simple_file_save(EFI_HANDLE Volume, const char *filepath,
+                            int (*callback)(size_t), VOID *Buffer,
+                            UINTN BufSize)
+{
+   EFI_FILE *File;
+   EFI_STATUS Status;
+   UINTN size, chunk_size, written_size;
+   VOID *Data;
+   int error;
+
+   Status = simple_file_open(Volume, filepath, EFI_FILE_MODE_READ |
+                             EFI_FILE_MODE_WRITE, &File);
+   if (!EFI_ERROR(Status)) {
+      Log(LOG_WARNING, "%s: overwriting existing file", filepath);
+      Status = File->Delete(File);
+      if (EFI_ERROR(Status)) {
+         return Status;
+      }
+      File = NULL;
+   }
+
+   Status = simple_file_open(Volume, filepath, EFI_FILE_MODE_READ |
+                             EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, &File);
+   if (EFI_ERROR(Status)) {
+      return Status;
+   }
+
+   Status = EFI_SUCCESS;
+   Data = Buffer;
+   size = BufSize;
+
+   while (size > 0) {
+      chunk_size = MIN(size, SIMPLEFILE_WRITE_BUFSIZE);
+      written_size = chunk_size;
+
+      efi_set_watchdog_timer(WATCHDOG_DISABLE);
+      Status = File->Write(File, &written_size, Data);
+      efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
+
+      if (EFI_ERROR(Status)) {
+         break;
+      }
+
+      if (written_size != chunk_size) {
+         /*
+          * The spec is unclear if partial writes are "successful" or not.
+          *
+          * So let's be proactively safe here.
+          */
+         Log(LOG_WARNING, "%s: partial write", filepath);
+         return EFI_DEVICE_ERROR;
+      }
+
+      Data = (char *)Data + chunk_size;
+      size -= chunk_size;
+
+      if (callback != NULL) {
+         error = callback(chunk_size);
+         if (error != 0) {
+            Status = error_generic_to_efi(error);
+            break;
+         }
+      }
+   }
+
+   File->Close(File);
    return Status;
 }

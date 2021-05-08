@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2013,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -65,11 +65,9 @@ uint64_t firmware_get_time_ms(UNUSED_PARAM(bool consider_timer_overflow))
    EFI_ASSERT(rs->GetTime != NULL);
    Status = rs->GetTime(&Time, NULL);
    if (EFI_ERROR(Status)) {
-      /* GetTime() may fail in certain cases, such as if the RTC's battery backup
-       * has failed.
+      /* GetTime() may fail in certain cases, such as if the RTC's battery
+       * backup has failed.
        */
-      Log(LOG_WARNING, "Failed to get system time, the timer device"
-          " may have a hardware problem\n");
       return 0;
    }
 
@@ -81,7 +79,6 @@ uint64_t firmware_get_time_ms(UNUSED_PARAM(bool consider_timer_overflow))
        Time.Minute > 59 ||                  // 0 - 59
        Time.Second > 59 ||                 // 0 - 59
        Time.Nanosecond > 999999999) {     // 0 - 999999999
-      Log(LOG_WARNING, "Invalid system time obtained from timer device\n");
       return 0;
    }
 

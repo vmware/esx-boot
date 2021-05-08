@@ -8,7 +8,7 @@ include common.mk
 
 MAKEFLAGS += -I ../../env
 
-SUBDIRS := test_libuart test_gui test_smbios
+SUBDIRS := test_libuart test_gui test_smbios test_libc test_fdt
 
 ifneq ($(BUILDENV),com32)
 SUBDIRS += test_rts

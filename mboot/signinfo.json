@@ -1,0 +1,4 @@
+{
+   "test": ["elfsign_test", "test_esx67"],
+   "official": ["vmware_esx40", "vmware_esx67"]
+}

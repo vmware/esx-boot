@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -243,6 +243,7 @@ void integrity_test(void)
    hash_image(hash);
 
    if (memcmp(hash, _expected_hash, HASH_SIZE) != 0) {
+#if DEBUG
       /*
        * If the hash mismatches, exit with the computed hash in ExitData,
        * converted to a hex string.
@@ -253,5 +254,9 @@ void integrity_test(void)
          snprintf(&str[2 * i], 3, "%02x", hash[i]);
       }
       failure(str);
+#else
+      failure("Integrity hash mismatch");
+#endif
    }
+   memset(hash, 0, HASH_SIZE); // FIPS: zeroize temp value
 }

@@ -209,3 +209,19 @@ int get_acpi_rsdp(UNUSED_PARAM(void **rsdp))
 {
    return ERR_UNSUPPORTED;
 }
+
+
+/*-- get_fdt ---------------------------------------------------------
+ *
+ *      Get the Flattened Device Tree blob.
+ *
+ * Parameters
+ *      OUT fdt_start: pointer to starting address of the FDT.
+ *
+ * Results
+ *      ERR_UNSUPPORTED, as the FDT isn't used on BIOS or x86 systems.
+ *----------------------------------------------------------------------------*/
+int get_fdt(UNUSED_PARAM(void **fdt_start))
+{
+   return ERR_UNSUPPORTED;
+}

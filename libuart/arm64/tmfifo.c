@@ -13,9 +13,10 @@
 
 #define TMFIFO_MSG_CONSOLE  3
 
-#define TILE_TO_HOST_DATA   0
-#define TILE_TO_HOST_STATUS 8
-#define TILE_TO_HOST_CTL    16
+#define TILE_TO_HOST_DATA   0xa40
+#define TILE_TO_HOST_STATUS 0xa48
+#define TILE_TO_HOST_CTL    0xa50
+#define SCRATCHPAD1         0xc20
 
 #define FIFO_LENGTH         256
 
@@ -34,6 +35,32 @@ const tmfifo_msg_header_t tx_header = {
   .len_lo = 1,
 };
 
+/*-- tmfifo_connected ----------------------------------------------------------
+ *
+ *      Returns whether the remote end (rshim driver) is present. If the
+ *      remote end is not present, the TX FIFO will never empty.
+ *
+ * Parameters
+ *      IN dev: pointer to a UART descriptor
+ *
+ * Results
+ *      True if the remote end (rshim driver) is present.
+ *----------------------------------------------------------------------------*/
+static bool tmfifo_connected(const uart_t *dev)
+{
+   return io_read64(&dev->io, SCRATCHPAD1) != 0;
+}
+
+/*-- tmfifo_full ---------------------------------------------------------------
+ *
+ *      Returns whether the TX FIFO is full.
+ *
+ * Parameters
+ *      IN dev: pointer to a UART descriptor
+ *
+ * Results
+ *      True if TXFIFO if full. False otherwise.
+ *----------------------------------------------------------------------------*/
 static bool tmfifo_full(const uart_t *dev)
 {
    /*
@@ -54,6 +81,10 @@ static bool tmfifo_full(const uart_t *dev)
 static void tmfifo_putc(const uart_t *dev, char c)
 {
    uint16_t timeout;
+
+   if (!tmfifo_connected(dev)) {
+      return;
+   }
 
    for (timeout = 0xffff; timeout > 0; timeout--) {
       if (!tmfifo_full(dev)) {
@@ -81,5 +112,6 @@ int tmfifo_init(uart_t *dev)
    }
 
    dev->putc = tmfifo_putc;
+   dev->flags = UART_USE_AFTER_EXIT_BOOT_SERVICES;
    return ERR_SUCCESS;
 }

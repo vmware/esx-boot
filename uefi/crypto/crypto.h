@@ -17,7 +17,7 @@
 
 #include <protocol/MbedTls.h>
 
-extern EFI_MBEDTLS_PROTOCOL *mbedtls;
+extern VMW_MBEDTLS_PROTOCOL *mbedtls;
 
 void failure(const char *msg);
 void self_test(void);

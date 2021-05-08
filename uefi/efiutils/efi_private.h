@@ -29,6 +29,10 @@
 #define WATCHDOG_DISABLE         0
 #define WATCHDOG_DEFAULT_TIMEOUT 300   /* 5 minutes, in seconds */
 
+EFI_STATUS efi_create_argv(EFI_HANDLE Handle, const EFI_LOADED_IMAGE *Image,
+                           int *argcp, char ***argvp);
+void efi_destroy_argv(char **argv);
+
 /*
  * init_arch.c
  */

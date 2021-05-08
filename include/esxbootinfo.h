@@ -52,6 +52,7 @@
 #define ESXBOOTINFO_ARCH_FLAG_ARM64_EL1   (1 << 0)   /* Kernel runs in EL1, not EL2 */
 #define ESXBOOTINFO_FLAG_VIDEO            (1 << 2)   /* Must pass video info to OS;
                                                         non-min video fields valid */
+#define ESXBOOTINFO_ARCH_FLAG_ARM64_VHE   (1 << 16)  /* Kernel supports VHE */
 #define ESXBOOTINFO_FLAG_EFI_RTS_OLD      (1 << 17)  /* Reserved; do not redefine */
 #define ESXBOOTINFO_FLAG_EFI_RTS          (1 << 18)  /* EFI RTS fields valid */
 #define ESXBOOTINFO_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */

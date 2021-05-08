@@ -82,16 +82,22 @@ endif
 #
 ifeq ($(ARCH),arm64)
    IARCH      := arm64
+   UEFIARCH   := AArch64
    AFLAGS     :=
-   CFLAGS     := -march=armv8-a -mlittle-endian -fno-stack-protector -mgeneral-regs-only -mcmodel=large -fno-short-enums -fsigned-char  -ffunction-sections -fdata-sections -fomit-frame-pointer -fno-builtin -Wno-address
+   CFLAGS     := -march=armv8-a -mlittle-endian -mgeneral-regs-only \
+                 -mcmodel=large -fno-short-enums -fsigned-char \
+                 -ffunction-sections -fdata-sections -fomit-frame-pointer \
+                 -fno-builtin -Wno-address
    LDFLAGS    :=
 else ifeq ($(ARCH),em64t)
    IARCH      := x86
+   UEFIARCH   := X64
    AFLAGS     := -f elf64
    CFLAGS     := -m64 -mno-red-zone -msoft-float -DNO_MSABI_VA_FUNCS
    LDFLAGS    := -m elf_x86_64
 else ifeq ($(ARCH),ia32)
    IARCH      := x86
+   UEFIARCH   := Ia32
    AFLAGS     := -f elf32
    CFLAGS     := -m32 -march=i386 -mpreferred-stack-boundary=2 -msoft-float
    LDFLAGS    := -m elf_i386
@@ -115,14 +121,16 @@ ifeq ($(DEBUG),1)
 CFLAGS    += -DDEBUG
 endif
 
-CFLAGS     += --sysroot $(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
+CFLAGS     += --sysroot=$(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
+              -DVMWARE_EDK2_CHANGES                                          \
               -ffreestanding -fno-exceptions                                 \
                                                                              \
               -Os -fstrength-reduce -ffast-math -fomit-frame-pointer         \
               -finline-limit=2000 -freg-struct-return                        \
               -fno-strict-aliasing -falign-functions=0 -falign-jumps=0       \
-              -falign-labels=0 -falign-loops=0 -fno-stack-protector -fwrapv  \
-              -fvisibility=hidden                                            \
+              -falign-labels=0 -falign-loops=0 -fwrapv -fvisibility=hidden   \
+              -fstack-protector -fstack-protector-all                        \
+              -mstack-protector-guard=global                                 \
                                                                              \
               -W -Wall -Werror -std=c99 -Wwrite-strings -Wstrict-prototypes  \
               -Wpointer-arith -Wdeclaration-after-statement                  \
@@ -138,6 +146,9 @@ LDFLAGS    += -nostdlib -q -T $(LDSCRIPT)
 # Use this to include debug symbols in the ELF file:
 LDFLAGS    +=
 CFLAGS     += -g
+
+# Use this to get a map during linking:
+#LDFLAGS += -M
 
 #
 #-- Files locations ------------------------------------------------------------
@@ -155,6 +166,7 @@ LIBGCC     := $(shell $(CC) $(CFLAGS) --print-libgcc)
 BOOTLIB    := $(LIB_DIR)/boot/libboot.a
 FIRMLIB    := $(LIB_DIR)/$(FIRMWARE)$(ARCH)/lib$(FIRMWARE)$(ARCH).a
 CRYPTOLIB  := $(LIB_DIR)/mbedtls/libmbedtls.a
+FDTLIB     := $(LIB_DIR)/fdt/libfdt.a
 
 ENV_LIB    := $(FIRMLIB) $(LIBFAT) $(LIBC) $(LIBCRC) $(LIBMD5) $(LIBUART) \
               $(ZLIB) $(LIBGCC)
@@ -163,16 +175,13 @@ LIBMD5_INC := $(TOPDIR)/libmd5
 STDINC     := $(TOPDIR)/libc/include $(TOPDIR)/include $(TOPDIR)/include/$(IARCH) $(LIBMD5_INC)
 ZLIB_INC   := $(TOPDIR)/zlib
 LIBFAT_INC := $(TOPDIR)/libfat
-EDK2INC    := $(TOPDIR)/uefi/edk2/MdePkg
-UEFIINC    := $(TOPDIR)/uefi $(EDK2INC)/Include $(EDK2INC)/Include/Protocol
+EDK2INC    := $(TOPDIR)/uefi/edk2
+UEFIINC    := $(TOPDIR)/uefi                        \
+              $(EDK2INC)/MdePkg/Include             \
+              $(EDK2INC)/MdePkg/Include/$(UEFIARCH) \
+              $(EDK2INC)/MdePkg/Include/Protocol    \
+              $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
-
-ifeq ($(ARCH),arm64)
-   UEFIINC    += $(EDK2INC)/Include/AArch64
-else ifeq ($(ARCH),em64t)
-   UEFIINC    += $(EDK2INC)/Include/X64
-else ifeq ($(ARCH),ia32)
-   UEFIINC    += $(EDK2INC)/Include/Ia32
-endif
+FDTINC     := $(TOPDIR)/libfdt
 
 endif # !BUILDENV

@@ -32,7 +32,7 @@ HOST_CFLAGS     :=
 HOST_LIBBFDINC  := <Path to host bfd.h>
 HOST_LIBBFD     := <Path to host libbfd.a>
 HOST_LIBERTY    := <Path to host libiberty.a>
-HOST_LIBCRYPTO  := <Path to host libcrypto.a>
+HOST_LIBCRYPTO  := <Path to host libcrypto.so>
 
 #=============================================================
 # Target definitions.
@@ -59,6 +59,9 @@ endif'
 makfile='#
 # Master Makefile
 #
+
+# Option: 0 to link crypto into mboot; 1 to use a separate module.
+export CRYPTO_MODULE := 1
 
 include env/common.mk
 

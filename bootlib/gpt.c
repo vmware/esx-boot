@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -12,12 +12,23 @@
 #include <string.h>
 #include <zlib.h>
 
-#define GPT_SIGNATURE   0x5452415020494645ULL
-#define GPT_GUID_LEN    16
+// Adapted from edk2
+typedef struct {
+  uint32_t  data1;
+  uint16_t  data2;
+  uint16_t  data3;
+  uint8_t   data4[8];
+} GUID;
 
-#define GPT_DATA_PARTITION_GUID                           \
-   {0xA2, 0xA0, 0xD0, 0xEB, 0xE5, 0xB9, 0x33, 0x44,       \
-    0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7}
+#define GPT_SIGNATURE   0x5452415020494645ULL
+
+#define GPT_BASIC_DATA_PARTITION_GUID \
+   { 0xEBD0A0A2, 0xB9E5, 0x4433, \
+      { 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7 } }
+
+#define GPT_EFI_SYSTEM_PARTITION_GUID \
+   { 0xC12A7328, 0xF81F, 0x11D2, \
+      { 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B } }
 
 typedef struct {
    uint64_t signature;
@@ -29,7 +40,7 @@ typedef struct {
    uint64_t alternateLba;
    uint64_t firstUsableLba;
    uint64_t lastUsableLba;
-   uint8_t diskGuid[GPT_GUID_LEN];
+   GUID diskGuid;
    uint64_t entryArrayLba;
    uint32_t numberOfEntries;
    uint32_t sizeOfEntry;
@@ -37,15 +48,16 @@ typedef struct {
 } gpt_header;
 
 typedef struct {
-   uint8_t type[GPT_GUID_LEN];
-   uint8_t guid[GPT_GUID_LEN];
+   GUID type;
+   GUID guid;
    uint64_t start_lba;
    uint64_t end_lba;
    uint64_t attributes;
    uint16_t name[36];
 } gpt_entry;
 
-static const uint8_t data_partition_guid[16] = GPT_DATA_PARTITION_GUID;
+static const GUID basic_data_partition_guid = GPT_BASIC_DATA_PARTITION_GUID;
+static const GUID efi_system_partition_guid = GPT_EFI_SYSTEM_PARTITION_GUID;
 
 /*-- gpt_to_partinfo -----------------------------------------------------------
  *
@@ -64,10 +76,18 @@ static void gpt_to_partinfo(gpt_entry *gpt_part, int part_id,
    partition->id = part_id;
    partition->info.start_lba = gpt_part->start_lba;
    partition->info.sectors_num = gpt_part->end_lba - gpt_part->start_lba + 1;
-   if (memcmp(data_partition_guid, gpt_part->type, GPT_GUID_LEN) == 0) {
-      partition->info.type = PART_TYPE_GPT;
-   } else {
+   if (memcmp(&basic_data_partition_guid,
+              &gpt_part->type, sizeof(GUID)) == 0) {
       partition->info.type = PART_TYPE_FAT16;
+   } else if (memcmp(&efi_system_partition_guid,
+                     &gpt_part->type, sizeof(GUID)) == 0) {
+      partition->info.type = PART_TYPE_EFI;
+   } else {
+      /*
+       * Could check for more GUIDs here, but we don't care about the exact
+       * partition type if it doesn't contain a FAT filesystem.
+       */
+      partition->info.type = PART_TYPE_NON_FS;
    }
 }
 

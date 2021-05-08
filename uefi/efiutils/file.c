@@ -21,6 +21,9 @@ typedef struct {
    EFI_STATUS (*load)(EFI_HANDLE Volume, const char *filepath,
                            int (*callback)(size_t), VOID **Buffer,
                            UINTN *BufSize);
+   EFI_STATUS (*save)(EFI_HANDLE Volume, const char *filepath,
+                           int (*callback)(size_t), VOID *Buffer,
+                           UINTN BufSize);
    EFI_STATUS (*get_size)(EFI_HANDLE Volume, const char *filepath,
                           UINTN *FileSize);
    const char *name;
@@ -41,11 +44,11 @@ static EFI_STATUS unsupported(void)
 }
 
 static file_access_methods fam[] = {
-   { gpxe_file_load, (void *)unsupported, "gpxe" },
-   { http_file_load, http_file_get_size, "http" },
-   { simple_file_load, simple_file_get_size, "simple" },
-   { load_file_load, load_file_get_size, "load" },
-   { tftp_file_load, tftp_file_get_size, "tftp" },
+   { gpxe_file_load, (void *)unsupported, (void *)unsupported, "gpxe" },
+   { http_file_load, (void *)unsupported, http_file_get_size, "http" },
+   { simple_file_load, simple_file_save, simple_file_get_size, "simple" },
+   { load_file_load, (void *)unsupported, load_file_get_size, "load" },
+   { tftp_file_load, (void *)unsupported, tftp_file_get_size, "tftp" },
 };
 
 /*-- filepath_unix_to_efi ------------------------------------------------------
@@ -335,7 +338,7 @@ int firmware_image_start(EFI_HANDLE ChildHandle)
       if (ExitData != NULL) {
          ucs2_to_ascii(ExitData, &exit_data, FALSE);
       }
-      Log(LOG_DEBUG, "StartImage returned %s, ExitData %s",
+      Log(LOG_WARNING, "StartImage returned %s, ExitData %s",
           error_str[status], exit_data);
       sys_free(exit_data);
    }
@@ -375,7 +378,63 @@ int firmware_file_exec(const char *filepath, const char *options)
                                 &ChildHandle);
    if (status != ERR_SUCCESS) {
       sys_free(image);
+      return status;
    }
 
    return firmware_image_start(ChildHandle);
+}
+
+
+/*-- firmware_file_write -------------------------------------------------------
+ *
+ *      Write an entire file.
+ *
+ * Parameters
+ *      IN  filepath: absolute path of the file
+ *      IN  callback: routine to be called periodically while the file is being
+ *                    written
+ *      IN  buffer:   pointer to buffer being written
+ *      IN  bufsize:  number of bytes to write
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int firmware_file_write(const char *filepath, int (*callback)(size_t),
+                        void *buffer, size_t bufsize)
+{
+   EFI_STATUS Status;
+   EFI_HANDLE Volume;
+   unsigned try;
+
+   Status = get_boot_volume(&Volume);
+   if (EFI_ERROR(Status)) {
+      return error_efi_to_generic(Status);
+   }
+
+   Status = EFI_UNSUPPORTED;
+
+   /* Try each known file access method until one succeeds or all fail. */
+   for (try = 0; try < ARRAYSIZE(fam); try++) {
+      EFI_STATUS St;
+
+      St = fam[try].save(Volume, filepath, callback, buffer, bufsize);
+#if DEBUG
+      Log(LOG_DEBUG, "%s_file_save returns %s", fam[try].name,
+          error_str[error_efi_to_generic(St)]);
+#endif
+      if (St != EFI_UNSUPPORTED && St != EFI_INVALID_PARAMETER) {
+         Status = St;
+      }
+      if (!EFI_ERROR(St) || St == EFI_ABORTED) {
+         break;
+      }
+   }
+
+   if (!EFI_ERROR(Status)) {
+      Log(LOG_DEBUG, "%s saved via %s_file_save at %p, size %zu",
+          filepath, fam[try].name, buffer, bufsize);
+      last_fam = &fam[try];
+   }
+
+   return error_efi_to_generic(Status);
 }

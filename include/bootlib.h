@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -151,6 +151,8 @@ EXTERN int file_get_size_hint(int volid, const char *filename,
                               size_t *filesize);
 EXTERN int file_load(int volid, const char *filename, int (*callback)(size_t),
                      void **buffer, size_t *bufsize);
+EXTERN int file_save(int volid, const char *filename, int (*callback)(size_t),
+                     void *buffer, size_t bufsize);
 EXTERN int file_overwrite(int volid, const char *filepath, void *buffer,
                           size_t size);
 EXTERN int file_sanitize_path(char *filepath);
@@ -165,8 +167,9 @@ EXTERN int get_mac_address(const char **mac);
  */
 #define FIRMWARE_BOOT_VOLUME 0
 EXTERN int get_max_volume(disk_t *disk, int *max);
-EXTERN int volume_read(int volid, void *dest, uint64_t offset, size_t size);
 EXTERN int get_volume_info(disk_t *disk, int part_id, partition_t *partition);
+EXTERN int volume_read(disk_t *disk, partition_t *partition,
+                       void *dest, uint64_t offset, size_t size);
 
 /*
  * mbr.c

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -23,6 +23,7 @@
  *         -H <DIR>       Set home directory to <DIR>.  Filenames that are
  *                        neither absolute paths nor URLs are interepreted
  *                        relative to this directory.
+ *         -h             Set home directory to the empty string.
  *         -D <N>         Set debug flag bits to N.  Bits include:
  *                        1: Wait for keypress before starting an app.
  *                        2: Fail with a syntax error on unrecognized keywords.
@@ -87,6 +88,7 @@
  *      EFI SERIAL p b    - Debug log to serial port p, baud b (both optional).
  *      EFI VERBOSE n     - Show Log(LOG_DEBUG, ...) messages on screen.
  *      EFI HOMEDIR s     - Set the directory for interpreting relative paths.
+ *                            If s is omitted, set HOMEDIR to the empty string.
  *      EFI HTTP s        - Evaluate s if HTTP loading is available.
  *      EFI NOHTTP s      - Evaluate s if HTTP loading is not available.
  *      EFI NATIVEHTTP n  - Set the criteria for using native UEFI HTTP to n.
@@ -1306,7 +1308,7 @@ int main(int argc, char **argv)
 
       optind = 1;
       do {
-         opt = getopt(argc, argv, "D:S:s:VH:N:");
+         opt = getopt(argc, argv, "D:S:s:VhH:N:");
          switch (opt) {
          case 'D': /* debug flags */
             debug = atoi(optarg);
@@ -1323,10 +1325,11 @@ int main(int argc, char **argv)
             verbose = true;
             break;
          case 'H': /* homedir */
-            status = set_homedir(optarg);
+         case 'h':
+            status = set_homedir(opt == 'h' ? "" : optarg);
             if (status != ERR_SUCCESS) {
-               Log(LOG_WARNING, "Cannot set homedir to %s: %s",
-                   optarg, error_str[status]);
+               Log(LOG_WARNING, "Cannot set homedir to \"%s\": %s",
+                   opt == 'h' ? "" : optarg, error_str[status]);
             }
             break;
          case 'N': /* nativehttp */
@@ -1373,7 +1376,7 @@ int main(int argc, char **argv)
       }
       status = set_homedir(bootdir);
       if (status != ERR_SUCCESS) {
-         Log(LOG_WARNING, "Cannot set homedir to %s: %s",
+         Log(LOG_WARNING, "Cannot set homedir to \"%s\": %s",
              bootdir, error_str[status]);
       }
       free(bootdir);

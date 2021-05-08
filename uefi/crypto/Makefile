@@ -16,10 +16,10 @@ BASENAME    := crypto
 TARGETTYPE  := bsdrv
 INC         := $(UEFIINC)
 INC         += $(CRYPTOINC)
-LIBS        := $(ENV_LIB) $(BOOTLIB) $(CRYPTOLIB)
+LIBS        := $(FIRMLIB) $(LIBC) $(CRYPTOLIB) $(LIBGCC)
 
 # Hint: Adjust RELOC_COPY_SIZE upward if elf2efi fails
-RELOC_COPY_SIZE := 1200
+RELOC_COPY_SIZE := 2500
 CFLAGS          += -DRELOC_COPY_SIZE=$(RELOC_COPY_SIZE)
 ELF2EFIFLAGS    := --copy-reloc $(RELOC_COPY_SIZE) --insert-hash
 

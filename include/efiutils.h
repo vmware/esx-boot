@@ -193,6 +193,9 @@ EXTERN EFI_STATUS simple_file_get_size(EFI_HANDLE Volume,
 EXTERN EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
                                    int (*callback)(size_t), VOID **Buffer,
                                    UINTN *BufSize);
+EXTERN EFI_STATUS simple_file_save(EFI_HANDLE Volume, const char *filepath,
+                                   int (*callback)(size_t), VOID *Buffer,
+                                   UINTN BufSize);
 
 /*
  * gpxefile.c

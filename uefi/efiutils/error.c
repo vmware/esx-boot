@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -26,7 +26,7 @@ static const EFI_STATUS efi_statuses[] = {
  *      Note: If a UEFI function can return a warning status, its caller is
  *      expected to specifically handle or ignore it, not blindly pass it to
  *      this function.  If a UEFI warning status is passed in, this function
- *      logs a warning message and returns ERR_SUCCESS.
+ *      returns ERR_SUCCESS.
  *
  * Parameters
  *      IN Status: EFI error status
@@ -39,9 +39,6 @@ int error_efi_to_generic(EFI_STATUS Status)
    int i;
 
    if (!EFI_ERROR(Status)) {
-      if (Status != EFI_SUCCESS) {
-         Log(LOG_WARNING, "Ignoring UEFI warning 0x%zx", Status);
-      }
       return ERR_SUCCESS;
    }
 

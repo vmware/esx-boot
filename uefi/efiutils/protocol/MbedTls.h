@@ -4,15 +4,15 @@
  ******************************************************************************/
 
 /*
- * EFI_CRYPTO_MBEDTLS_PROTOCOL
+ * VMW_CRYPTO_MBEDTLS_PROTOCOL
  *
  * This protocol exports a small subset of mbedTLS functionality, allowing
  * crypto code to be isolated in a separate .efi driver module that can
  * eventually be FIPS certified.
  */
 
-#ifndef __EFI_MBEDTLS_PROTOCOL_H__
-#define __EFI_MBEDTLS_PROTOCOL_H__
+#ifndef __VMW_MBEDTLS_PROTOCOL_H__
+#define __VMW_MBEDTLS_PROTOCOL_H__
 
 /* fccaf641-5030-4348-8c0d-82699e8491ac */
 #define VMW_MBEDTLS_PROTOCOL_GUID { \
@@ -20,9 +20,9 @@
       { 0x8c, 0x0d, 0x82, 0x69, 0x9e, 0x84, 0x91, 0xac } \
 }
 
-#define MBEDTLS_CURRENT_VERSION 4
+#define MBEDTLS_CURRENT_API_VERSION 5
 
-typedef struct _EFI_MBEDTLS_PROTOCOL EFI_MBEDTLS_PROTOCOL;
+typedef struct _VMW_MBEDTLS_PROTOCOL VMW_MBEDTLS_PROTOCOL;
 
 
 /*
@@ -118,8 +118,9 @@ int
     unsigned char *output
 );
 
-struct _EFI_MBEDTLS_PROTOCOL {
-   UINT32 Version;
+struct _VMW_MBEDTLS_PROTOCOL {
+   UINT32 ApiVersion;
+   const char *ModuleVersion;
    MBEDTLS_RSA_INIT RsaInit;
    MBEDTLS_RSA_PKCS1_VERIFY RsaPkcs1Verify;
    MBEDTLS_MPI_LSET MpiLset;

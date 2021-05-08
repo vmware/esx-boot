@@ -21,6 +21,7 @@ EXTERN char *strrchr(const char *, int);
 EXTERN int strcmp(const char *, const char *);
 EXTERN char *strcpy(char *, const char *);
 EXTERN size_t strlen(const char *);
+EXTERN size_t strnlen(const char *, size_t);
 EXTERN int strncmp(const char *, const char *, size_t);
 EXTERN char *strstr(const char *, const char *);
 EXTERN char *strdup(const char *src);

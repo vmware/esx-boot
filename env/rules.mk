@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -8,7 +8,7 @@
 #
 
 # Source filenames to object filenames convertion
-src_to_obj  =  $(patsubst %.S,%.o,$(patsubst %.s,%.o,$(patsubst %.c,%.o,$(1))))
+src_to_obj  =  $(addsuffix .o,$(basename $(1)))
 objects     =  $(addprefix $(2),$(call src_to_obj,$(1)))
 
 get_odir    =  $(if $(findstring lib,$(2)),$(LIB_DIR)/$(1),$(BUILD_DIR)/$(1))
@@ -24,7 +24,12 @@ CFLAGS      += $(patsubst %,-D%,$(CDEF)) $(patsubst %,-I%,$(STDINC) $(INC))
 
 # Makefile rules
 .SECONDARY:
-.SUFFIXES: .c .s .S .o .a .elf .efi $(APP_EXT)
+.SUFFIXES: .c .s .S .o .a .elf .efi .json $(APP_EXT)
+
+$(ODIR)/%.c: %.json $(TOPDIR)/env/getkeys.py
+	$(call printcmd,GETKEYS)
+	LD_LIBRARY_PATH=$(HOST_OPENSSL_LIB):$(LD_LIBRARY_PATH) \
+		$(PYTHON) $(TOPDIR)/env/getkeys.py < $< > $@
 
 $(ODIR)/%.o: %.c
 	$(call printcmd,CC)

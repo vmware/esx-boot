@@ -86,6 +86,11 @@ int runtime_addr(const void *addr, run_addr_t *runaddr);
 int install_trampoline(trampoline_t *run_trampo, handoff_t **run_handoff);
 
 /*
+ * trampoline.c
+ */
+void TRAMPOLINE do_reloc(reloc_t *reloc);
+
+/*
  * elf.c
  */
 int elf_check_headers(void *buffer, size_t buflen, Elf_CommonAddr *base);

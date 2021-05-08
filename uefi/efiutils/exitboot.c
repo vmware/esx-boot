@@ -546,6 +546,18 @@ int relocate_page_tables2(void)
 }
 #endif /* defined(only_em64t) || defined(only_arm64) */
 
+/*-- in_boot_services ----------------------------------------------------------
+ *
+ *      Return true if boot services are still available.
+ *
+ * Results
+ *      true or false.
+ *----------------------------------------------------------------------------*/
+bool in_boot_services(void)
+{
+   return st->BootServices != NULL;
+}
+
 /*-- exit_boot_services --------------------------------------------------------
  *
  *      Exit UEFI boot services.

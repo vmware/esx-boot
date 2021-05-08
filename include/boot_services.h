@@ -48,6 +48,7 @@ typedef struct {
 
 EXTERN int get_firmware_info(firmware_t *firmware);
 EXTERN int chainload_parent(const char *cmdline);
+EXTERN bool in_boot_services(void);
 EXTERN int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
                               size_t *count, efi_info_t *efi_info);
 EXTERN int get_memory_map(size_t desc_extra_mem, e820_range_t **mmap,
@@ -62,6 +63,7 @@ EXTERN int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_
 EXTERN int get_acpi_rsdp(void **rsdp);
 EXTERN int get_smbios_eps(void **eps_start);
 EXTERN int get_smbios_v3_eps(void **eps_start);
+EXTERN int get_fdt(void **fdt_start);
 
 /*
  * Memory allocation
@@ -80,12 +82,15 @@ EXTERN int get_bootif_option(const char **bootif);
  * File system
  */
 #define READ_CHUNK_SIZE (1024 * 1024)
+#define WRITE_CHUNK_SIZE (1024 * 1024)
 
 EXTERN int get_boot_file(char **buffer);
 EXTERN int get_boot_dir(char **buffer);
 EXTERN int firmware_file_get_size_hint(const char *filepath, size_t *size);
 EXTERN int firmware_file_read(const char *filepath, int (*callback)(size_t),
                               void **buffer, size_t *buflen);
+EXTERN int firmware_file_write(const char *filepath, int (*callback)(size_t),
+                               void *buffer, size_t buflen);
 EXTERN int firmware_file_exec(const char *filepath, const char *options);
 
 /*

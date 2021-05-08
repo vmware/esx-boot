@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -347,7 +347,7 @@ int file_sanitize_path(char *filepath)
 
 /*-- make_path -----------------------------------------------------------------
  *
- *      Concatenate the absolute path of a root directory with a relative file
+ *      Concatenate the path of a default root directory with a relative file
  *      path. The given file path is duplicated if it is actually already
  *      absolute.
  *
@@ -385,7 +385,7 @@ int make_path(const char *default_root_dir, const char *filepath, char **buffer)
       }
    }
 
-   if (default_root_dir != NULL) {
+   if (default_root_dir != NULL && default_root_dir[0] != '\0') {
       if (asprintf(&path, "%s/%s", default_root_dir, filepath) == -1) {
          path = NULL;
       }

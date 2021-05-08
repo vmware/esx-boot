@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -273,10 +273,14 @@ EFI_STATUS file_devpath(EFI_HANDLE Device, const CHAR16 *FileName,
  *       - Single file path nodes with no directory path data are presumed to
  *         have their files located in the root directory of the device."
  *
- *      Note: file path strings in device paths are supposed to be
+ *      Note: File path strings in device paths are supposed to be
  *      null-terminated, but some software has been observed not to terminate
  *      them.  This function tolerates a source string that is terminated by
  *      either the device path node length or null.
+ *
+ *      Note: Even if the first path is empty, this function still inserts a
+ *      separator before appending (unless the second path is empty and thus
+ *      nothing is appended).
  *
  * Parameters
  *      IN  Dest: pointer to the path to be appended
@@ -326,10 +330,13 @@ static void efi_path_concat(CHAR16 *Dest, const FILEPATH_DEVICE_PATH *SrcDP)
  *      path. This function returns a freshly allocated empty string if there
  *      is no file portion of the path.
  *
- *      Note: file path strings in device paths are supposed to be
+ *      Note: If nonempty, the returned value always has a leading backslash.
+ *
+ *      Note: File path strings in device paths are supposed to be
  *      null-terminated, but some software has been observed not to terminate
  *      them.  This function tolerates strings that are terminated by either
  *      the device path node length or null.
+ *
  *
  * Parameters
  *      IN  DevPath:  pointer to the device path to query
@@ -477,46 +484,4 @@ char *devpath_text(const EFI_DEVICE_PATH *DevPath,
    }
    ucs2_to_ascii(ws, (char **)&ws, false);
    return (char *)ws;
-}
-
-/*-- log_devpath ---------------------------------------------------------------
- *
- *      Convert a device path to text and log it.
- *
- * Parameters
- *      IN  level:   log level
- *      IN  prefix:  string to prefix the device path with
- *      IN  DevPath: device path
- *----------------------------------------------------------------------------*/
-void log_devpath(int level, const char *prefix, const EFI_DEVICE_PATH *DevPath)
-{
-   char *text;
-
-   text = devpath_text(DevPath, false, false);
-   Log(level, "%s: %s", prefix, text);
-   sys_free(text);
-}
-
-/*-- log_handle_devpath --------------------------------------------------------
- *
- *      Get the device path associated with an EFI handle, convert it to text,
- *      and log it.
- *
- * Parameters
- *      IN  level:  log level
- *      IN  prefix: string to prefix the device path with
- *      IN  handle: EFI handle
- *----------------------------------------------------------------------------*/
-void log_handle_devpath(int level, const char *prefix, EFI_HANDLE handle)
-{
-   EFI_STATUS Status;
-   EFI_DEVICE_PATH *DevPath;
-
-   Status = devpath_get(handle, &DevPath);
-   if (EFI_ERROR(Status)) {
-      Log(level, "%s: EFI error getting devpath: %zx", prefix, Status);
-      return;
-   }
-
-   log_devpath(level, prefix, DevPath);
 }

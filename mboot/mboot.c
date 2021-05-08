@@ -334,7 +334,7 @@ int load_crypto_module(void)
     * methods (such as copying an ISO installer image) place the crypto module
     * in a subdirectory named efi/boot.
     */
-   int status = ERR_INSECURE;
+   int status, final_status;
    unsigned i;
    struct {
       char *dir;
@@ -352,14 +352,21 @@ int load_crypto_module(void)
       return status;
    }
 
+   final_status = ERR_UNKNOWN;
    for (i = 0; i < ARRAYSIZE(try); i++) {
       status = make_path(try[i].dir, try[i].base, &modpath);
       if (status != ERR_SUCCESS) {
          Log(LOG_DEBUG, "make_path(%s, %s): %s",
              try[i].dir, try[i].base, error_str[status]);
+         if (status > final_status) {
+            final_status = status;
+         }
          continue;
       }
       status = firmware_file_exec(modpath, "");
+      if (status == ERR_SUCCESS || status > final_status) {
+         final_status = status;
+      }
       if (status != ERR_SUCCESS) {
          /*
           * LOG_DEBUG so that users don't see the failure and fallback.  A more
@@ -373,13 +380,13 @@ int load_crypto_module(void)
       break;
    }
 
-   if (status == ERR_SUCCESS) {
+   if (final_status == ERR_SUCCESS) {
       Log(LOG_INFO, "Loading %s", modpath);
       free(modpath);
    } else {
       Log(LOG_CRIT, "Failed to load %s", CRYPTO_DRIVER);
    }
-   return status;
+   return final_status;
 }
 #endif
 
@@ -515,7 +522,7 @@ int main(int argc, char **argv)
          Log(LOG_CRIT, "Boot module signatures are not valid");
       }
       if (boot.efi_info.secure_boot) {
-         return clean(ERR_INSECURE);
+         return clean(ERR_SECURITY_VIOLATION);
       }
    }
 #endif

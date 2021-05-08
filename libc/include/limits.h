@@ -12,9 +12,12 @@
 
 #define CHAR_BIT    8
 
-#define UINT_MAX    (4294967295U)
-
 #define UINT16_MAX  (65535U)
+
+#define UINT32_MAX  (4294967295U)
+#define INT32_MAX   (2147483647)
+#define UINT_MAX    UINT32_MAX
+#define INT_MAX     INT32_MAX
 
 #if defined(only_em64t) || defined(only_arm64)
 #define LONG_MIN    (-9223372036854775807L-1)

@@ -1,18 +1,15 @@
 /** @file
   ACPI 1.0b definitions from the ACPI Specification, revision 1.0b
 
-Copyright (c) 2006 - 2011, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials are licensed and made available under
-the terms and conditions of the BSD License that accompanies this distribution.
-The full text of the license may be found at
-http://opensource.org/licenses/bsd-license.php.
-
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2020, Arm Limited. All rights reserved.<BR>
+SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
 #ifndef _ACPI_1_0_H_
 #define _ACPI_1_0_H_
+
+#include <IndustryStandard/AcpiAml.h>
 
 ///
 /// Common table header, this prefaces all ACPI tables, including FACS, but
@@ -41,7 +38,7 @@ typedef struct {
 #pragma pack()
 
 //
-// Define for Desriptor
+// Define for Descriptor
 //
 #define ACPI_SMALL_ITEM_FLAG                   0x00
 #define ACPI_LARGE_ITEM_FLAG                   0x01
@@ -113,7 +110,7 @@ typedef struct {
 #pragma pack(1)
 
 ///
-/// The commond definition of QWORD, DWORD, and WORD
+/// The common definition of QWORD, DWORD, and WORD
 /// Address Space Descriptors.
 ///
 typedef PACKED struct {
@@ -362,7 +359,7 @@ typedef struct {
 #define EFI_ACPI_DMA_TRANSFER_TYPE_MASK                 0x03
 #define   EFI_ACPI_DMA_TRANSFER_TYPE_8_BIT              0x00
 #define   EFI_ACPI_DMA_TRANSFER_TYPE_8_BIT_AND_16_BIT   0x01
-#define   EFI_ACPI_DMA_TRANSFER_TYPE_16_BIT             0x10
+#define   EFI_ACPI_DMA_TRANSFER_TYPE_16_BIT             0x02
 
 //
 // IO Information
@@ -379,6 +376,16 @@ typedef struct {
 #define EFI_ACPI_MEMORY_WRITE_STATUS_MASK               0x01
 #define   EFI_ACPI_MEMORY_WRITABLE                      0x01
 #define   EFI_ACPI_MEMORY_NON_WRITABLE                  0x00
+
+//
+// Interrupt Vector Flags definitions for Extended Interrupt Descriptor
+// Ref ACPI specification 6.4.3.6
+//
+#define EFI_ACPI_EXTENDED_INTERRUPT_FLAG_PRODUCER_CONSUMER_MASK   BIT0
+#define EFI_ACPI_EXTENDED_INTERRUPT_FLAG_MODE_MASK                BIT1
+#define EFI_ACPI_EXTENDED_INTERRUPT_FLAG_POLARITY_MASK            BIT2
+#define EFI_ACPI_EXTENDED_INTERRUPT_FLAG_SHARABLE_MASK            BIT3
+#define EFI_ACPI_EXTENDED_INTERRUPT_FLAG_WAKE_CAPABLITY_MASK      BIT4
 
 //
 // Ensure proper structure formats

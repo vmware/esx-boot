@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2015,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -33,6 +33,7 @@ typedef struct {
    uint8_t minor;
    uint8_t derivative;
    uint8_t drive;
+   bool in_boot_services;
 } com32_t;
 
 #define STACK_SIZE       (8 * 1024 * 1024)

@@ -18,6 +18,7 @@
 
 EXTERN int atoi(const char *);
 EXTERN long strtol(const char *, char **, int);
+EXTERN unsigned long strtoul(const char *, char **, int);
 
 EXTERN void *malloc(size_t);
 EXTERN void *calloc(size_t, size_t);

@@ -15,6 +15,8 @@
 #include "mboot.h"
 
 static bool is_intel_skylake;
+CPUIDRegs cpuid0;
+CPUIDRegs cpuid1;
 
 void
 __GET_CPUID(unsigned int input, CPUIDRegs *regs)

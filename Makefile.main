@@ -19,7 +19,8 @@ SHAREDLIBS := bootlib       \
               libmd5        \
               libuart       \
               mbedtls       \
-              zlib
+              zlib          \
+              libfdt
 
 SUBDIRS    := $(SHAREDLIBS) \
               $(FIRMWARE)   \

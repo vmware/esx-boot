@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2019 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -15,17 +15,17 @@ TCROOT          := /build/toolchain/lin32
 # host during the build, such as uefi/elf2efi and bios/relocs.
 #=============================================================
 
-HOST_CC         := $(TCROOT)/gcc-4.8.0/bin/x86_64-linux5.0-gcc
-HOST_CFLAGS     := -m32
+HOST_CC         := gcc
+HOST_CFLAGS     := 
 #
 # Known to work with libbfd 2.17.50. libbfd
 # used should be aware of all architecture types
 # used in build.
 #
-HOST_LIBBFDINC  := $(TCROOT)/binutils-2.17.50.0.15/x86_64-linux/include
-HOST_LIBBFD     := $(TCROOT)/binutils-2.17.50.0.15/x86_64-linux/lib/libbfd.a
-HOST_LIBERTY    := $(TCROOT)/binutils-2.17.50.0.15/lib/libiberty.a
-HOST_CRYPTO     := -lcrypto
+HOST_LIBBFDINC  := /usr/include
+HOST_LIBBFD     := -lbfd
+HOST_LIBERTY    := -liberty
+HOST_LIBCRYPTO  := -lcrypto
 
 #=============================================================
 # Target definitions.

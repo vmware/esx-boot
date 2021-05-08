@@ -50,7 +50,7 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
    }
 
    io->type = IO_MEMORY_MAPPED;
-   io->channel.addr = tmff->tile_to_host_base;
+   io->channel.addr = tmff->base;
    io->offset_scaling = 1;
    *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
    *type = SERIAL_TMFIFO;
@@ -141,7 +141,7 @@ int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
       *original_baudrate = 9600;
       break;
    default:
-      return ERR_UNSUPPORTED;
+      *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
    }
 
    return ERR_SUCCESS;

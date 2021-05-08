@@ -19,9 +19,15 @@ SRC         := \
                mem.c             \
                printf.c          \
                standard.c        \
+               stack_chk.c       \
+               stack_chk2.c      \
                string.c
 
 BASENAME    := c
 TARGETTYPE  := lib
 
 include rules.mk
+
+$(ODIR)/stack_chk.o: stack_chk.c
+	$(call printcmd,CC)
+	$(CC) $(CFLAGS) -fno-stack-protector -c -o $@ $<

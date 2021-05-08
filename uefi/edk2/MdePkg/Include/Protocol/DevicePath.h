@@ -2,18 +2,11 @@
   The device path protocol as defined in UEFI 2.0.
 
   The device path represents a programmatic path to a device,
-  from a software point of view. The path must persist from boot to boot, so 
+  from a software point of view. The path must persist from boot to boot, so
   it can not contain things like PCI bus numbers that change from boot to boot.
 
-Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
-Portions copyright (c) 2017 VMware, Inc. All rights reserved.<BR>
-This program and the accompanying materials are licensed and made available under 
-the terms and conditions of the BSD License that accompanies this distribution.  
-The full text of the license may be found at
-http://opensource.org/licenses/bsd-license.php.                                          
-    
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.              
+Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
@@ -40,11 +33,11 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #pragma pack(1)
 
 /**
-  This protocol can be used on any device handle to obtain generic path/location 
-  information concerning the physical device or logical device. If the handle does 
-  not logically map to a physical device, the handle may not necessarily support 
-  the device path protocol. The device path describes the location of the device 
-  the handle is for. The size of the Device Path can be determined from the structures 
+  This protocol can be used on any device handle to obtain generic path/location
+  information concerning the physical device or logical device. If the handle does
+  not logically map to a physical device, the handle may not necessarily support
+  the device path protocol. The device path describes the location of the device
+  the handle is for. The size of the Device Path can be determined from the structures
   that make up the Device Path.
 **/
 typedef struct {
@@ -54,20 +47,20 @@ typedef struct {
                     ///< 0x04 Media Device Path.
                     ///< 0x05 BIOS Boot Specification Device Path.
                     ///< 0x7F End of Hardware Device Path.
-                    
+
   UINT8 SubType;    ///< Varies by Type
                     ///< 0xFF End Entire Device Path, or
                     ///< 0x01 End This Instance of a Device Path and start a new
                     ///< Device Path.
-                    
+
   UINT8 Length[2];  ///< Specific Device Path data. Type and Sub-Type define
                     ///< type of data. Size of data is included in Length.
-                    
+
 } EFI_DEVICE_PATH_PROTOCOL;
 
 ///
 /// Device Path protocol definition for backward-compatible with EFI1.1.
-/// 
+///
 typedef EFI_DEVICE_PATH_PROTOCOL  EFI_DEVICE_PATH;
 
 ///
@@ -288,6 +281,21 @@ typedef struct {
   // This device path may optionally contain more than one _ADR entry.
   //
 } ACPI_ADR_DEVICE_PATH;
+
+///
+/// ACPI NVDIMM Device Path SubType.
+///
+#define ACPI_NVDIMM_DP               0x04
+///
+///
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  ///
+  /// NFIT Device Handle, the _ADR of the NVDIMM device.
+  /// The value of this field comes from Section 9.20.3 of the ACPI 6.2A specification.
+  ///
+  UINT32                          NFITDeviceHandle;
+} ACPI_NVDIMM_DEVICE_PATH;
 
 #define ACPI_ADR_DISPLAY_TYPE_OTHER             0
 #define ACPI_ADR_DISPLAY_TYPE_VGA               1
@@ -719,6 +727,18 @@ typedef struct {
   UINT8                           StopBits;
 } UART_DEVICE_PATH;
 
+///
+/// NVDIMM Namespace Device Path SubType.
+///
+#define NVDIMM_NAMESPACE_DP               0x20
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  ///
+  /// Namespace unique label identifier UUID.
+  ///
+  EFI_GUID Uuid;
+} NVDIMM_NAMESPACE_DEVICE_PATH;
+
 //
 // Use VENDOR_DEVICE_PATH struct
 //
@@ -786,7 +806,6 @@ typedef struct {
 
 ///
 /// Serial Attached SCSI (SAS) Ex Device Path SubType
-/// NOTE: macOS uses the SasEx SubType for NVMe DP nodes.  PR1927353.
 ///
 #define MSG_SASEX_DP              0x16
 typedef struct {
@@ -811,7 +830,6 @@ typedef struct {
 
 ///
 /// NvmExpress Namespace Device Path SubType.
-/// NOTE: macOS uses the SasEx SubType for NVMe DP nodes.  PR1927353.
 ///
 #define MSG_NVME_NAMESPACE_DP     0x17
 typedef struct {
@@ -819,6 +837,22 @@ typedef struct {
   UINT32                          NamespaceId;
   UINT64                          NamespaceUuid;
 } NVME_NAMESPACE_DEVICE_PATH;
+
+///
+/// DNS Device Path SubType
+///
+#define MSG_DNS_DP                0x1F
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  ///
+  /// Indicates the DNS server address is IPv4 or IPv6 address.
+  ///
+  UINT8                           IsIPv6;
+  ///
+  /// Instance of the DNS server address.
+  ///
+  EFI_IP_ADDRESS                  DnsServerIp[];
+} DNS_DEVICE_PATH;
 
 ///
 /// Uniform Resource Identifiers (URI) Device Path SubType
@@ -1059,8 +1093,8 @@ typedef struct {
 #define MEDIA_PROTOCOL_DP         0x05
 
 ///
-/// The Media Protocol Device Path is used to denote the protocol that is being 
-/// used in a device path at the location of the path specified. 
+/// The Media Protocol Device Path is used to denote the protocol that is being
+/// used in a device path at the location of the path specified.
 /// Many protocols are inherent to the style of device path.
 ///
 typedef struct {
@@ -1255,6 +1289,7 @@ typedef union {
   SAS_DEVICE_PATH                            Sas;
   SASEX_DEVICE_PATH                          SasEx;
   NVME_NAMESPACE_DEVICE_PATH                 NvmeNamespace;
+  DNS_DEVICE_PATH                            Dns;
   URI_DEVICE_PATH                            Uri;
   BLUETOOTH_DEVICE_PATH                      Bluetooth;
   WIFI_DEVICE_PATH                           WiFi;
@@ -1312,6 +1347,7 @@ typedef union {
   SAS_DEVICE_PATH                            *Sas;
   SASEX_DEVICE_PATH                          *SasEx;
   NVME_NAMESPACE_DEVICE_PATH                 *NvmeNamespace;
+  DNS_DEVICE_PATH                            *Dns;
   URI_DEVICE_PATH                            *Uri;
   BLUETOOTH_DEVICE_PATH                      *Bluetooth;
   WIFI_DEVICE_PATH                           *WiFi;
@@ -1333,7 +1369,7 @@ typedef union {
 } EFI_DEV_PATH_PTR;
 
 #pragma pack()
-                                             
+
 #define END_DEVICE_PATH_TYPE                 0x7f
 #define END_ENTIRE_DEVICE_PATH_SUBTYPE       0xFF
 #define END_INSTANCE_DEVICE_PATH_SUBTYPE     0x01

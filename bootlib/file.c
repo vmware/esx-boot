@@ -420,6 +420,35 @@ int file_load(int volid, const char *filename, int (*callback)(size_t),
    return status;
 }
 
+/*-- file_save -----------------------------------------------------------------
+ *
+ *      Save a file from a memory buffer, overwriting the file if it exists.
+ *
+ * Parameters
+ *      IN  volid:            MBR/GPT partition number of the volume to save to.
+ *                            Setting this parameter to zero indicates that we
+ *                            want to save the file to the boot volume. A
+ *                            parameter other than zero indicates that the file
+ *                            should be saved to a FAT filesystem on the given
+ *                            partition (but that is not currently supported).
+ *      IN  filepath:         absolute path to the file
+ *      IN  callback:         routine to be called periodically while the file
+ *                            is being saved
+ *      OUT buffer:           pointer to the buffer to save
+ *      OUT bufsize:          the size of the buffer
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int file_save(int volid, const char *filename, int (*callback)(size_t),
+              void *buffer, size_t bufsize)
+{
+   if (volid != FIRMWARE_BOOT_VOLUME) {
+      return ERR_UNSUPPORTED;
+   }
+
+   return firmware_file_write(filename, callback, buffer, bufsize);
+}
+
 /*-- file_overwrite ------------------------------------------------------------
  *
  *      Overwrite a file which already exists with the new data contained in the

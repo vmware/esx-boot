@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -50,7 +50,7 @@ D(ERR_BAD_ARCH,             EFI_UNDEFINED_ERROR,      "Bad arch")             \
 D(ERR_BAD_TYPE,             EFI_UNDEFINED_ERROR,      "Bad type")             \
 D(ERR_BAD_HEADER,           EFI_UNDEFINED_ERROR,      "Bad header")           \
 D(ERR_NOT_EXECUTABLE,       EFI_UNDEFINED_ERROR,      "Not executable")       \
-D(ERR_INSECURE,             EFI_UNDEFINED_ERROR,      "Secure boot failed")   \
+D(ERR_RESERVED,             EFI_UNDEFINED_ERROR,      "-reserved-")           \
 D(ERR_COMPROMISED_DATA,     EFI_COMPROMISED_DATA,     "Compromised data")     \
 D(ERR_HTTP_ERROR,           EFI_HTTP_ERROR,           "HTTP Error")           \
 D(ERR_NETWORK_UNREACHABLE,  EFI_NETWORK_UNREACHABLE,  "Network unreachable")  \
@@ -60,6 +60,7 @@ D(ERR_PORT_UNREACHABLE,     EFI_PORT_UNREACHABLE,     "Port unreachable")     \
 D(ERR_CONNECTION_FIN,       EFI_CONNECTION_FIN,       "Connection closed")    \
 D(ERR_CONNECTION_RESET,     EFI_CONNECTION_RESET,     "Connection reset")     \
 D(ERR_CONNECTION_REFUSED,   EFI_CONNECTION_REFUSED,   "Connection refused")   \
+D(ERR_TEST_FAILURE,         EFI_UNSUPPORTED,          "Test error")           \
 
 #define D(symbol, efi_symbol, string) symbol,
 enum {
