@@ -1,9 +1,9 @@
-**/*~
-**/tmp.*
+*~
+tmp.*
 cscope.*
 TAGS
 efiboot*.tgz
 nohup.out
-build
-Makefile
+/build
+/Makefile
 env/toolchain.mk
