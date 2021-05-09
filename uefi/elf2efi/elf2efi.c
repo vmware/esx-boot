@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015,2019-2020 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2015,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -21,9 +21,8 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/* POSIX and GNU headers */
 #define _GNU_SOURCE
-#define EFIAPI
-#define NO_MSABI_VA_FUNCS 1
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -33,13 +32,19 @@
 #include <errno.h>
 #include <assert.h>
 #include <getopt.h>
-#include <efi.h>
-#include <IndustryStandard/PeImage.h>
-#include <libgen.h>
-#undef VA_START
 #include <bfd.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
+
+/* UEFI headers */
+#define EFIAPI
+#define NO_MSABI_VA_FUNCS 1
+#undef NULL
+#undef TRUE
+#undef FALSE
+#undef VA_START
+#include <Uefi.h>
+#include <IndustryStandard/PeImage.h>
 
 /* binutils 2.34 have new section API */
 #ifndef bfd_get_section_flags
