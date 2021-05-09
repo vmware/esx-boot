@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015,2019,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2015,2019-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -183,5 +183,10 @@ UEFIINC    := $(TOPDIR)/uefi                        \
               $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 FDTINC     := $(TOPDIR)/libfdt
+
+ifeq ($(ARCH),arm64)
+ENV_LIB += $(FDTLIB)
+STDINC += $(FDTINC)
+endif
 
 endif # !BUILDENV

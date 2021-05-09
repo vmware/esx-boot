@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,6 +14,7 @@
 int pl011_init(const uart_t *dev);
 int ns16550_init(const uart_t *dev);
 int tmfifo_init(const uart_t *dev);
+int aapl_s5l_init(const uart_t *dev);
 
 /*-- uart_init -----------------------------------------------------------------
  *
@@ -39,6 +40,8 @@ int uart_init(const uart_t *dev)
      return pl011_init(dev);
    case SERIAL_TMFIFO:
      return tmfifo_init(dev);
+   case SERIAL_AAPL_S5L:
+     return aapl_s5l_init(dev);
    default:
      return ERR_UNSUPPORTED;
    }

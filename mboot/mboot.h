@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2017,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -125,7 +125,7 @@ typedef struct {
    size_t load_size;          /* Compressed module size (in bytes) */
    size_t size;               /* Decompressed module size (in bytes) */
    bool is_loaded;            /* True if the module has been entirely loaded */
-   uint64_t network_load_time;/* Time(ms) to load the module over network */
+   uint64_t load_time;        /* Time(ms) to load the module */
 } module_t;
 
 typedef struct {
@@ -144,7 +144,7 @@ typedef struct {
    efi_info_t efi_info;       /* EFI-specific information */
    uint64_t load_size;        /* Total size to load (in bytes) */
    uint64_t load_offset;      /* Current amount of loaded memory (in bytes) */
-   uint64_t network_load_time;/* Total time(ms) to load modules over network */
+   uint64_t load_time;        /* Total time(ms) to load modules */
    char *recovery_cmd;        /* Command to be executed on <SHIFT+R> */
    bool verbose;              /* Verbose mode (true = on, false = off) */
    bool debug;                /* Debug mode (true = on, false = off) */
@@ -195,7 +195,7 @@ typedef enum {
 
 static INLINE const char *size_unit_to_str(size_unit_t size_unit)
 {
-  static const char *size_units_in_str[] = {" bytes", "Kb", "Mb", "Gb"};
+  static const char *size_units_in_str[] = {" bytes", "KiB", "MiB", "GiB"};
 
   if (size_unit >= BYTES && size_unit <= GIGABYTES) {
      return size_units_in_str[size_unit];

@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -64,7 +64,13 @@ ifeq ($(FIRMWARE),uefi)
 
 %.efi: %.elf
 	$(call printcmd,ELF2EFI)
-	$(ELF2EFI) --subsystem=$(EFISUBSYSTEM) $(ELF2EFIFLAGS) $< $@
+	frozen="$(realpath $(TOPDIR)/frozen/$(notdir $@))" ; \
+	if [ "$(OBJDIR)" = release -a -f "$$frozen" ] ; then \
+	   echo "Substituting frozen binary $$frozen" ; \
+	   cp --no-preserve=mode $$frozen $@ ; \
+	else \
+	   $(ELF2EFI) --subsystem=$(EFISUBSYSTEM) $(ELF2EFIFLAGS) $< $@ ; \
+	fi
 
 %.efi-$(KEY): %.efi
 	$(call printcmd,SIGN)

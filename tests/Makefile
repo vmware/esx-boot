@@ -8,10 +8,14 @@ include common.mk
 
 MAKEFLAGS += -I ../../env
 
-SUBDIRS := test_libuart test_gui test_smbios test_libc test_fdt
+SUBDIRS := test_libuart test_gui test_smbios test_libc
 
 ifneq ($(BUILDENV),com32)
 SUBDIRS += test_rts
+endif
+
+ifneq ($(IARCH),x86)
+SUBDIRS += test_fdt
 endif
 
 # Building rules

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2020,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -31,6 +31,11 @@ static int serial_speed;
 
 #define DEFAULT_PROG_NAME       "test_libuart.c32"
 
+static const char *serial_type_names[] = {
+#define SERIAL_TYPE_DEF(x) #x,
+   SERIAL_TYPE_DEFS
+#undef SERIAL_TYPE_DEF
+};
 
 
 /*-- test_libuart_init ----------------------------------------------------------
@@ -117,9 +122,19 @@ int main(int argc, char **argv)
      return status;
    }
 
-   Log(LOG_ERR, "port %u is a %s, %u baud", serial_com,
-       serial_dev.type == SERIAL_NS16550 ? "ns16550" : "pl011",
-       original_baudrate);
+   if (serial_dev.type >= SERIAL_COUNT) {
+      Log(LOG_ERR, "corrupted serial_dev.type = %u\n", serial_dev.type);
+      return status;
+   }
+
+   if (original_baudrate == SERIAL_BAUDRATE_UNKNOWN) {
+      Log(LOG_ERR, "port %u is a %s, unknown baud", serial_com,
+          serial_type_names[serial_dev.type]);
+   } else {
+      Log(LOG_ERR, "port %u is a %s, %u baud", serial_com,
+          serial_type_names[serial_dev.type],
+          original_baudrate);
+   }
 
    Log(LOG_ERR, "registers at %s 0x%"PRIxPTR" with scaling %u\n",
        serial_dev.io.type == IO_PORT_MAPPED ? "io" : "mmio",

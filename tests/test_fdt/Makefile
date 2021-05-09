@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2020,2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -14,8 +14,7 @@ SRC         := test_fdt.c
 
 BASENAME    := test_fdt
 TARGETTYPE  := app
-LIBS        := $(BOOTLIB) $(ENV_LIB) $(FDTLIB)
-INC         := $(FDTINC)
+LIBS        := $(BOOTLIB) $(ENV_LIB)
 
 CFLAGS      +=
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <io.h>
+#include <fdt_vmware.h>
 
 /*
  * Microsoft Debug Port Table 2 (http://go.microsoft.com/fwlink/p/?LinkId=234837)
@@ -58,10 +59,9 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
    return ERR_SUCCESS;
 }
 
-/*-- get_serial_port -----------------------------------------------------------
+/*-- get_fdt_serial_port -------------------------------------------------------
  *
- *      Get the I/O base address of a serial port. On ARM UEFI platforms, this
- *      is generally the SPCR. One some platforms, other ways may be preferred.
+ *      Attempt to get serial port configuration via FDT.
  *
  * Parameters
  *      IN  com:  unused
@@ -72,17 +72,94 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
  * Results
  *      A generic error status.
  *----------------------------------------------------------------------------*/
-int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
-                    uint32_t *original_baudrate)
+static int get_fdt_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
+                               io_channel_t *io, uint32_t *original_baudrate)
 {
+   void *fdt;
+   int node;
    int status;
-   EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *spcr =
-      (void *) acpi_find_sdt("SPCR");
+   const char *prop;
+   char *baud;
+   int prop_len;
 
-   status = get_nvidia_rshim_console_port(com, type, io, original_baudrate);
-   if (status == ERR_SUCCESS) {
+   status = get_fdt(&fdt);
+   if (status != ERR_SUCCESS) {
       return status;
    }
+
+   if (fdt_check_header(fdt) != 0) {
+      return ERR_UNSUPPORTED;
+   }
+
+   node = fdt_path_offset(fdt, "/chosen");
+   if (node < 0) {
+      return ERR_UNSUPPORTED;
+   }
+
+   prop = fdt_getprop(fdt, node, "stdout-path", &prop_len);
+   if (prop == NULL || prop_len == 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   /*
+    * stdout-path will look like "serial0:1500000", where the thing
+    * after the : is the baud rate.
+    */
+
+   baud = strchr(prop, ':');
+   if (baud != NULL) {
+      prop_len = baud - prop;
+      baud++;
+   }
+
+   node = fdt_path_offset_namelen(fdt, prop, prop_len);
+   if (node < 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   prop = fdt_getprop(fdt, node, "compatible", &prop_len);
+   if (prop == NULL || prop_len == 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   if (!strcmp(prop, "AAPL,s5l-uart") ||
+       !strcmp(prop, "apple,uart")) {
+      if (fdt_get_reg(fdt, node, "reg", &io->channel.addr) < 0) {
+         return ERR_UNSUPPORTED;
+      }
+      io->type = IO_MEMORY_MAPPED;
+      io->offset_scaling = 1;
+      if (baud != NULL) {
+         *original_baudrate = strtol(baud, NULL, 0);
+      } else {
+         *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
+      }
+      *type = SERIAL_AAPL_S5L;
+      return ERR_SUCCESS;
+   }
+
+   return ERR_UNSUPPORTED;
+}
+
+
+/*-- get_spcr_serial_port ------------------------------------------------------
+ *
+ *      Attempt to get serial port configuration via SPCR.
+ *
+ * Parameters
+ *      IN  com:  unused
+ *      OUT type: serial port type
+ *      OUT io:   serial port base address
+ *      OUT original_baudrate: current baudrate from SPCR
+ *
+ * Results
+ *      A generic error status.
+ *----------------------------------------------------------------------------*/
+static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
+                                io_channel_t *io, uint32_t *original_baudrate)
+{
+   EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE *spcr =
+      (void *) acpi_find_sdt("SPCR");
 
    if (spcr == NULL) {
       return ERR_NOT_FOUND;
@@ -145,4 +222,41 @@ int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
    }
 
    return ERR_SUCCESS;
+}
+
+/*-- get_serial_port -----------------------------------------------------------
+ *
+ *      Get the I/O base address of a serial port. On ARM UEFI platforms, this
+ *      is generally the SPCR. One some platforms, other ways may be preferred.
+ *
+ * Parameters
+ *      IN  com:  unused
+ *      OUT type: serial port type
+ *      OUT io:   serial port base address
+ *      OUT original_baudrate: current baudrate from firmware
+ *
+ * Results
+ *      A generic error status.
+ *----------------------------------------------------------------------------*/
+int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
+                    uint32_t *original_baudrate)
+{
+   int status;
+
+   status = get_nvidia_rshim_console_port(com, type, io, original_baudrate);
+   if (status == ERR_SUCCESS) {
+      return status;
+   }
+
+   status = get_spcr_serial_port(com, type, io, original_baudrate);
+   if (status == ERR_SUCCESS) {
+      return status;
+   }
+
+   status = get_fdt_serial_port(com, type, io, original_baudrate);
+   if (status == ERR_SUCCESS) {
+      return status;
+   }
+
+   return ERR_NOT_FOUND;
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -106,11 +106,13 @@ int ns16550_init(uart_t *dev)
       uint16_t latch;
 
       /*
-       * Only allow setting baudrates on x86. ESXi-ARM uses the SPCR baudrate
-       * and the UART to figure out the uart clock, so unless we patch the SPCR,
-       * the OS will get very confused.
+       * Only allow setting baudrates on x86. ESXi-ARM uses the firmware
+       * baudrate (e.g. from ACPI SPCR or FDT) and the UART to figure out the
+       * UART clock, so unless we patch the firmware data, the OS will get very
+       * confused.
        *
-       * So today the behavior is to maintain whatever the firmware UART configuration is.
+       * So today the behavior is to maintain whatever the firmware UART
+       * configuration is.
        */
       if (dev->baudrate == 0) {
          return ERR_INVALID_PARAMETER;

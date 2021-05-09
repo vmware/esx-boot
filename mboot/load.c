@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015,2017-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015,2017-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -177,7 +177,7 @@ void unload_boot_modules(void)
 /*-- modify_size_units ----------------------------------------------------------
  *
  *      Converts an input in bytes to a different binary metric based on
- *      its range i.e. to Gb, Mb or Kb.
+ *      its range i.e. to GiB, MiB or KiB.
  *
  * Parameters
  *      IN/OUT size:        Value in bytes, this contains the converted
@@ -223,7 +223,7 @@ static size_unit_t modify_size_units(uint64_t *size)
  *      IN time:            amount of time taken to load the above
  *                          said memory in milliseconds
  *      OUT bandwidth_unit: bandwidth units i.e. whether
- *                          Gbps/Mbps/Kbps etc
+ *                          GiBps/MiBps/KiBps etc
  *
  * Results
  *      The value of time should at least be 1s or greater for this function
@@ -272,11 +272,11 @@ static void log_module_transfer_stats(unsigned int n)
    pretty_unit_str = size_unit_to_str(pretty_unit);
    md5_to_str(&mod->md5_compressed, md5str, sizeof(md5str));
 
-   seconds = MILLISEC_TO_SEC_SIGNIFICAND(mod->network_load_time);
-   tenths_of_second = MILLISEC_TO_SEC_FRACTIONAL(mod->network_load_time);
+   seconds = MILLISEC_TO_SEC_SIGNIFICAND(mod->load_time);
+   tenths_of_second = MILLISEC_TO_SEC_FRACTIONAL(mod->load_time);
 
-   if (boot.is_network_boot) {
-      bandwidth = get_transfer_bandwidth(load_size, mod->network_load_time,
+   if (boot.is_network_boot || boot.debug) {
+      bandwidth = get_transfer_bandwidth(load_size, mod->load_time,
                                          &bandwidth_unit);
       if (bandwidth > 0) {
          if (pretty_unit > BYTES) {
@@ -395,13 +395,12 @@ static int load_module(unsigned int n)
    void *addr;
    int status;
    uint64_t start_time, end_time;
-   bool is_network_boot;
+   bool show_bandwidth = boot.is_network_boot || boot.debug;
 
-   is_network_boot = boot.is_network_boot;
    filepath = boot.modules[n].filename;
    Log(LOG_INFO, "Loading %s\n", filepath);
 
-   if (is_network_boot) {
+   if (show_bandwidth) {
       start_time = firmware_get_time_ms(false);
    }
    status = file_load(boot.volid, filepath,
@@ -411,7 +410,7 @@ static int load_module(unsigned int n)
       return status;
    }
 
-   if (is_network_boot) {
+   if (show_bandwidth) {
       end_time = firmware_get_time_ms(true);
    }
 
@@ -446,10 +445,10 @@ static int load_module(unsigned int n)
       }
    }
 
-   if (is_network_boot) {
-      boot.modules[n].network_load_time = (end_time > start_time) ?
+   if (show_bandwidth) {
+      boot.modules[n].load_time = (end_time > start_time) ?
          (end_time - start_time) : 0;
-      boot.network_load_time += boot.modules[n].network_load_time;
+      boot.load_time += boot.modules[n].load_time;
    }
 
    if (n == 0) {
@@ -507,8 +506,8 @@ static void log_transfer_stats(unsigned int num_modules_loaded,
    size_unit_t pretty_unit;
    const char *pretty_unit_str;
 
-   seconds = MILLISEC_TO_SEC_SIGNIFICAND(boot.network_load_time);
-   tenths_of_second = MILLISEC_TO_SEC_FRACTIONAL(boot.network_load_time);
+   seconds = MILLISEC_TO_SEC_SIGNIFICAND(boot.load_time);
+   tenths_of_second = MILLISEC_TO_SEC_FRACTIONAL(boot.load_time);
 
    pretty_size = size_transferred;
    pretty_unit = modify_size_units(&pretty_size);
@@ -517,9 +516,9 @@ static void log_transfer_stats(unsigned int num_modules_loaded,
    Log(LOG_DEBUG, "Loaded %u/%u modules\n",
        num_modules_loaded, boot.modules_nr);
 
-   if (boot.is_network_boot) {
+   if (boot.is_network_boot || boot.debug) {
       avg_bandwidth = get_transfer_bandwidth(size_transferred,
-                                             boot.network_load_time,
+                                             boot.load_time,
                                              &bandwidth_unit);
 
       if (avg_bandwidth > 0) {
@@ -563,7 +562,7 @@ int load_boot_modules(void)
    uint64_t size_transferred, size_extracted;
 
    boot.load_offset = 0;
-   boot.network_load_time = 0;
+   boot.load_time = 0;
    num_modules_loaded = 0;
    size_transferred = 0;
    size_extracted = 0;

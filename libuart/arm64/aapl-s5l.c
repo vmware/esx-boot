@@ -1,18 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
- * pl011.c -- ARM PL011-type UART support.
+ * aapl-s5l.c -- Support for the UART found in Apple Silicon hardware.
  */
 
 #include <stdint.h>
 #include <io.h>
 #include <uart.h>
-#include "pl011.h"
+#include "aapl-s5l.h"
 
-/*-- pl011_read --------------------------------------------------------------
+/*-- aapl_s5l_read --------------------------------------------------------------
  *
  *      Read a UART register.
  *
@@ -23,12 +23,12 @@
  * Results:
  *      32-bit register content.
  *----------------------------------------------------------------------------*/
-uint32_t pl011_read(const uart_t *dev, uint32_t reg)
+uint32_t aapl_s5l_read(const uart_t *dev, uint32_t reg)
 {
    return io_read32(&dev->io, reg);
 }
 
-/*-- pl011_write -------------------------------------------------------------
+/*-- aapl_s5l_write -------------------------------------------------------------
  *
  *      Write a UART register.
  *
@@ -37,12 +37,12 @@ uint32_t pl011_read(const uart_t *dev, uint32_t reg)
  *      IN reg: register to write to
  *      IN val: value to be written to the given register
  *----------------------------------------------------------------------------*/
-static void pl011_write(const uart_t *dev, uint32_t reg, uint32_t val)
+static void aapl_s5l_write(const uart_t *dev, uint32_t reg, uint32_t val)
 {
    io_write32(&dev->io, reg, val);
 }
 
-/*-- pl011_putc --------------------------------------------------------------
+/*-- aapl_s5l_putc --------------------------------------------------------------
  *
  *      Write a character on a serial port.
  *
@@ -50,34 +50,26 @@ static void pl011_write(const uart_t *dev, uint32_t reg, uint32_t val)
  *      IN dev: pointer to a UART descriptor
  *      IN c:   character to be written
  *----------------------------------------------------------------------------*/
-static void pl011_putc(const uart_t *dev, char c)
+static void aapl_s5l_putc(const uart_t *dev, char c)
 {
    uint16_t timeout;
 
    for (timeout = 0xffff; timeout > 0; timeout--) {
-      if ((pl011_read(dev, PL011_FR) & PL011_FR_TXFF) == 0) {
-         pl011_write(dev, PL011_DR, c);
+      if ((aapl_s5l_read(dev, AAPL_S5L_UTRSTAT) &
+           AAPL_S5L_UTRSTAT_TX_FIFO_EMPTY) != 0) {
+         aapl_s5l_write(dev, AAPL_S5L_UTXH, c);
          return;
       }
    }
 }
 
-/*-- pl011_init --------------------------------------------------------------
+/*-- aapl_s5l_init --------------------------------------------------------------
  *
- *      Initialize a UART device with the given baudrate.
- *        - polling mode (no interrupts)
- *        - Word length = 8 bits
- *        - 1 stop bit
- *        - no parity
- *        - FIFO triggering on 1 byte
+ *      Prepare an S5L UART.
  *
  *      Note: does nothing today, since the UART must already have been
- *      enabled by the firmware. UARTs on ARM64 servers don't have a known
- *      fixed divisor and special ACPI actions may be necessary to enable
- *      UARTs that had been disabled.
- *
- *      In the future, given an SPCR-defined UART, we may allow changing
- *      the baud rate.
+ *      enabled by firmware / prior boot stages. For example, M1N1 will
+ *      configure the baud-rate for 1.5Mbaud.
  *
  * Parameters
  *      IN dev:      pointer to a UART descriptor
@@ -85,12 +77,12 @@ static void pl011_putc(const uart_t *dev, char c)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int pl011_init(uart_t *dev)
+int aapl_s5l_init(uart_t *dev)
 {
-   if (dev->type != SERIAL_PL011) {
+   if (dev->type != SERIAL_AAPL_S5L) {
       return ERR_UNSUPPORTED;
    }
 
-   dev->putc = pl011_putc;
+   dev->putc = aapl_s5l_putc;
    return ERR_SUCCESS;
 }

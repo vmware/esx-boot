@@ -19,7 +19,8 @@ SRC         := fdt.c     \
                fdt_empty_tree.c \
                fdt_addresses.c \
                fdt_overlay.c \
-               fdt_check.c
+               fdt_check.c \
+               fdt_vmware.c
 
 BASENAME    := fdt
 TARGETTYPE  := lib

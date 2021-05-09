@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2017-2018, 2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -100,6 +100,8 @@ char *smbios_get_string(smbios_entry ptr,
  *      Get the legacy 32-bit SMBIOS Entry Point Structure (EPS) and associated
  *      SMBIOS table info.
  *
+ *      A table address of 0 is treated as missing tables.
+ *
  * Parameters
  *      OUT eps_start: pointer to starting address of the EPS.
  *      OUT eps_length: pointer to length of the EPS.
@@ -112,24 +114,27 @@ char *smbios_get_string(smbios_entry ptr,
 int smbios_get_info(void **eps_start, size_t *eps_length,
                     void **table_start, size_t *table_length)
 {
-   void *eps;
+   smbios_eps *eps;
    int ret;
 
-   ret = get_smbios_eps(&eps);
+   ret = get_smbios_eps((void **) &eps);
    if (ret != ERR_SUCCESS) {
       return ret;
    }
 
-   if (memcmp(eps, SMBIOS_EPS_SIGNATURE, SMBIOS_EPS_SIGNATURE_LEN) == 0) {
-      smbios_eps *e = eps;
-      *eps_start = e;
-      *eps_length = e->length;
-      *table_start = (void *) (uintptr_t) e->table_address;
-      *table_length = e->table_length;
-      return ERR_SUCCESS;
+   if (memcmp(eps, SMBIOS_EPS_SIGNATURE, SMBIOS_EPS_SIGNATURE_LEN) != 0) {
+      return ERR_NOT_FOUND;
    }
 
-   return ERR_NOT_FOUND;
+   if (eps->table_address == 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   *eps_start = eps;
+   *eps_length = eps->length;
+   *table_start = (void *) (uintptr_t) eps->table_address;
+   *table_length = eps->table_length;
+   return ERR_SUCCESS;
 }
 
 
@@ -137,6 +142,8 @@ int smbios_get_info(void **eps_start, size_t *eps_length,
  *
  *      Get the v3 64-bit SMBIOS Entry Point Structure (EPS) and associated
  *      SMBIOS table info.
+ *
+ *      A table address of 0 is treated as missing tables.
  *
  * Parameters
  *      OUT eps_start: pointer to starting address of the EPS.
@@ -150,27 +157,30 @@ int smbios_get_info(void **eps_start, size_t *eps_length,
 int smbios_get_v3_info(void **eps_start, size_t *eps_length,
                        void **table_start, size_t *table_length)
 {
-   void *eps;
+   smbios_eps3 *eps;
    int ret;
 
-   ret = get_smbios_v3_eps(&eps);
+   ret = get_smbios_v3_eps((void **) &eps);
    if (ret != ERR_SUCCESS) {
       return ret;
    }
 
-   if (memcmp(eps, SMBIOS_EPS3_SIGNATURE, SMBIOS_EPS3_SIGNATURE_LEN) == 0) {
-      smbios_eps3 *e = eps;
-      *eps_start = e;
-      *eps_length = e->length;
-      *table_start = (void *) (uintptr_t) e->table_address;
-      /*
-       * Don't bother refining down the size, use the maximum possible.
-       */
-      *table_length = e->table_max_length;
-      return ERR_SUCCESS;
+   if (memcmp(eps, SMBIOS_EPS3_SIGNATURE, SMBIOS_EPS3_SIGNATURE_LEN) != 0) {
+      return ERR_NOT_FOUND;
    }
 
-   return ERR_NOT_FOUND;
+   if (eps->table_address == 0) {
+      return ERR_NOT_FOUND;
+   }
+
+   *eps_start = eps;
+   *eps_length = eps->length;
+   *table_start = (void *) (uintptr_t) eps->table_address;
+   /*
+    * Don't bother refining down the size, use the maximum possible.
+    */
+   *table_length = eps->table_max_length;
+   return ERR_SUCCESS;
 }
 
 

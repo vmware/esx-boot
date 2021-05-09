@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013,2015,2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013,2015,2019,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -113,6 +113,13 @@ int main(int argc, char **argv)
    }
 
    Status = bs->ConnectController(CdromDevice, DriverImageHandle, NULL, FALSE);
+   if (Status == EFI_NOT_FOUND) {
+      /*
+       * On some systems, the first ConnectController after DisconnectController
+       * will fail with EFI_NOT_FOUND. Just retry once.
+       */
+      Status = bs->ConnectController(CdromDevice, DriverImageHandle, NULL, FALSE);
+   }
    if (EFI_ERROR(Status)) {
       status = error_efi_to_generic(Status);
       Log(LOG_ERR, "ConnectController: %s", error_str[status]);

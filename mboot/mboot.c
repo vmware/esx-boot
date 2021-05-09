@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -495,10 +495,7 @@ int main(int argc, char **argv)
    }
 
 #if defined(SECURE_BOOT) && defined(CRYPTO_MODULE)
-   status = load_crypto_module();
-   if (status != ERR_SUCCESS) {
-      return clean(status);
-   }
+   load_crypto_module();
 #endif
 
    status = load_boot_modules();
@@ -518,6 +515,8 @@ int main(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       if (status == ERR_NOT_FOUND) {
          Log(LOG_INFO, "Boot modules are not signed");
+      } else if (status == ERR_LOAD_ERROR) {
+         Log(LOG_WARNING, "Boot module signatures cannot be checked");
       } else {
          Log(LOG_CRIT, "Boot module signatures are not valid");
       }

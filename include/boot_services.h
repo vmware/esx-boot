@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -184,11 +184,17 @@ EXTERN int firmware_print(const char *str);
 /*
  * Serial
  */
+#define SERIAL_TYPE_DEFS                       \
+   SERIAL_TYPE_DEF(NS16550)                    \
+   SERIAL_TYPE_DEF(PL011)                      \
+   SERIAL_TYPE_DEF(TMFIFO)                     \
+   SERIAL_TYPE_DEF(AAPL_S5L)
+
 typedef enum {
-   SERIAL_NS16550,
-   SERIAL_PL011,
-   SERIAL_TMFIFO,
-   SERIAL_LAST = SERIAL_TMFIFO,
+#define SERIAL_TYPE_DEF(x) SERIAL_##x,
+   SERIAL_TYPE_DEFS
+#undef SERIAL_TYPE_DEF
+   SERIAL_COUNT,
 } serial_type_t;
 #define SERIAL_BAUDRATE_UNKNOWN 0
 EXTERN int get_serial_port(int com, serial_type_t *type,
