@@ -384,8 +384,8 @@ int secure_boot_check(void)
       return ERR_LOAD_ERROR;
    }
 #else
-   static EFI_MBEDTLS_PROTOCOL MbedTls = {
-      MBEDTLS_CURRENT_VERSION,
+   static VMW_MBEDTLS_PROTOCOL MbedTls = {
+      MBEDTLS_CURRENT_API_VERSION,
       NULL,
       mbedtls_rsa_init,
       mbedtls_rsa_pkcs1_verify,
