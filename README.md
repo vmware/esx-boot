@@ -24,11 +24,9 @@ boot API specific to VMware called ESXBootInfo.
 esx-boot is not terribly easy to try out.
 
 On an ESXi installation, the bootloader lives in the UEFI system
-partition, which ESXi itself currently is not able to mount, so it's
-not easy for an end user to replace the bootloader with a custom
-build.  You could boot into the UEFI shell and access the partition
-that way, or you could copy a partition image elsewhere, modify it
-with mtools or the like, and then copy it back.
+partition, which ESXi itself currently is not able to mount.  ESXi
+does include an mtools build in /bin/mtools, so you can use that to
+read and modify files in the system partition.
 
 On an ESXi ISO image, see the documentation below for how those work.
 If you want to modify an existing ISO, you'll need a tool that can
@@ -72,7 +70,8 @@ The main bootloader module is called mboot. The mboot module is responsible for:
     3. Verifying the cryptographic signatures on the early modules for Secure Boot purposes.
     4. Setting up system information (Multiboot or ESXBootInfo) structures and passing them to the kernel
     5. Preparing the firmware for kernel hand-off.
-    6. Handing off to the kernel. 
+    6. Exiting from firmware (on UEFI, ExitBootServices).
+    7. Jumping to the kernel. 
 
 Depending on how you boot ESXi, one or more other esx-boot modules may run prior to mboot.
 
@@ -125,8 +124,8 @@ for details.
 ### A note on UEFI Secure Boot
 
 This open source release of esx-boot includes machinery for signing
-the generated binaries for UEFI Secure Boot purposes.  Two non-secret
-test certificates are provided in the package as a sample.  Read the
+the generated binaries for UEFI Secure Boot purposes.  A non-secret
+test certificate is provided in the package as a sample.  Read the
 source code and Makefiles if you would like to see how to sign the
 binaries you create with your own certificate(s).
 
@@ -143,12 +142,14 @@ branch esx-boot even when an older ESXi release needs a bugfix; we
 simply pull in the newest stable version from the main branch.  The
 one exception since we created this github repository is 6.7p01 on the
 vsphere67 branch, which cherry-picked a couple of small fixes from
-main.
+main.  Another oddity is that 7.0.1a is an *older* version that 7.0.1;
+the 7.0.1a patch release of ESXi temporarily moved back to an older
+bootloader to work around an installer issue.
 
 If you are interested in versions of esx-boot that have been used in
-older ESXi releases, they are available on VMware's ESXi Open Source
-Disclosure Package ISO images, downloadable from
-http://www.vmware.com.
+ESXi releases prior to the start of this repository, they are
+available on VMware's ESXi Open Source Disclosure Package ISO images,
+downloadable from http://www.vmware.com.
 
 ## Contributing
 
