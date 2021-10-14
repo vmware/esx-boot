@@ -171,8 +171,8 @@ int tpm_extend_module(const char *filename,
    const char *basename;
    const char *ext;
    size_t normalizedLen;
-   uint32_t pcrIndex = 0;  // mollify older gcc
-   uint32_t eventType = 0; // ditto
+   uint32_t pcrIndex;
+   uint32_t eventType;
    tpm_event_t event;
 
    if (!useTpm) {
@@ -234,21 +234,20 @@ int tpm_extend_module(const char *filename,
          eventType = module->eventType;
 
          module->measured = true;
-         break;
+         goto done;
       }
       module++;
    }
 
-   if (module->name == NULL) {
-      if (ext != NULL && strcmp(ext, "gz") == 0) {
-         pcrIndex = VARIABLE_DATA_PCR;
-         eventType = TPM_VMK_EVENT_BOOT_OPT;
-      } else {
-         pcrIndex = STATIC_DATA_PCR;
-         eventType = TPM_VMK_EVENT_MOD;
-      }
+   if (ext != NULL && strcmp(ext, "gz") == 0) {
+      pcrIndex = VARIABLE_DATA_PCR;
+      eventType = TPM_VMK_EVENT_BOOT_OPT;
+   } else {
+      pcrIndex = STATIC_DATA_PCR;
+      eventType = TPM_VMK_EVENT_MOD;
    }
 
+ done:
    event.pcrIndex = pcrIndex;
    event.data = (uint8_t *)addr;
    event.dataSize = (uint32_t)size;
