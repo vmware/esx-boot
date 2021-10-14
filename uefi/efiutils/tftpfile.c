@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -30,7 +30,23 @@
 /*
  * Standard DHCPv4 options
  *
- * Option 54: Server Identifier
+ * Option 0: Pad Option
+ *
+ * "The pad option can be used to cause subsequent fields to align on word
+ * boundaries.  The code for the pad option is 0, and its length is 1 octet."
+ */
+#define OPT_PAD 0
+
+/*
+ * Option 255: End Option
+ *
+ * "The end option marks the end of valid information in the vendor field.
+ * Subsequent octets should be filled with pad options.  The code for the end
+ * option is 255, and its length is 1 octet."
+ */
+#define OPT_END 255
+
+/* Option 54: Server Identifier
  *
  * "DHCP clients use the contents of the 'server identifier' field as the
  * destination address for any DHCP messages unicast to the DHCP
@@ -198,13 +214,13 @@ static EFI_STATUS get_pxe_base_code_packet(EFI_PXE_BASE_CODE *Pxe,
  *
  * Parameters
  *      IN Packet:    pointer to a PXE BC packet
- *      OUT ServerIP: the IPv4 address of the DHCP server
+ *      OUT ServerIP: the IPv4 address of the DHCP server; 0.0.0.0 on error.
  *
  * Results
- *      The IPv4 address of the DHCP server, or 0.0.0.0 if not set.
+ *      EFI_SUCCESS, or an UEFI error status.
  *----------------------------------------------------------------------------*/
-static void get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
-                             EFI_IP_ADDRESS *ServerIp)
+static EFI_STATUS get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
+                                   EFI_IP_ADDRESS *ServerIp)
 {
    const uint8_t *p;
    const uint8_t *optEnd;
@@ -215,6 +231,14 @@ static void get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
 
    while (p < optEnd) {
       optCode = *p++;
+
+      if (optCode == OPT_PAD) {
+         continue;
+      }
+      if (optCode == OPT_END) {
+         break;
+      }
+
       optLen = *p++;
 
       // Protect from bogus/malicious length in DHCP option packets
@@ -224,13 +248,14 @@ static void get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
           optLen == sizeof(ServerIp->v4)) {
 
          memcpy(ServerIp, p, optLen);
-         return;
+         return EFI_SUCCESS;
       }
 
       p += optLen;
    }
 
    memset(ServerIp, 0, sizeof(ServerIp));
+   return EFI_NOT_FOUND;
 }
 
 
@@ -298,7 +323,10 @@ static EFI_STATUS get_pxe_info(EFI_PXE_BASE_CODE **Pxe,
           ServerIp->v4.Addr[1] == 0 &&
           ServerIp->v4.Addr[2] == 0 &&
           ServerIp->v4.Addr[3] == 0) {
-         get_ipv4_dhcp_ip(Packet, ServerIp);
+         Status = get_ipv4_dhcp_ip(Packet, ServerIp);
+         if (EFI_ERROR(Status)) {
+            return Status;
+         }
       }
 
       if (memcmp(&lastServerIp, ServerIp, sizeof(ServerIp)) != 0) {

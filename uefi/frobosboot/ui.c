@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -41,10 +41,11 @@ static void print_current_page(void)
 
    st->ConOut->ClearScreen(st->ConOut);
    st->ConOut->SetCursorPosition(st->ConOut, 0, 0);
-   efi_log(LOG_INFO, "%s", header);
+   firmware_print(header);
    for (i = 0; i < num_pagetest; i++) {
       if (pos < num_test) {
-         efi_log(LOG_INFO, "%s\n", test_list[pos]);
+         firmware_print(test_list[pos]);
+         firmware_print("\n");
          pos++;
       } else {
          break;
@@ -102,7 +103,7 @@ uint32_t wait_for_bootoption(void)
 
     do {
        if (kbd_waitkey_timeout(&key, 3) != ERR_SUCCESS) {
-          efi_log(LOG_INFO, "Keyboard error\n");
+          firmware_print("Keyboard error");
        } else {
           if (!wait && key.sym != KEYSYM_NONE) {
              wait = 1;
@@ -151,27 +152,6 @@ uint32_t wait_for_bootoption(void)
     return bootoption;
 }
 
-/*-- text_log ------------------------------------------------------------------
- *
- *      Routine to be called in order to log text message from UEFI layer.
- *
- * Parameters
- *      IN level: syslog message priority
- *      IN msg:   the message to be logged
- *      IN ...:   arguments list for the message format
- *----------------------------------------------------------------------------*/
-static void text_log(UNUSED_PARAM(int level), const char *msg, ...)
-{
-   char buffer[EFI_MESSAGE_BUFLEN];
-   va_list ap;
-
-   va_start(ap, msg);
-   vsnprintf(buffer, EFI_MESSAGE_BUFLEN, msg, ap);
-   va_end(ap);
-
-   firmware_print(buffer);
-}
-
 /*-- setup_display -------------------------------------------------------------
  *
  *      Prepare for text mode display and print the current page of test list.
@@ -183,9 +163,7 @@ int setup_display(void)
 
    Status = st->ConOut->SetMode(st->ConOut, 0);
 
-   if (!EFI_ERROR(Status)) {
-      set_firmware_log_callback(text_log);
-   } else {
+   if (EFI_ERROR(Status)) {
       return error_efi_to_generic(Status);
    }
 

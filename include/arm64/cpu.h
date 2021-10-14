@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,6 +14,10 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+#define DAIF_F                            (1 << 0)
+#define DAIF_I                            (1 << 1)
+#define DAIF_A                            (1 << 2)
+
 #define SCTLR_MMU                         ((uint64_t)1 << 0)
 #define TCR_ELx_TG0_SHIFT                 (14)
 #define TCR_ELx_TG0_MASK                  (3UL)
@@ -25,7 +29,13 @@
 #define TCR_ELx_TnSZ_MAX_WITH_PML3_LOOKUP 33
 #define TCR_ELx_TnSZ_MIN_WITH_PML2_LOOKUP 34
 #define TCR_ELx_TnSZ_MAX_WITH_PML2_LOOKUP 39
-
+#define HCR_E2H                           ((uint64_t)1 << 34)
+#define MMFR1_VH_MASK                     (0xF00)
+#define MMFR1_VH_NOT_PRESENT              (0)
+#define PAR_EL1_ATTRS_SHIFT               (56)
+#define PAR_EL1_ATTRS_MASK                (0xFF)
+#define PAR_EL1_FLAGS_SHIFT               (0)
+#define PAR_EL1_FLAGS_MASK                (0xFFF)
 
 /*
  * Cache Type Register (CTR) line sizes, see D7.2.21 [ARMv8-ARM].
@@ -47,13 +57,12 @@
  */
 static INLINE void CLI(void)
 {
-   __asm__ __volatile__ ("msr daifset, #2");
-
+   __asm__ __volatile__ ("msr daifset, %0" :: "i" (DAIF_A | DAIF_I | DAIF_F));
 }
 
 static INLINE void STI(void)
 {
-   __asm__ __volatile__ ("msr daifclr, #2");
+   __asm__ __volatile__ ("msr daifclr, %0" :: "i" (DAIF_A | DAIF_I | DAIF_F));
 }
 
 static INLINE void HLT(void)
@@ -217,6 +226,44 @@ static INLINE void tlbi_all(void)
    ISB();
 }
 
+static INLINE uint64_t xlate_va_2_par(uintptr_t va)
+{
+   uint64_t par;
+
+   CLI();
+
+   if (el_is_hyp()) {
+      __asm__ volatile("at s1e2r, %0" : : "r" (va));
+   } else {
+      __asm__ volatile("at s1e1r, %0" : : "r" (va));
+   }
+
+   ISB();
+
+   MRS(par, par_el1);
+
+   /*
+    * On At least one system (X-Gene) we've seen invalid PAR_EL1
+    * contents unless there was an ISB() following the read.
+    */
+   ISB();
+   STI();
+
+   return par;
+}
+
+static INLINE uint64_t xlate_va_2_flags(uintptr_t va)
+{
+   return (xlate_va_2_par(va) >> PAR_EL1_FLAGS_SHIFT) &
+      PAR_EL1_FLAGS_MASK;
+}
+
+static INLINE uint64_t xlate_va_2_attrs(uintptr_t va)
+{
+   return (xlate_va_2_par(va) >> PAR_EL1_ATTRS_SHIFT) &
+      PAR_EL1_ATTRS_MASK;
+}
+
 static INLINE void set_page_table_reg(uintptr_t *reg)
 {
    DSB();
@@ -373,6 +420,53 @@ static INLINE unsigned mmu_max_entries(int level)
    }
 
    return 1 << bits;
+}
+
+static INLINE uint64_t get_mmfr1(void)
+{
+   uint64_t mmfr1;
+
+   MRS(mmfr1, id_aa64mmfr1_el1);
+   return mmfr1;
+}
+
+static INLINE bool vhe_supported(void)
+{
+   uint64_t mmfr1 = get_mmfr1();
+
+   if (!el_is_hyp()) {
+      return false;
+   }
+
+   if ((mmfr1 & MMFR1_VH_MASK) == MMFR1_VH_NOT_PRESENT) {
+      return false;
+   }
+
+   return true;
+}
+
+static INLINE uint64_t get_hcr(void)
+{
+   uint64_t hcr;
+
+   MRS(hcr, hcr_el2);
+   return hcr;
+}
+
+static INLINE bool vhe_enabled(void)
+{
+   uint64_t hcr;
+
+   if (!el_is_hyp()) {
+      return false;
+   }
+
+   hcr = get_hcr();
+   if ((hcr & HCR_E2H) != 0) {
+      return true;
+   }
+
+   return false;
 }
 
 static INLINE bool mmu_supported_configuration(void)

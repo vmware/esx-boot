@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2017,2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -49,11 +49,10 @@ else
    BASENAME := mboot-$(EKEY)
    CFLAGS   += -D$(EKEY) -DSECURE_BOOT
    INC      += $(UEFIINC) $(CRYPTOINC)
+   LIBS     += $(CRYPTOLIB)
 
    ifeq ($(CRYPTO_MODULE), 1)
       CFLAGS += -DCRYPTO_MODULE
-   else
-      LIBS   += $(CRYPTOLIB)
    endif
 endif
 

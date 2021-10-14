@@ -1,7 +1,7 @@
 #! /usr/bin/python
 
 #*******************************************************************************
-# Copyright (c) 2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -186,6 +186,7 @@ def process_key(output, key):
       %(exponentStart)s, %(exponentLength)s,
       MBEDTLS_MD_%(hash)s,
       false,
+      false,
       { 0 }
    },
 """ % args)
@@ -232,6 +233,7 @@ RawRSACert certs[] = {
       0, 0,
       0, 0,
       MBEDTLS_MD_NONE,
+      false,
       false,
       { 0 }
    }

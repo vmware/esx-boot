@@ -104,6 +104,7 @@ void failure(const char *msg)
    unsigned size = 0;
 
    if (msg != NULL) {
+      Log(LOG_CRIT, "Crypto module failure: %s", msg);
       ascii_to_ucs2(msg, &Msg);
    }
    if (Msg != NULL) {
@@ -120,6 +121,9 @@ void failure(const char *msg)
  *----------------------------------------------------------------------------*/
 void __stack_chk_fail(void)
 {
+   int dummy;
+   Log(LOG_EMERG, "Fatal error: Stack smash detected (sp=%p ra=%p)",
+       &dummy, __builtin_return_address(0));
    failure("Fatal error: Stack smash detected");
 }
 
@@ -144,6 +148,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Handle, EFI_SYSTEM_TABLE *SystemTable)
       return Status;
    }
    mem_init(Image->ImageDataType);
+
+#if DEBUG
+   log_init(true);
+   serial_log_init(DEFAULT_SERIAL_COM, DEFAULT_SERIAL_BAUDRATE);
+#endif
 
    self_test();
    integrity_test();

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -172,5 +172,30 @@ int get_fdt(void **fdt_start)
    }
 
    *fdt_start = fdt;
+   return ERR_SUCCESS;
+}
+
+/*-- get_tcg2_final_events -----------------------------------------------------
+ *
+ *      Get the TCG2 final events table.
+ *
+ * Parameters
+ *      OUT final_events_start: pointer to the final events table.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int get_tcg2_final_events(void **final_events_start)
+{
+   EFI_GUID guid = EFI_TCG2_FINAL_EVENTS_TABLE_GUID;
+   void *table;
+   EFI_STATUS Status;
+
+   Status = efi_get_system_config_table(&guid, &table);
+   if (Status != EFI_SUCCESS) {
+      return error_efi_to_generic(Status);
+   }
+
+   *final_events_start = table;
    return ERR_SUCCESS;
 }

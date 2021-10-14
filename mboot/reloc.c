@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2014-2016,2018,2020 VMware, Inc. All rights reserved.
+ * Copyright (c) 2008-2012,2014-2016,2018,2020-2021 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -85,7 +86,7 @@
  *      - Allocate contiguous run-time memory for the 'm' objects (modules)
  *      - Allocate whatever run-time memory for the 's' objects (system info)
  *
- *   3. Blacklist bootloader's memory
+ *   4. Blacklist bootloader's memory
  *      At this point, system memory and hidden memory have been blacklisted.
  *      Moreover, we are done allocating run-time memory. Therefore, only two
  *      kinds of memory remain available in the allocator: bootloader's memory
@@ -94,21 +95,21 @@
  *
  * runtime_addr()
  *
- *   4. Dynamically link run-time objects
+ *   5. Dynamically link run-time objects
  *      Run-time objects are often complex structures that contains internal
  *      pointers referring to other run-time objects. These pointers must be
  *      updated with their run-time value using the runtime_addr() function.
  *
  * install_trampoline()
  *
- *   5. Order relocations
+ *   6. Order relocations
  *      Ordering relocations with reloc_order() is necessary to make sure that
  *      no relocation would overwrite the source of a later one. Sometimes,
  *      cyclic dependencies prevent from finding a safe relocation order. In
  *      this case, the object that is causing the cyclic dependency is moved to
  *      a place it will never overwrite another object: into safe memory.
  *
- *   6. Install the trampoline
+ *   7. Install the trampoline
  *      The trampoline is relocated into safe memory with install_trampoline()
  *      to ensure it will not overwrite itself later when processing the runtime
  *      objects relocations.
@@ -356,7 +357,7 @@ static int set_runtime_addr(reloc_t *objs, size_t count,
  *      Check whether the i-th relocation in the given relocation table has at
  *      least one dependency. The first seek_offset entries are ignored.
  *
- *      Rule: a relocation depends on anoter one if moving the first relocation
+ *      Rule: a relocation depends on another one if moving the first relocation
  *            from its source to its destination would overwrite the source of
  *            the second relocation.
  *
@@ -494,7 +495,7 @@ static int break_reloc_deadlock(reloc_t *rel)
  *      Main loop:
  *        2. For each unresolved relocation (i.e. any entry in the relocation
  *           table which is located at/after the resolved offset), if the entry
- *           does not depend on any other unresolved relocation, it is moved at
+ *           does not depend on any other unresolved relocation, it is moved to
  *           the resolved offset and we increment the resolved offset.
  *        3. If at least one relocation has been resolved:
  *            - if the resolved offset has been incremented up to the total
@@ -668,6 +669,19 @@ static int blacklist_bootloader_mem(UNUSED_PARAM(e820_range_t *mmap),
 #if defined(__COM32__)
    status = blacklist_runtime_mem((run_addr_t)PTR_TO_UINT(__executable_start),
                                   _end - __executable_start);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Loader memory reservation error.\n");
+      return status;
+   }
+   /*
+    * PR 2770265: Blacklist the stack.  Unfortunately with COM32 we have to
+    * guess how large the stack area is.  mboot is written in a style that
+    * doesn't put large objects on the stack and uses little or no recursion,
+    * so protecting 64KB on each side of the current stack pointer should be
+    * plenty.
+    */
+   status = blacklist_runtime_mem((run_addr_t)PTR_TO_UINT(&status) - 0x10000,
+                                  0x20000);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Loader memory reservation error.\n");
       return status;

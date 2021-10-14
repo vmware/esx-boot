@@ -20,6 +20,7 @@
 #undef MAX
 
 #include <Uefi.h>
+#include <Protocol/RuntimeWatchdog.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/LoadFile.h>

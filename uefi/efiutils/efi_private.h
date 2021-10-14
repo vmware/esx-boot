@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2018,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015-2018,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -123,7 +123,12 @@ EFI_STATUS uga_init(resolution_t **res, unsigned int *n);
  */
 EFI_STATUS tcg2_get_event_log(const uint8_t **address, uint32_t *size,
                               bool *truncated);
-void tcg2_init(void);
+EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex, const uint8_t *data,
+                                 uint64_t dataSize, uint32_t eventType,
+                                 const uint8_t *event, uint64_t eventSize);
+EFI_STATUS tcg2_submit_command(uint8_t *input, uint32_t inputSize,
+                               uint8_t *output, uint32_t outputSize);
+bool tcg2_init(void);
 
 /*
  * net.c

@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2016,2018-2019 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2016,2018-2019,2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -10,7 +10,14 @@
 TOPDIR       := ..
 include common.mk
 
-SRC         := alloc.c       \
+#
+# 0log.c must precede log.c.  Otherwise the list is in alphabetical
+# order just for neatness.
+#
+SRC         := \
+	       0log.c        \
+               acpi.c        \
+               alloc.c       \
                e820.c        \
                error.c       \
                fb.c          \
@@ -23,12 +30,11 @@ SRC         := alloc.c       \
                net.c         \
                parse.c       \
                serial.c      \
+               smbios.c      \
                sort.c        \
                string.c      \
                video.c       \
                volume.c      \
-               smbios.c      \
-               acpi.c
 
 BASENAME    := boot
 TARGETTYPE  := lib

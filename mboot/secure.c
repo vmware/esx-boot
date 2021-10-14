@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015,2017-2018,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015,2017-2018,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -75,6 +75,19 @@
 #define V1_KEYID_LEN 16
 
 static VMW_MBEDTLS_PROTOCOL *mbedtls = NULL;
+
+static VMW_MBEDTLS_PROTOCOL InternalMbedTls = {
+   MBEDTLS_CURRENT_API_VERSION,
+   "Internal crypto suite",
+   mbedtls_rsa_init,
+   mbedtls_rsa_pkcs1_verify,
+   mbedtls_mpi_lset,
+   mbedtls_mpi_read_binary,
+   mbedtls_mpi_read_string,
+   mbedtls_sha256_ret,
+   mbedtls_sha512_ret,
+   /* mbedtls_hmac_ret wrapper; not used */ NULL,
+};
 
 typedef struct {
    const char *name;
@@ -316,6 +329,17 @@ static bool secure_boot_check_sig(uint32_t schema,
       return false;
    }
 
+   if (!cert->measured && boot.tpm_measure) {
+      errcode = tpm_extend_signer(cert->certData, cert->certLength);
+      if (errcode != ERR_SUCCESS) {
+         Log(LOG_ERR, "Failed to log certificate %s: %s", cert->keyid,
+             error_str[errcode]);
+         return false;
+      } else {
+         cert->measured = TRUE;
+      }
+   }
+
    switch (cert->digest) {
    case MBEDTLS_MD_SHA256:
       mbedtls->Sha256Ret(data, dataLen, md, 0);
@@ -352,7 +376,10 @@ static bool secure_boot_check_sig(uint32_t schema,
  *      their signatures.
  *
  *      Logging strategy: LOG_DEBUG for non-error messages.  LOG_WARNING for
- *      detail about failures.  LOG_CRIT for final failure (with module name).
+ *      detail about failures.  LOG_CRIT for security violation.
+ *
+ * Parameters
+ *      IN crypto_module: use external crypto module
  *
  * Results
  *      ERR_SUCCESS: signatures are valid
@@ -360,7 +387,7 @@ static bool secure_boot_check_sig(uint32_t schema,
  *      ERR_SECURITY_VIOLATION: signature validation failed
  *      ERR_LOAD_ERROR: crypto not available
  *----------------------------------------------------------------------------*/
-int secure_boot_check(void)
+int secure_boot_check(bool crypto_module)
 {
    int status;
    uint32_t schema0 = 0;
@@ -368,36 +395,28 @@ int secure_boot_check(void)
    unsigned errors;
    NamedModule *named;
 
+   if (crypto_module) {
 #ifdef CRYPTO_MODULE
-   EFI_STATUS Status;
-   EFI_GUID MbedTlsProto = VMW_MBEDTLS_PROTOCOL_GUID;
-   Status = LocateProtocol(&MbedTlsProto, (void **)&mbedtls);
-   if (EFI_ERROR(Status)) {
-      Log(LOG_WARNING, "Error locating crypto module: %s",
-                        error_str[error_efi_to_generic(Status)]);
-      return ERR_LOAD_ERROR;
-   }
-   Log(LOG_INFO, "Located crypto module: %s", mbedtls->ModuleVersion);
-   if (mbedtls->ApiVersion != MBEDTLS_CURRENT_API_VERSION) {
-      Log(LOG_WARNING, "Incorrect crypto module API version: %u",
-          mbedtls->ApiVersion);
-      return ERR_LOAD_ERROR;
-   }
+      EFI_STATUS Status;
+      EFI_GUID MbedTlsProto = VMW_MBEDTLS_PROTOCOL_GUID;
+      Status = LocateProtocol(&MbedTlsProto, (void **)&mbedtls);
+      if (EFI_ERROR(Status)) {
+         Log(LOG_WARNING, "Error locating crypto module API: %s",
+             error_str[error_efi_to_generic(Status)]);
+         return ERR_LOAD_ERROR;
+      }
+      Log(LOG_INFO, "Located crypto module: %s", mbedtls->ModuleVersion);
+      if (mbedtls->ApiVersion != MBEDTLS_CURRENT_API_VERSION) {
+         Log(LOG_WARNING, "Incorrect crypto module API version: %u",
+             mbedtls->ApiVersion);
+         return ERR_LOAD_ERROR;
+      }
 #else
-   static VMW_MBEDTLS_PROTOCOL MbedTls = {
-      MBEDTLS_CURRENT_API_VERSION,
-      NULL,
-      mbedtls_rsa_init,
-      mbedtls_rsa_pkcs1_verify,
-      mbedtls_mpi_lset,
-      mbedtls_mpi_read_binary,
-      mbedtls_mpi_read_string,
-      mbedtls_sha256_ret,
-      mbedtls_sha512_ret,
-      /* mbedtls_hmac_ret wrapper; not used */ NULL,
-   };
-   mbedtls = &MbedTls;
+      return ERR_LOAD_ERROR;
 #endif
+   } else {
+      mbedtls = &InternalMbedTls;
+   }
 
    status = secure_boot_parse_module(boot.modules[0].addr,
                                      boot.modules[0].size,

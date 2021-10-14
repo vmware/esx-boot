@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -286,7 +286,7 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
    return error_efi_to_generic(EFI_SUCCESS);
 }
 
-/*-- efi_log_memory_map -----------------------------------------------------------
+/*-- efi_log_memory_map --------------------------------------------------------
  *
  *      Log UEFI system memory map currently saved in efi_info.
  *
@@ -306,8 +306,9 @@ void efi_log_memory_map(efi_info_t *efi_info)
       base = MMap->PhysicalStart;
       length = MMap->NumberOfPages << EFI_PAGE_SHIFT;
 
-      efi_log(LOG_INFO, "MMap[%d]: 0x%llx - 0x%llx len=%llu, type=%u, attr=0x%llx\n",
-              i, base, base + length - 1, length, MMap->Type, MMap->Attribute);
+      Log(LOG_INFO, "MMap[%zu]: "
+          "0x%"PRIx64" - 0x%"PRIx64" len=%"PRIu64", type=%u, attr=0x%"PRIx64"",
+          i, base, base + length - 1, length, MMap->Type, MMap->Attribute);
 
       MMap = NextMemoryDescriptor(MMap, efi_info->desc_size);
    }
@@ -332,7 +333,7 @@ void log_memory_map(efi_info_t *efi_info)
    size_t count;
 
    if (get_memory_map(0, &e820_mmap, &count, efi_info) != ERR_SUCCESS) {
-      efi_log(LOG_ERR, "failed to get memory map for logging\n");
+      Log(LOG_ERR, "failed to get memory map for logging");
       return;
    }
 

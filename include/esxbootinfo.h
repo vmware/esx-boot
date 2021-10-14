@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -57,9 +57,20 @@
 #define ESXBOOTINFO_FLAG_EFI_RTS          (1 << 18)  /* EFI RTS fields valid */
 #define ESXBOOTINFO_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */
 #define ESXBOOTINFO_FLAG_VIDEO_MIN        (1 << 20)  /* Video min fields valid */
+#define ESXBOOTINFO_FLAG_TPM_MEASUREMENT  (1 << 21)  /* TPM measurement field valid */
 
 #define ESXBOOTINFO_VIDEO_GRAPHIC         0          /* Linear graphics mode */
 #define ESXBOOTINFO_VIDEO_TEXT            1          /* EGA-standard text mode */
+
+/*
+ * These flags expose OS TPM measurement requests to the bootloader.
+ *
+ * The OS reports the measurement versions it supports, and the bootloader will
+ * measure the highest version it supports from that set. The actual measured
+ * version is reported through ESXBootInfo_Tpm.
+ */
+#define ESXBOOTINFO_TPM_MEASURE_NONE      0          /* No measurement */
+#define ESXBOOTINFO_TPM_MEASURE_V1        (1 << 0)   /* Mods, cmdline, certs, tag. */
 
 /*
  * ESXBootInfo_Header passed statically from kernel to bootloader.
@@ -84,6 +95,7 @@ typedef struct ESXBootInfo_Header {
    uint64_t rts_vaddr;       /* Virtual address of UEFI Runtime Services */
    uint64_t rts_size;        /* For new-style RTS. */
    uint32_t loadesx_version; /* LoadESX version supported */
+   uint32_t tpm_measure;     /* TPM: determine what bootloader measures */
 } __attribute__((packed)) ESXBootInfo_Header;
 
 /*
@@ -218,7 +230,8 @@ typedef struct ESXBootInfo_LoadESXChecks {
 } __attribute__((packed)) ESXBootInfo_LoadESXChecks;
 
 /* TPM Flags */
-#define ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED  (1<<0)
+#define ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED     (1 << 0)
+#define ESXBOOTINFO_TPM_EVENTS_MEASURED_V1      (1 << 1)
 
 typedef struct ESXBootInfo_Tpm {
    ESXBootInfo_Type type;

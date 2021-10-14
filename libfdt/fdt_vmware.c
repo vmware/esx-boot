@@ -36,19 +36,10 @@ int fdt_get_reg(void *fdt, int node, const char *prop, uintptr_t *base)
    }
 
    parent = fdt_parent_offset(fdt, node);
-   addr_cells = fdt_address_cells(fdt, node);
-   if (addr_cells < 0 && parent >= 0) {
+   if (fdt_getprop(fdt, node, "#address-cells", NULL) || parent < 0) {
+      addr_cells = fdt_address_cells(fdt, node);
+   } else {
       addr_cells = fdt_address_cells(fdt, parent);
-   }
-   if (addr_cells < 0) {
-      /*
-       * 2.3.5 #address-cells and #size-cells in v0.3 spec.
-       */
-      addr_cells = 2;
-   }
-
-   if (addr_cells != 1 && addr_cells != 2) {
-      return -FDT_ERR_BADNCELLS;
    }
 
    if (addr_cells == 1) {
@@ -57,19 +48,10 @@ int fdt_get_reg(void *fdt, int node, const char *prop, uintptr_t *base)
       *base = fdt64_to_cpu(*(uint64_t *) data);
    }
 
-   size_cells = fdt_size_cells(fdt, node);
-   if (size_cells < 0 && parent >= 0) {
+   if (fdt_getprop(fdt, node, "#size-cells", NULL) || parent < 0) {
+      size_cells = fdt_size_cells(fdt, node);
+   } else {
       size_cells = fdt_size_cells(fdt, parent);
-   }
-   if (size_cells < 0) {
-      /*
-       * 2.3.5 #address-cells and #size-cells in v0.3 spec.
-       */
-      size_cells = 1;
-   }
-
-   if (size_cells > 2) {
-      return -FDT_ERR_BADNCELLS;
    }
 
    data += addr_cells;

@@ -339,11 +339,10 @@ static void log_module_transfer_stats(unsigned int n)
  *      IN/OUT buffer:           incoming compressed buffer is replaced with
  *                               newly allocated outgoing uncompressed buffer.
  *                               Incoming buffer is freed in this routine.
- *      IN     isize:            size of incoming compressed buffer
- *      OUT    osize:            size of outgoing uncompressed buffer
+ *      IN/OUT bufsize:          incoming compressed buffer size is replaced
+ *                               with newly allocated uncompressed size.
  *      OUT    md5_compressed:   MD5 sum of compressed buffer.
  *      OUT    md5_uncompressed: MD5 sum of uncompressed buffer.
- *
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -470,6 +469,15 @@ static int load_module(unsigned int n)
          }
       } else {
          boot.is_esxbootinfo = true;
+      }
+   }
+
+   if (boot.tpm_measure) {
+      status = tpm_extend_module(filepath, addr, size);
+      if (status != ERR_SUCCESS) {
+         Log(LOG_ERR, "Failed to measure '%s' into TPM: %s", filepath,
+             error_str[status]);
+         return status;
       }
    }
 

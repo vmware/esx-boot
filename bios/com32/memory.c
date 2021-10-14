@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2018,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -284,18 +284,18 @@ static int get_e820_mmap(e820_range_t **mmap, size_t *count)
       len = E820_LENGTH(&e820[nentries]);
 
       if (desc_size < sizeof (e820_range_t)) {
-         bios_log(LOG_DEBUG, "e820[%d]: 0x%llx - 0x%llx "
-                  " len=%llu, type=%u, no attr\n",
-                  nentries, base, base + len - 1, len, e820[nentries].type);
+         Log(LOG_DEBUG, "e820[%d]: 0x%llx - 0x%llx "
+             " len=%llu, type=%u, no attr\n",
+             nentries, base, base + len - 1, len, e820[nentries].type);
 
          e820[nentries].attributes = E820_ATTR_ENABLED;
       } else {
-         bios_log(LOG_DEBUG,
-                  "e820[%d]: 0x%llx - 0x%llx len=%llu, type=%u, attr=0x%x%s\n",
-                  nentries, base, base + len - 1, len, e820[nentries].type,
-                  e820[nentries].attributes,
-                  (e820[nentries].attributes & E820_ATTR_ENABLED) ?
-                  "" : " INVALID");
+         Log(LOG_DEBUG,
+             "e820[%d]: 0x%llx - 0x%llx len=%llu, type=%u, attr=0x%x%s\n",
+             nentries, base, base + len - 1, len, e820[nentries].type,
+             e820[nentries].attributes,
+             (e820[nentries].attributes & E820_ATTR_ENABLED) ?
+             "" : " INVALID");
       }
 
       nentries++;
@@ -381,7 +381,7 @@ void log_memory_map(UNUSED_PARAM(efi_info_t *efi_info))
       free_memory_map(e820_mmap, NULL);
       log_malloc_arena();
    } else {
-      bios_log(LOG_ERR, "failed to get memory map for logging\n");
+      Log(LOG_ERR, "failed to get memory map for logging\n");
    }
 }
 

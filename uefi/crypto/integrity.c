@@ -243,20 +243,20 @@ void integrity_test(void)
    hash_image(hash);
 
    if (memcmp(hash, _expected_hash, HASH_SIZE) != 0) {
-#if DEBUG
-      /*
-       * If the hash mismatches, exit with the computed hash in ExitData,
-       * converted to a hex string.
-       */
-      unsigned i;
-      char str[HASH_SIZE * 2 + 1];
-      for (i = 0; i < HASH_SIZE; i++) {
-         snprintf(&str[2 * i], 3, "%02x", hash[i]);
-      }
-      failure(str);
-#else
       failure("Integrity hash mismatch");
-#endif
    }
+
+#if !FORCE_ZEROIZE_FAIL
    memset(hash, 0, HASH_SIZE); // FIPS: zeroize temp value
+#endif
+
+#if ZEROIZE_CHECK || FORCE_ZEROIZE_FAIL
+   for (unsigned i = 0; i < HASH_SIZE; i++) {
+      if (hash[i] != 0) {
+         failure("Zeroization error");
+         return;
+      }
+   }
+   Log(LOG_INFO, "Zeroization successful");
+#endif
 }

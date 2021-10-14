@@ -35,6 +35,8 @@ int sanitize_page_tables(void)
        get_sctlr(), get_tcr(), get_mair(), get_page_table_root());
    Log(LOG_DEBUG, "T0SZ = 0x%x Max Levels = %u\n", mmu_t0sz(),
        mmu_max_levels());
+   Log(LOG_DEBUG, "Normal map attrs = 0x%lx, flags = 0x%lx\n",
+       xlate_va_2_attrs((uintptr_t) &i), xlate_va_2_flags((uintptr_t) &i));
    Log(LOG_DEBUG, "L4 Max Entries: %u\n", mmu_max_entries(4));
    Log(LOG_DEBUG, "L3 Max Entries: %u\n", mmu_max_entries(3));
    Log(LOG_DEBUG, "L2 Max Entries: %u\n", mmu_max_entries(2));

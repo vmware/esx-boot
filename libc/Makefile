@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2011,2014,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2011,2014,2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -29,5 +29,9 @@ TARGETTYPE  := lib
 include rules.mk
 
 $(ODIR)/stack_chk.o: stack_chk.c
+	$(call printcmd,CC)
+	$(CC) $(CFLAGS) -fno-stack-protector -c -o $@ $<
+
+$(ODIR)/stack_chk2.o: stack_chk2.c
 	$(call printcmd,CC)
 	$(CC) $(CFLAGS) -fno-stack-protector -c -o $@ $<

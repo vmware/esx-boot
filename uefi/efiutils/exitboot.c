@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -545,18 +545,6 @@ int relocate_page_tables2(void)
    return ERR_SUCCESS;
 }
 #endif /* defined(only_em64t) || defined(only_arm64) */
-
-/*-- in_boot_services ----------------------------------------------------------
- *
- *      Return true if boot services are still available.
- *
- * Results
- *      true or false.
- *----------------------------------------------------------------------------*/
-bool in_boot_services(void)
-{
-   return st->BootServices != NULL;
-}
 
 /*-- exit_boot_services --------------------------------------------------------
  *

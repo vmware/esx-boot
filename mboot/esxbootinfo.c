@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -47,20 +47,22 @@ static vbe_info_t vbe;              /* VBE information */
  *
  *      ESXBootInfo uses a header similar to Multiboot. The header is located
  *      within the first ESXBOOTINFO_SEARCH bytes of the first (as in
- *      lowest-loaded) ELF segment. The ESXBootInfo header must be 64-bit aligned.
+ *      lowest-loaded) ELF segment. The ESXBootInfo header must be 64-bit
+ *      aligned.
  *
  * Parameters
  *      IN buffer: pointer to the buffer to search in
  *      IN buflen: buffer size, in bytes
  *
  * Results
- *      A pointer to the ESXBootInfo header, or NULL if the header was not found.
+ *      Pointer to the ESXBootInfo header, or NULL if the header was not found.
  *----------------------------------------------------------------------------*/
 static INLINE ESXBootInfo_Header *esxbootinfo_scan(void *buffer, size_t buflen)
 {
    ESXBootInfo_Header *mbh = buffer;
 
-   for (buflen = MIN(buflen, ESXBOOTINFO_SEARCH); buflen >= sizeof (ESXBootInfo_Header);
+   for (buflen = MIN(buflen, ESXBOOTINFO_SEARCH);
+        buflen >= sizeof (ESXBootInfo_Header);
         buflen -= ESXBOOTINFO_ALIGNMENT) {
 
       if ((mbh->magic == ESXBOOTINFO_MAGIC) &&
@@ -85,7 +87,8 @@ static void eb_mmap_sanity_check(void)
    max_base = 0;
    max_limit = 0;
    i = 0;
-   FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE, ebi_mem) {
+   FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE,
+                                     ebi_mem) {
       uint64_t base, len, limit;
       const char *msg = NULL;
 
@@ -110,7 +113,8 @@ static void eb_mmap_sanity_check(void)
    } FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DONE(eb_info, ebi_mem);
 
    if (overlap || error) {
-      FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE, ebi_mem) {
+      FOR_EACH_ESXBOOTINFO_ELMT_TYPE_DO(eb_info, ESXBOOTINFO_MEMRANGE_TYPE,
+                                        ebi_mem) {
          uint64_t base, len, limit;
 
          base = ebi_mem->startAddr;
@@ -199,7 +203,7 @@ static int eb_set_mmap_entry(uint64_t base, uint64_t len, uint32_t type)
    return ERR_SUCCESS;
 }
 
-/*-- check_esxbootinfo_kernel ----------------------------------------------------
+/*-- check_esxbootinfo_kernel --------------------------------------------------
  *
  *      Check whether the given buffer contains a valid ESXBootInfo kernel.
  *
@@ -259,7 +263,8 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
       return ERR_BAD_TYPE;
    }
 
-   if ((ESXBOOTINFO_GET_REQ_FLAGS(mbh->flags) & ~ESXBOOTINFO_FLAGS_SUPPORTED) != 0) {
+   if ((ESXBOOTINFO_GET_REQ_FLAGS(mbh->flags) &
+        ~ESXBOOTINFO_FLAGS_SUPPORTED) != 0) {
       Log(LOG_ERR, "ESXBootInfo header contains unsupported flags.\n");
       Log(LOG_ERR, "req. flags set: 0x%x (supported 0x%x) \n",
           ESXBOOTINFO_GET_REQ_FLAGS(mbh->flags),
@@ -294,6 +299,9 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
          EFI_RTS_CAP_RTS_COMPACT |
          EFI_RTS_CAP_RTS_CONTIG;
    }
+
+   boot.tpm_measure = (mbh->flags & ESXBOOTINFO_FLAG_TPM_MEASUREMENT) != 0 &&
+                      (mbh->tpm_measure & ESXBOOTINFO_TPM_MEASURE_V1) != 0;
 
    return ERR_SUCCESS;
 }
@@ -495,7 +503,7 @@ static int set_efi_info(uint64_t systab,
    return ERR_SUCCESS;
 }
 
-/*-- e820_to_esxbootinfo ---------------------------------------------------------
+/*-- e820_to_esxbootinfo -------------------------------------------------------
  *
  *      Convert a E820 memory map to the ESXBootInfo memory map format.
  *
@@ -548,7 +556,7 @@ static int e820_to_esxbootinfo(e820_range_t *e820, size_t *count)
    return ERR_SUCCESS;
 }
 
-/*-- esxbootinfo_set_runtime_pointers --------------------------------------------
+/*-- esxbootinfo_set_runtime_pointers ------------------------------------------
  *
  *      1) Convert boot.mmap from e820 format to esxbootinfo format.
  *
@@ -629,11 +637,16 @@ int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi)
 static void esxbootinfo_set_tpm(const tpm_event_log_t *log)
 {
    ESXBootInfo_Tpm *tpm = (ESXBootInfo_Tpm *)next_elmt;
+   uint32_t flags;
    int status;
 
    if (log->size == 0) {
       return;
    }
+
+   flags = 0;
+   flags |= log->truncated ? ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED : 0;
+   flags |= boot.tpm_measure ? ESXBOOTINFO_TPM_EVENTS_MEASURED_V1 : 0;
 
    status = eb_check_space(sizeof(ESXBootInfo_Tpm) + log->size);
    if (status != ERR_SUCCESS) {
@@ -642,7 +655,7 @@ static void esxbootinfo_set_tpm(const tpm_event_log_t *log)
    }
 
    tpm->type = ESXBOOTINFO_TPM_TYPE;
-   tpm->flags = log->truncated ? ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED : 0;
+   tpm->flags = flags;
    tpm->elmtSize = sizeof(ESXBootInfo_Tpm) + log->size;
    tpm->eventLogSize = log->size;
 
@@ -686,7 +699,7 @@ static int vbe_register(void)
    return ERR_SUCCESS;
 }
 
-/*-- esxbootinfo_register -------------------------------------------------------
+/*-- esxbootinfo_register -----------------------------------------------------
  *
  *      Register the objects that will need to be relocated.
  *
@@ -745,7 +758,8 @@ int esxbootinfo_register(void)
          return status;
       }
       status = add_sysinfo_object(boot.efi_info.mmap,
-                                  boot.efi_info.desc_size * boot.efi_info.num_descs,
+                                  boot.efi_info.desc_size *
+                                  boot.efi_info.num_descs,
                                   ALIGN_PAGE);
       if (status != ERR_SUCCESS) {
          return status;
@@ -762,11 +776,11 @@ int esxbootinfo_register(void)
    return ERR_SUCCESS;
 }
 
-/*-- esxbootinfo_init_vbe --------------------------------------------------------
+/*-- esxbootinfo_init_vbe ------------------------------------------------------
  *
  *      Set the kernel preferred video mode, and query the VBE information.
- *      By default, mboot discards the ESXBootInfo video info, and toggles to VGA
- *      text mode before jumping to the kernel. Mboot only provides the VBE
+ *      By default, mboot discards the ESXBootInfo video info, and toggles to
+ *      VGA text mode before jumping to the kernel. Mboot only provides the VBE
  *      information when the kernel ESXBootInfo headers specify a VBE mode to be
  *      setup.
  *
@@ -800,7 +814,8 @@ static int esxbootinfo_init_vbe(void *kbuf, size_t ksize)
        ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO) == ESXBOOTINFO_FLAG_VIDEO) &&
        (mbh->mode_type == ESXBOOTINFO_VIDEO_GRAPHIC)) {
       unsigned int min_width, min_height, min_depth;
-      if ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO_MIN) == ESXBOOTINFO_FLAG_VIDEO_MIN) {
+      if ((mbh->flags & ESXBOOTINFO_FLAG_VIDEO_MIN) ==
+          ESXBOOTINFO_FLAG_VIDEO_MIN) {
          min_width = mbh->min_width;
          min_height = mbh->min_height;
          min_depth = mbh->min_depth;
@@ -842,7 +857,7 @@ static int esxbootinfo_init_vbe(void *kbuf, size_t ksize)
    return status;
 }
 
-/*-- esxbootinfo_init ------------------------------------------------------------
+/*-- esxbootinfo_init ----------------------------------------------------------
  *
  *      Allocate the ESXBootInfo structure.
  *
@@ -878,7 +893,8 @@ int esxbootinfo_init(void)
    size_mod = sizeof(ESXBootInfo_Module) + sizeof(ESXBootInfo_ModuleRange);
 
    size_ebi  = sizeof(ESXBootInfo);
-   size_ebi += sizeof(ESXBootInfo_MemRange) * (num_e820_ranges + NUM_E820_SLACK);
+   size_ebi += sizeof(ESXBootInfo_MemRange) *
+      (num_e820_ranges + NUM_E820_SLACK);
    size_ebi += size_mod * boot.modules_nr;
    size_ebi += sizeof(ESXBootInfo_Vbe);
    if (tpm_event_log.size != 0) {

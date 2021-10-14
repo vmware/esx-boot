@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -338,13 +338,63 @@ int firmware_image_start(EFI_HANDLE ChildHandle)
       if (ExitData != NULL) {
          ucs2_to_ascii(ExitData, &exit_data, FALSE);
       }
-      Log(LOG_WARNING, "StartImage returned %s, ExitData %s",
+      Log(LOG_WARNING, "StartImage returned %s, %s",
           error_str[status], exit_data);
       sys_free(exit_data);
    }
    sys_free(ExitData);
 
    return status;
+}
+
+/*-- firmware_filepath_load --------------------------------------------------
+ *
+ *      Execute an UEFI binary (works for both application and driver).
+ *      Works only for files on disk.
+ *
+ * Parameters
+ *      IN filepath: absolute path to the file
+ *      IN options:  pointer to the command line options
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int
+firmware_filepath_load(const char *filepath, const char *options)
+{
+   CHAR16 *optbuf, *Path;
+   EFI_HANDLE Volume;
+   EFI_STATUS Status;
+
+   Status = get_boot_volume(&Volume);
+   if (EFI_ERROR(Status)) {
+      return error_efi_to_generic(Status);
+   }
+
+   Status = filepath_unix_to_efi(filepath, &Path);
+   if (EFI_ERROR(Status)) {
+      return error_efi_to_generic(Status);
+   }
+
+   if (options != NULL) {
+      options = strchr(options, ' ');
+   }
+   options = (options == NULL) ? "" : options + 1;
+
+   optbuf = NULL;
+   Status = ascii_to_ucs2(options, &optbuf);
+   if (EFI_ERROR(Status)) {
+      sys_free(Path);
+      return error_efi_to_generic(Status);
+   }
+
+   Status = image_load(Volume, Path, optbuf, (UINT32)UCS2SIZE(optbuf),
+                       NULL, NULL);
+
+   sys_free(optbuf);
+   sys_free(Path);
+
+   return error_efi_to_generic(Status);
 }
 
 /*-- firmware_file_exec --------------------------------------------------------
@@ -376,12 +426,16 @@ int firmware_file_exec(const char *filepath, const char *options)
 
    status = firmware_image_load(filepath, options, image, imgsize,
                                 &ChildHandle);
-   if (status != ERR_SUCCESS) {
-      sys_free(image);
-      return status;
+   if (status == ERR_SUCCESS) {
+      return firmware_image_start(ChildHandle);
    }
 
-   return firmware_image_start(ChildHandle);
+   /*
+    * Loading an image copied to memory failed; attempt with the file path
+    * instead.
+    */
+   sys_free(image);
+   return firmware_filepath_load(filepath, options);
 }
 
 

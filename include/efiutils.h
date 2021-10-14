@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -31,33 +31,6 @@
 #ifdef DEBUG
 void efi_assert(const char *msg, ...);
 #endif
-
-/*
- * console.c
- */
-
-/*-- efi_log -------------------------------------------------------------------
- *
- *      Log a message to the EFI native text console.  The message may or may
- *      not also be written to serial by the firmware.  If the console has been
- *      set to graphic mode (see set_display_mode), the message is not logged
- *      anywhere, not even to serial.
- *
- * Parameters
- *      IN _level_: log level
- *      IN ...:     printf-style arguments
- *
- * Results
- *      None.  Syntactically a statement, not a function.
- *----------------------------------------------------------------------------*/
-#define efi_log(_level_, ...)                                     \
-   do {                                                           \
-      if (efi_log_callback != NULL) {                             \
-         efi_log_callback((_level_), __VA_ARGS__);                \
-      }                                                           \
-   } while (0)
-
-EXTERN void (*efi_log_callback)(int level, const char *, ...);
 
 /*
  * error.c

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -19,8 +19,9 @@
  *----------------------------------------------------------------------------*/
 void __attribute__((weak,noreturn)) __stack_chk_fail(void)
 {
-   log_init(false); // in case not initialized yet
-   Log(LOG_EMERG, "Fatal error: Stack smash detected");
+   int dummy;
+   Log(LOG_EMERG, "Fatal error: Stack smash detected (sp=%p ra=%p)",
+       &dummy, __builtin_return_address(0));
    while (1) {
       HLT();
    }
@@ -31,7 +32,5 @@ void __attribute__((weak,noreturn)) __stack_chk_fail(void)
  *      In some cases, compiler-generated stack smash checking code calls this
  *      function on failure instead of __stack_chk_fail.
  *----------------------------------------------------------------------------*/
-void __attribute__((weak,noreturn)) __stack_chk_fail_local(void)
-{
-   __stack_chk_fail();
-}
+void __attribute__((weak,noreturn,alias("__stack_chk_fail")))
+   __stack_chk_fail_local(void);

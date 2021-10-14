@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2014-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2014-2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -15,18 +15,16 @@
 
 #define EFI_MESSAGE_BUFLEN   128
 
-void (*efi_log_callback)(int level, const char *, ...) = NULL;
-
 static EFI_GUID ConsoleControlProto = EFI_CONSOLE_CONTROL_PROTOCOL_GUID;
 
-/*-- efi_set_graphic_mode ------------------------------------------------------
+/*-- set_graphic_mode ----------------------------------------------------------
  *
  *      Enable graphic mode.
  *
  * Results
- *      EFI_SUCCESS, or an UEFI error status.
+ *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static EFI_STATUS efi_set_graphic_mode(void)
+int set_graphic_mode(void)
 {
    EFI_CONSOLE_CONTROL_PROTOCOL *console;
    EFI_CONSOLE_CONTROL_SCREEN_MODE current_mode;
@@ -41,7 +39,7 @@ static EFI_STATUS efi_set_graphic_mode(void)
        * this in this case).
        * Therefore, we return success here and hope for the best.
        */
-      return EFI_SUCCESS;
+      return ERR_SUCCESS;
    }
 
    console->GetMode(console, &current_mode, NULL, NULL);
@@ -49,33 +47,7 @@ static EFI_STATUS efi_set_graphic_mode(void)
       console->SetMode(console, EfiConsoleControlScreenGraphics);
    }
 
-   return EFI_SUCCESS;
-}
-
-/*-- efi_set_text_mode ---------------------------------------------------------
- *
- *      Enable text mode.
- *
- * Results
- *      EFI_SUCCESS, or an UEFI error status.
- *----------------------------------------------------------------------------*/
-static EFI_STATUS efi_set_text_mode(void)
-{
-   EFI_CONSOLE_CONTROL_PROTOCOL *console;
-   EFI_CONSOLE_CONTROL_SCREEN_MODE current_mode;
-   EFI_STATUS Status;
-
-   Status = LocateProtocol(&ConsoleControlProto, (void **)&console);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-
-   console->GetMode(console, &current_mode, NULL, NULL);
-   if (current_mode != EfiConsoleControlScreenGraphics) {
-      console->SetMode(console, EfiConsoleControlScreenText);
-   }
-
-   return EFI_SUCCESS;
+   return ERR_SUCCESS;
 }
 
 /*-- efi_print -----------------------------------------------------------------
@@ -151,28 +123,6 @@ int firmware_print(const char *str)
    return error_efi_to_generic(EFI_SUCCESS);
 }
 
-/*-- efi_log_default -----------------------------------------------------------
- *
- *      Default routine to be called in order to log a message from the UEFI
- *      layer.
- *
- * Parameters
- *      IN level: syslog message priority
- *      IN msg:   the message to be logged
- *      IN ...:   arguments list for the message format
- *----------------------------------------------------------------------------*/
-static void efi_log_default(UNUSED_PARAM(int level), const char *msg, ...)
-{
-   char buffer[EFI_MESSAGE_BUFLEN];
-   va_list ap;
-
-   va_start(ap, msg);
-   vsnprintf(buffer, EFI_MESSAGE_BUFLEN, msg, ap);
-   va_end(ap);
-
-   firmware_print(buffer);
-}
-
 /*-- efi_assert ----------------------------------------------------------------
  *
  *      Assert routine (debugging purposes)
@@ -191,55 +141,6 @@ void efi_assert(const char *msg, ...)
    vsnprintf(buffer, EFI_MESSAGE_BUFLEN, msg, ap);
    va_end(ap);
 
-   efi_log(LOG_EMERG, "%s", buffer);
+   Log(LOG_EMERG, "%s", buffer);
 }
 #endif
-
-/*-- set_firmware_log_callback -------------------------------------------------
- *
- *      Set the routine to be called in order to log a message from the UEFI
- *      layer.
- *
- * Parameters
- *      IN callback: pointer to the logging routine, or NULL to disable UEFI
- *                   logging
- *----------------------------------------------------------------------------*/
-void set_firmware_log_callback(void (*callback)(int, const char *, ...))
-{
-   efi_log_callback = callback;
-}
-
-/*-- set_display_mode ---------------------------------------------------------
- *
- *      Set the display to either firmware native text mode, or VBE graphic
- *      mode.
- *
- * Parameters
- *      IN mode: the desired mode
- *
- * Results
- *      A generic status code.
- *----------------------------------------------------------------------------*/
-int set_display_mode(display_mode_t mode)
-{
-   EFI_STATUS Status;
-
-   switch (mode) {
-      case DISPLAY_MODE_NATIVE_TEXT:
-         Status = efi_set_text_mode();
-         if (!EFI_ERROR(Status)) {
-            set_firmware_log_callback(efi_log_default);
-         }
-         break;
-      case DISPLAY_MODE_VBE:
-         Status = efi_set_graphic_mode();
-         if (!EFI_ERROR(Status) && efi_log_callback == efi_log_default) {
-            set_firmware_log_callback(NULL);
-         }
-         break;
-      default:
-         Status = EFI_INVALID_PARAMETER;
-   }
-
-   return error_efi_to_generic(Status);
-}

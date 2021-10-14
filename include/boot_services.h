@@ -64,6 +64,7 @@ EXTERN int get_acpi_rsdp(void **rsdp);
 EXTERN int get_smbios_eps(void **eps_start);
 EXTERN int get_smbios_v3_eps(void **eps_start);
 EXTERN int get_fdt(void **fdt_start);
+EXTERN int get_tcg2_final_events(void **final_events_start);
 
 /*
  * Memory allocation
@@ -157,6 +158,14 @@ EXTERN int kbd_init(void);
 /*
  * TPM
  */
+#ifdef __COM32__
+static INLINE void
+tpm_init(void)
+{}
+#else
+EXTERN void tpm_init(void);
+#endif
+
 typedef struct {
    const uint8_t *address;
    uint32_t size;
@@ -164,7 +173,8 @@ typedef struct {
 } tpm_event_log_t;
 
 #ifdef __COM32__
-static INLINE int tpm_get_event_log(tpm_event_log_t *log)
+static INLINE int
+tpm_get_event_log(tpm_event_log_t *log)
 {
    log->address = NULL;
    log->size = 0;
@@ -173,6 +183,93 @@ static INLINE int tpm_get_event_log(tpm_event_log_t *log)
 }
 #else
 EXTERN int tpm_get_event_log(tpm_event_log_t *log);
+#endif
+
+#ifdef __COM32__
+static INLINE int
+tpm_extend_module(const char *filename, const void *addr, size_t size)
+{
+   (void)filename;
+   (void)addr;
+   (void)size;
+   return ERR_SUCCESS; // No-op
+}
+#else
+EXTERN int tpm_extend_module(const char *filename, const void *addr,
+                             size_t size);
+#endif
+
+#ifdef __COM32__
+static INLINE int
+tpm_extend_signer(const unsigned char *certData, uint16_t certLength)
+{
+   (void)certData;
+   (void)certLength;
+   return ERR_SUCCESS; // No-op
+}
+#else
+EXTERN int tpm_extend_signer(const unsigned char *certData,
+                             uint16_t certLength);
+#endif
+
+#ifdef __COM32__
+static INLINE int
+tpm_extend_cmdline(const char *filename, const char *options)
+{
+   (void)filename;
+   (void)options;
+   return ERR_SUCCESS; // No-op
+}
+#else
+EXTERN int tpm_extend_cmdline(const char *filename, const char *cmdline);
+#endif
+
+#ifdef __COM32__
+static INLINE int
+tpm_extend_asset_tag(void)
+{
+   return ERR_SUCCESS; // No-op
+}
+#else
+EXTERN int tpm_extend_asset_tag(void);
+#endif
+
+/*
+ * runtime_watchdog.c
+ */
+#ifdef __COM32__
+static INLINE int
+set_runtime_watchdog(unsigned int timeout)
+{
+   (void)timeout;
+   return ERR_SUCCESS; // No-op
+}
+
+static INLINE int
+dump_runtime_watchdog(unsigned int *minTimeoutSec,
+                      unsigned int *maxTimeoutSec,
+                      int *watchdogType,
+                      unsigned int *baseAddr)
+{
+   (void)minTimeoutSec;
+   (void)maxTimeoutSec;
+   (void)watchdogType;
+   (void)baseAddr;
+   return ERR_SUCCESS; //No-op
+}
+
+static INLINE int
+init_runtime_watchdog(void)
+{
+   return ERR_SUCCESS; //No-op
+}
+#else
+EXTERN int set_runtime_watchdog(unsigned int timeout);
+EXTERN void dump_runtime_watchdog(unsigned int *minTimeoutSec,
+                                 unsigned int *maxTimeoutSec,
+                                 int *watchdogType,
+                                 unsigned int *baseAddr);
+EXTERN int init_runtime_watchdog(void);
 #endif
 
 /*
@@ -203,15 +300,10 @@ EXTERN int get_serial_port(int com, serial_type_t *type,
 /*
  * Misc
  */
-typedef enum {
-   DISPLAY_MODE_NATIVE_TEXT,
-   DISPLAY_MODE_VBE
-} display_mode_t;
-
-EXTERN int set_display_mode(display_mode_t mode);
+EXTERN int set_graphic_mode(void);
 
 EXTERN bool secure_boot_mode(void);
-EXTERN int secure_boot_check(void);
+EXTERN int secure_boot_check(bool crypto_module);
 
 EXTERN void check_efi_quirks(efi_info_t *efi_info);
 EXTERN int relocate_page_tables2(void);

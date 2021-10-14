@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2014-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2014-2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -13,20 +13,15 @@
 
 #include "com32_private.h"
 
-void (*bios_log_callback)(int level, const char *, ...) = NULL;
-
-/*-- set_display_mode ----------------------------------------------------------
+/*-- set_graphic_mode ----------------------------------------------------------
  *
- *      Set the display to either firmware native text mode, or VBE graphic
- *      mode. This function does nothing and returns successfully.
- *
- * Parameters
- *      IN mode: DISPLAY_MODE_NATIVE_TEXT or DISPLAY_MODE_VBE
+ *      Set the display to VBE graphic mode. This function does nothing and
+ *      returns successfully.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int set_display_mode(display_mode_t UNUSED_PARAM(mode))
+int set_graphic_mode(void)
 {
    return ERR_SUCCESS;
 }
@@ -68,20 +63,6 @@ int firmware_print(const char *str)
    }
 
    return ERR_SUCCESS;
-}
-
-/*-- set_firmware_log_callback -------------------------------------------------
- *
- *      Set the routine to be called in order to log a message from the COM32
- *      layer.
- *
- * Parameters
- *      IN callback: pointer to the logging routine, or NULL to disable COM32
- *                   logging
- *----------------------------------------------------------------------------*/
-void set_firmware_log_callback(void (*callback)(int, const char *, ...))
-{
-   bios_log_callback = callback;
 }
 
 /*-- get_serial_port -----------------------------------------------------------

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2015,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2015,2020-2021 VMware, Inc. All rights reserved
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -18,15 +18,6 @@
 #include "com32.h"
 
 #define CONSTRUCTOR   __attribute__((constructor))
-
-EXTERN void (*bios_log_callback)(int level, const char *, ...);
-
-#define bios_log(_level_, ...)                                     \
-   do {                                                            \
-      if (bios_log_callback != NULL) {                             \
-         bios_log_callback((_level_), __VA_ARGS__);                \
-      }                                                            \
-   } while (0)
 
 typedef struct {
    uint8_t major;

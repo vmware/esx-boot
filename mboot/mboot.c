@@ -384,7 +384,8 @@ int load_crypto_module(void)
       Log(LOG_INFO, "Loading %s", modpath);
       free(modpath);
    } else {
-      Log(LOG_CRIT, "Failed to load %s", CRYPTO_DRIVER);
+      Log(LOG_WARNING, "Failed to load %s: %s",
+          CRYPTO_DRIVER, error_str[final_status]);
    }
    return final_status;
 }
@@ -410,6 +411,9 @@ int main(int argc, char **argv)
    handoff_t *handoff;
    run_addr_t ebi;
    int status;
+#ifdef SECURE_BOOT
+   bool crypto_module = false;
+#endif
 
    status = mboot_init(argc, argv);
    if (status != ERR_SUCCESS) {
@@ -458,6 +462,8 @@ int main(int argc, char **argv)
    Log(LOG_DEBUG, "Processing CPU quirks...");
    check_cpu_quirks();
 
+   tpm_init();
+
    if (!boot.headless &&
        gui_init() != ERR_SUCCESS) {
       boot.headless = true;
@@ -494,8 +500,29 @@ int main(int argc, char **argv)
       }
    }
 
-#if defined(SECURE_BOOT) && defined(CRYPTO_MODULE)
-   load_crypto_module();
+#ifdef SECURE_BOOT
+   boot.efi_info.secure_boot = secure_boot_mode();
+   if (boot.efi_info.secure_boot) {
+      Log(LOG_INFO, "UEFI Secure Boot in progress");
+   } else {
+      Log(LOG_INFO, "UEFI Secure Boot is not enabled");
+   }
+#ifdef CRYPTO_MODULE
+   status = load_crypto_module();
+   if (status == ERR_SUCCESS) {
+      crypto_module = true;
+   } else if (boot.efi_info.secure_boot && status != ERR_NOT_FOUND) {
+      /*
+       * In secure boot mode, fail boot except for the ERR_NOT_FOUND
+       * case.  We allow internal crypto in that case to help recover
+       * from install/upgrade bug PR 2727885 failing to install the
+       * crypto module.
+       */
+      return clean(status);
+   } else {
+      Log(LOG_WARNING, "Falling back to internal crypto suite");
+   }
+#endif
 #endif
 
    status = load_boot_modules();
@@ -504,14 +531,7 @@ int main(int argc, char **argv)
    }
 
 #ifdef SECURE_BOOT
-   boot.efi_info.secure_boot = secure_boot_mode();
-   if (boot.efi_info.secure_boot) {
-      Log(LOG_INFO, "UEFI Secure Boot in progress");
-   } else {
-      Log(LOG_INFO, "UEFI Secure Boot is not enabled");
-   }
-
-   status = secure_boot_check();
+   status = secure_boot_check(crypto_module);
    if (status != ERR_SUCCESS) {
       if (status == ERR_NOT_FOUND) {
          Log(LOG_INFO, "Boot modules are not signed");
@@ -526,6 +546,21 @@ int main(int argc, char **argv)
    }
 #endif
 
+   /* Must be before boot_init, where the event log is captured. */
+   if (boot.tpm_measure) {
+      status = measure_kernel_options();
+      if (status != ERR_SUCCESS) {
+         Log(LOG_WARNING, "Failed to measure command line into TPM: %s",
+             error_str[status]);
+      }
+
+      status = tpm_extend_asset_tag();
+      if (status != ERR_SUCCESS) {
+         Log(LOG_WARNING, "Failed to measure asset tag into TPM: %s",
+             error_str[status]);
+      }
+   }
+
    Log(LOG_DEBUG, "Initializing %s standard...",
        boot.is_esxbootinfo ? "ESXBootInfo" : "Multiboot");
 
@@ -536,6 +571,7 @@ int main(int argc, char **argv)
 
    Log(LOG_INFO, "Shutting down firmware services...");
 
+   log_unsubscribe(firmware_print);
    if (firmware_shutdown(&boot.mmap, &boot.mmap_count,
                          &boot.efi_info)                 != ERR_SUCCESS
     || boot_register()                                   != ERR_SUCCESS

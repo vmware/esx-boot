@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2018,2020 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include "efi_private.h"
+#include "crc.h"
 
 /*
  * These are ordered in terms of safety and likelihood of
@@ -273,6 +274,23 @@ int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks)
    if (EFI_ERROR(Status)) {
       Log(LOG_WARNING,
           "Failed to set virtual address map for UEFI runtime services");
+   } else {
+      /*
+       * UEFI Specification v2.8 (8.4 "Virtual Memory Services") says:
+       *
+       * "Several fields of the EFI System Table must be converted from
+       *  physical pointers to virtual pointers using the ConvertPointer()
+       *  service. These fields include FirmwareVendor, RuntimeServices,
+       *  and ConfigurationTable. Because contents of both the EFI Runtime
+       *  Services Table and the EFI SystemTable are modified by this service,
+       *  the 32-bit CRC for the EFI Runtime Services Table and the EFI System
+       *  Table must be recomputed."
+       *
+       * As of Mar 2021, U-Boot's UEFI implementation does not update the
+       * CRC for the EFI SystemTable. ESXi will check the CRC.
+       */
+      st->Hdr.CRC32 = 0;
+      st->Hdr.CRC32 = crc_32(&st->Hdr, st->Hdr.HeaderSize);
    }
 
    if (!no_quirks) {

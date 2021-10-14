@@ -118,6 +118,19 @@ int append_kernel_options(const char *options)
    return ERR_SUCCESS;
 }
 
+/*-- measure_kernel_options ----------------------------------------------------
+ *
+ *      Measure the kernel command line into the TPM. This should be
+ *      called once after the command line is fully formed.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int measure_kernel_options(void)
+{
+   return tpm_extend_cmdline(boot.modules[0].filename, boot.modules[0].options);
+}
+
 /*-- find_next_mod -------------------------------------------------------------
  *
  *      Return a pointer to the next module string within the given module list.

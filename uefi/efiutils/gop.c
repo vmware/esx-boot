@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -311,8 +311,8 @@ EFI_STATUS gop_init(resolution_t **res, unsigned int *count)
       return Status;
    }
 
-   efi_log(LOG_DEBUG, "GOP framebuffer @ 0x%llx (%zu bytes)\n",
-           gop->Mode->FrameBufferBase, gop->Mode->FrameBufferSize);
+   Log(LOG_DEBUG, "GOP framebuffer @ 0x%"PRIx64" (%zu bytes)",
+       gop->Mode->FrameBufferBase, gop->Mode->FrameBufferSize);
 
    if (gop->Mode->MaxMode == 0) {
       /* GOP protocol is present, but no video mode is available */

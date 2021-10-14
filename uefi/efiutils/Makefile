@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2015-2016,2019-2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2015-2016,2019-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -26,6 +26,7 @@ SRC         := console.c    \
                httpfile.c   \
                ishttp.c     \
                image.c      \
+               inboot.c     \
                init.c       \
                keyboard.c   \
                loadfile.c   \
@@ -40,12 +41,15 @@ SRC         := console.c    \
                runtime_sparse.c \
                runtime_compact.c \
                runtime_contig.c \
+               runtime_watchdog.c\
                simplefile.c \
                systab.c     \
                tcg2.c       \
                tftpfile.c   \
                timer.c      \
                tpm.c        \
+               tpm2_nv.c    \
+               tpm2_marshal.c \
                ucs2.c       \
                ucs2a.c      \
                uga.c        \

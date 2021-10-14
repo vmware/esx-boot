@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -127,8 +127,8 @@ EFI_STATUS uga_get_fb_info(resolution_t *res, framebuffer_t *fb)
    /* The Macmini2,1 returns a totally bogus height. Fix it. */
    if (Height == 0) {
       Height = Size / BytesPerRow;
-      efi_log(LOG_WARNING, "Unable to retrieve display height, guessing %d\n",
-              Height);
+      Log(LOG_WARNING, "Unable to retrieve display height, guessing %d",
+          Height);
    }
 
    if (res != NULL) {
@@ -180,7 +180,7 @@ EFI_STATUS uga_init(resolution_t **res, unsigned int *count)
       return Status;
    }
 
-   efi_log(LOG_DEBUG, "Apple UGA framebuffer detected\n");
+   Log(LOG_DEBUG, "Apple UGA framebuffer detected");
 
    return uga_list_resolutions(res, count);
 }

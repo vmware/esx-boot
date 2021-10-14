@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -73,7 +73,6 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Handle, EFI_SYSTEM_TABLE *SystemTable)
    }
 
    acpi_init();
-   tcg2_init();
 
    retval = main(argc, argv);
    Status = error_generic_to_efi(retval);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015,2017-2018,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015,2017-2018,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -34,6 +34,10 @@ typedef struct {
     * Parsed form; valid if parsed = TRUE.
     */
    bool parsed;
+   /*
+    * Measured into the TPM once before use.
+    */
+   bool measured;
    mbedtls_rsa_context rsa;
 } RawRSACert;
 

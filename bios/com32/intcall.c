@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -23,6 +23,10 @@
 void intcall(uint8_t vector, const com32sys_t *iregs, com32sys_t *oregs)
 {
    com32sys_t tmpiregs, tmporegs;
+
+   if (!com32.in_boot_services) {
+      return;
+   }
 
    if (iregs == NULL) {
       memset(&tmpiregs, 0, sizeof (com32sys_t));
@@ -52,6 +56,10 @@ void intcall(uint8_t vector, const com32sys_t *iregs, com32sys_t *oregs)
 int intcall_check_CF(uint8_t vector, const com32sys_t *iregs, com32sys_t *oregs)
 {
    com32sys_t tmpregs;
+
+   if (!com32.in_boot_services) {
+      return ERR_NOT_READY;
+   }
 
    if (oregs == NULL) {
       oregs = &tmpregs;

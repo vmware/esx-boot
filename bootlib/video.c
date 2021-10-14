@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2014,2016,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -72,7 +72,7 @@ static int video_init(void)
       return ERR_ALREADY_STARTED;
    }
 
-   status = set_display_mode(DISPLAY_MODE_VBE);
+   status = set_graphic_mode();
    if (status != ERR_SUCCESS) {
       return status;
    }

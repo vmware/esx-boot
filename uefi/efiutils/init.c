@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -100,8 +100,8 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
    }
 
    if (EFI_ERROR(Status)) {
-      efi_log(LOG_WARNING, "Could not %s the UEFI watchdog timer.\n",
-              (Timeout == WATCHDOG_DISABLE) ? "disable" : "reset");
+      Log(LOG_WARNING, "Could not %s the UEFI watchdog timer.",
+          (Timeout == WATCHDOG_DISABLE) ? "disable" : "reset");
    }
 
    return Status;

@@ -13,13 +13,24 @@
 #include <fdt_vmware.h>
 
 /*
- * Microsoft Debug Port Table 2 (http://go.microsoft.com/fwlink/p/?LinkId=234837)
+ * Microsoft Debug Port Table 2
+ * https://docs.microsoft.com/en-us/windows-hardware/drivers/bringup/acpi-debug-port-table
  */
-#define SPCR_TYPE_PL011       0x3
-#define SPCR_TYPE_SBSA_32BIT  0xd
-#define SPCR_TYPE_SBSA        0xe
-#define SPCR_TYPE_ARM_DCC     0xf
-#define SPCR_TYPE_BCM2835     0x10
+#define SPCR_TYPE_PL011           0x3
+#define SPCR_TYPE_MSM8x60         0x4
+#define SPCR_TYPE_NVIDIA_16550    0x5
+#define SPCR_TYPE_TI_OMAP         0x6
+#define SPCR_TYPE_APM88xxxx       0x8
+#define SPCR_TYPE_MSM8974         0x9
+#define SPCR_TYPE_SAM5250         0xa
+#define SPCR_TYPE_IMX6            0xc
+#define SPCR_TYPE_SBSA_32BIT      0xd
+#define SPCR_TYPE_SBSA            0xe
+#define SPCR_TYPE_ARM_DCC         0xf
+#define SPCR_TYPE_BCM2835         0x10
+#define SPCR_TYPE_SDM845_18432    0x11
+#define SPCR_TYPE_16550_HONOR_GAS 0x12
+#define SPCR_TYPE_SDM845_7372     0x13
 
 #include "efi_private.h"
 
@@ -182,6 +193,7 @@ static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       */
    case EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_INTERFACE_TYPE_16550:
    case EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_INTERFACE_TYPE_16450:
+   case SPCR_TYPE_16550_HONOR_GAS:
       *type = SERIAL_NS16550;
       /*
        * Regs are 8-bit wide, but are likely on a 32-bit boundary.

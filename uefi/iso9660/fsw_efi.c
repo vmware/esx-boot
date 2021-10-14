@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2010-2011 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2010-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -41,6 +41,7 @@
  */
 
 #include <sys/stat.h>
+#include <bootlib.h>
 #include "fsw_efi.h"
 
 #define DEBUG_LEVEL 0
@@ -262,7 +263,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
     FSW_VOLUME_DATA     *Volume;
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_DriverBinding_Start\n");
+    Log(LOG_DEBUG, "fsw_efi_DriverBinding_Start");
 #endif
 
     // open consumed protocols
@@ -273,7 +274,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
                               ControllerHandle,
                               EFI_OPEN_PROTOCOL_GET_PROTOCOL);   // NOTE: we only want to look at the MediaId
     if (EFI_ERROR(Status)) {
-        efi_log(LOG_ERR, "OpenProtocol(BlockIo) returned %x\n", Status);
+        Log(LOG_ERR, "OpenProtocol(BlockIo) returned %zx", Status);
         return Status;
     }
 
@@ -284,7 +285,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
                               ControllerHandle,
                               EFI_OPEN_PROTOCOL_BY_DRIVER);
     if (EFI_ERROR(Status)) {
-        efi_log(LOG_ERR, "OpenProtocol(DiskIo) returned %x\n", Status);
+        Log(LOG_ERR, "OpenProtocol(DiskIo) returned %zx", Status);
         return Status;
     }
 
@@ -309,7 +310,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
                                                        &SimpleFileSystemProto, &Volume->FileSystem,
                                                        NULL);
         if (EFI_ERROR(Status))
-            efi_log(LOG_ERR, "InstallMultipleProtocolInterfaces returned %x\n", Status);
+            Log(LOG_ERR, "InstallMultipleProtocolInterfaces returned %zx", Status);
     }
 
     // on errors, close the opened protocols
@@ -347,7 +348,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Stop(IN  EFI_DRIVER_BINDING_PROTOCOL  *T
     FSW_VOLUME_DATA     *Volume;
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_DriverBinding_Stop\n");
+    Log(LOG_DEBUG, "fsw_efi_DriverBinding_Stop");
 #endif
 
     // get the installed SimpleFileSystem interface
@@ -368,11 +369,11 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Stop(IN  EFI_DRIVER_BINDING_PROTOCOL  *T
                                                      &SimpleFileSystemProto, &Volume->FileSystem,
                                                      NULL);
     if (EFI_ERROR(Status)) {
-        efi_log(LOG_ERR, "UninstallMultipleProtocolInterfaces returned %x\n", Status);
+        Log(LOG_ERR, "UninstallMultipleProtocolInterfaces returned %zx", Status);
         return Status;
     }
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_DriverBinding_Stop: protocol uninstalled successfully\n");
+    Log(LOG_DEBUG, "fsw_efi_DriverBinding_Stop: protocol uninstalled successfully");
 #endif
 
     // release private data structure
@@ -501,7 +502,7 @@ EFI_STATUS EFIAPI fsw_efi_FileSystem_OpenVolume(IN EFI_FILE_IO_INTERFACE *This,
     FSW_VOLUME_DATA     *Volume = FSW_VOLUME_FROM_FILE_SYSTEM(This);
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_FileSystem_OpenVolume\n");
+    Log(LOG_DEBUG, "fsw_efi_FileSystem_OpenVolume");
 #endif
 
     Status = fsw_efi_dnode_to_FileHandle(Volume->vol->root, Root);
@@ -538,7 +539,7 @@ EFI_STATUS EFIAPI fsw_efi_FileHandle_Close(IN EFI_FILE *This)
     FSW_FILE_DATA      *File = FSW_FILE_FROM_FILE_HANDLE(This);
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_FileHandle_Close\n");
+    Log(LOG_DEBUG, "fsw_efi_FileHandle_Close");
 #endif
 
     fsw_shandle_close(&File->shand);
@@ -735,7 +736,7 @@ EFI_STATUS fsw_efi_file_read(IN FSW_FILE_DATA *File,
     fsw_u32             buffer_size;
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_file_read %d bytes\n", *BufferSize);
+    Log(LOG_DEBUG, "fsw_efi_file_read %zd bytes", *BufferSize);
 #endif
 
     buffer_size = (fsw_u32)*BufferSize;
@@ -793,7 +794,7 @@ EFI_STATUS fsw_efi_dir_open(IN FSW_FILE_DATA *File,
     struct fsw_string   lookup_path;
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_dir_open\n");
+    Log(LOG_DEBUG, "fsw_efi_dir_open");
 #endif
 
     if (OpenMode != EFI_FILE_MODE_READ)
@@ -838,7 +839,7 @@ EFI_STATUS fsw_efi_dir_read(IN FSW_FILE_DATA *File,
     struct fsw_dnode    *dno;
 
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "fsw_efi_dir_read...\n");
+    Log(LOG_DEBUG, "fsw_efi_dir_read...");
 #endif
 
     // read the next entry
@@ -848,7 +849,7 @@ EFI_STATUS fsw_efi_dir_read(IN FSW_FILE_DATA *File,
         // end of directory
         *BufferSize = 0;
 #if DEBUG_LEVEL
-        efi_log(LOG_DBG, "...no more entries\n");
+        Log(LOG_DEBUG, "...no more entries");
 #endif
         return EFI_SUCCESS;
     }
@@ -898,14 +899,14 @@ EFI_STATUS fsw_efi_dnode_getinfo(IN FSW_FILE_DATA *File,
 
     if (efi_guid_cmp(InformationType, &GenericFileInfoId) == 0) {
 #if DEBUG_LEVEL
-        efi_log(LOG_DBG, "fsw_efi_dnode_getinfo: FILE_INFO\n");
+        Log(LOG_DEBUG, "fsw_efi_dnode_getinfo: FILE_INFO");
 #endif
 
         Status = fsw_efi_dnode_fill_FileInfo(Volume, File->shand.dnode, BufferSize, Buffer);
 
     } else if (efi_guid_cmp(InformationType, &FileSystemInfoId) == 0) {
 #if DEBUG_LEVEL
-        efi_log(LOG_DBG, "fsw_efi_dnode_getinfo: FILE_SYSTEM_INFO\n");
+        Log(LOG_DEBUG, "fsw_efi_dnode_getinfo: FILE_SYSTEM_INFO");
 #endif
 
         // check buffer size
@@ -936,7 +937,7 @@ EFI_STATUS fsw_efi_dnode_getinfo(IN FSW_FILE_DATA *File,
 
     } else if (efi_guid_cmp(InformationType, &FileSystemVolumeLabelInfoId) == 0) {
 #if DEBUG_LEVEL
-        efi_log(LOG_DBG, "fsw_efi_dnode_getinfo: FILE_SYSTEM_VOLUME_LABEL\n");
+        Log(LOG_DEBUG, "fsw_efi_dnode_getinfo: FILE_SYSTEM_VOLUME_LABEL");
 #endif
 
         // check buffer size
@@ -1019,7 +1020,7 @@ EFI_STATUS fsw_efi_dnode_fill_FileInfo(IN FSW_VOLUME_DATA *Volume,
         // TODO: wind back the directory in this case
 
 #if DEBUG_LEVEL
-        efi_log(LOG_DBG, "...BUFFER TOO SMALL\n");
+        Log(LOG_DEBUG, "...BUFFER TOO SMALL");
 #endif
         *BufferSize = RequiredSize;
         return EFI_BUFFER_TOO_SMALL;
@@ -1048,7 +1049,7 @@ EFI_STATUS fsw_efi_dnode_fill_FileInfo(IN FSW_VOLUME_DATA *Volume,
     // prepare for return
     *BufferSize = RequiredSize;
 #if DEBUG_LEVEL
-    efi_log(LOG_DBG, "...returning\n");
+    Log(LOG_DEBUG, "...returning");
 #endif
     return EFI_SUCCESS;
 }

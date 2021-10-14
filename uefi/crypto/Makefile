@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2015,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2015,2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -16,7 +16,12 @@ BASENAME    := crypto
 TARGETTYPE  := bsdrv
 INC         := $(UEFIINC)
 INC         += $(CRYPTOINC)
-LIBS        := $(FIRMLIB) $(LIBC) $(CRYPTOLIB) $(LIBGCC)
+LIBS        := $(FIRMLIB) $(LIBC) $(CRYPTOLIB) $(LIBGCC) $(BOOTLIB)
+
+ifeq ($(DEBUG),1)
+LIBS        += $(LIBUART) $(FDTLIB)
+endif
+CDEF        += $(CRYPTOTEST)
 
 # Hint: Adjust RELOC_COPY_SIZE upward if elf2efi fails
 RELOC_COPY_SIZE := 2500

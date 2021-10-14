@@ -157,6 +157,7 @@ typedef struct {
    bool no_quirks;            /* Do not work around platform quirks */
    bool no_rts;               /* Disable UEFI runtime services support */
    bool serial;               /* Is the serial log enabled? */
+   bool tpm_measure;          /* Should TPM measurements be made? */
    uint32_t timeout;          /* Autoboot timeout in units of seconds */
 } boot_info_t;
 
@@ -212,6 +213,7 @@ void unload_boot_modules(void);
  * config.c
  */
 int append_kernel_options(const char *options);
+int measure_kernel_options(void);
 int parse_config(const char *filename);
 void config_clear(void);
 

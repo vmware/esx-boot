@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2015-2016 VMware, Inc.  All rights reserved.
+# Copyright (c) 2015-2016,2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -15,7 +15,7 @@ SUBDIRS += test_rts
 endif
 
 ifneq ($(IARCH),x86)
-SUBDIRS += test_fdt
+SUBDIRS += test_fdt test_runtimewd
 endif
 
 # Building rules

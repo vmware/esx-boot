@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2014,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -227,13 +227,12 @@ void log_unsubscribe(log_callback_t callback)
 
 /*-- log_init ------------------------------------------------------------------
  *
- *      Initialize the logging system. Logs get redirected to the firmware by
- *      default.
+ *      Initialize the logging system, initially directing logs to firmware_print.
+ *      Until log_init is called, Log() is a no-op.
  *
  *      It is harmless to call this function repeatedly to change the verbosity
  *      level at which firmware_print is registered, but do not call it after
- *      firmware_print is no longer safe or after the firmware log callback
- *      should no longer be Log().
+ *      firmware_print is no longer safe.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -246,8 +245,6 @@ int log_init(bool verbose)
    if (status != ERR_SUCCESS) {
       return status;
    }
-
-   set_firmware_log_callback(Log);
 
    return ERR_SUCCESS;
 }

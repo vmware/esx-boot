@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -8,6 +8,7 @@
  */
 #include <stdbool.h>
 #include <efiutils.h>
+#include <bootlib.h>
 
 /*-- secure_boot_mode ----------------------------------------------------------
  *
@@ -38,7 +39,7 @@ bool secure_boot_mode(void)
    Status = rs->GetVariable(SetupModeName, &EfiGlobalVariable,
                             NULL, &DataSize, &SetupMode);
    if (Status != EFI_SUCCESS || DataSize != sizeof(SetupMode)) {
-      efi_log(LOG_DEBUG, "Failed to read SetupMode variable: 0x%x", Status);
+      Log(LOG_DEBUG, "Failed to read SetupMode variable: 0x%zx", Status);
       return false;
    }
 
@@ -46,12 +47,12 @@ bool secure_boot_mode(void)
    Status = rs->GetVariable(SecureBootName, &EfiGlobalVariable,
                             NULL, &DataSize, &SecureBoot);
    if (Status != EFI_SUCCESS || DataSize != sizeof(SecureBoot)) {
-      efi_log(LOG_DEBUG, "Failed to read SecureBoot variable: 0x%x", Status);
+      Log(LOG_DEBUG, "Failed to read SecureBoot variable: 0x%zx", Status);
       return false;
    }
 
-   efi_log(LOG_DEBUG, "SetupMode = %u, SecureBoot = %u\n",
-           SetupMode, SecureBoot);
+   Log(LOG_DEBUG, "SetupMode = %u, SecureBoot = %u",
+       SetupMode, SecureBoot);
 
    return !SetupMode && SecureBoot;
 }

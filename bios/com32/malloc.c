@@ -1,3 +1,8 @@
+/*******************************************************************************
+ * Portions Copyright (c) 2018,2021 VMware, Inc.  All rights reserved.
+ * SPDX-License-Identifier: GPL-2.0
+ ******************************************************************************/
+
 /*------------------------------------------------------------------------------
  *   Copyright 2004-2009 H. Peter Anvin - All Rights Reserved
  *   Portions Copyright 2009 Intel Corporation; author: H. Peter Anvin
@@ -230,8 +235,8 @@ void *sys_malloc(size_t size)
 
    /* Print caller's instruction pointer and memory arena due to malloc fail */
    __asm__("movl %%ebp,%0" : "=r" (frame));
-   bios_log(LOG_ERR, "Requested malloc size %zu failed, caller offset 0x%zx\n",
-            size, frame->rip - (uintptr_t)_start);
+   Log(LOG_ERR, "Requested malloc size %zu failed, caller offset 0x%zx",
+       size, frame->rip - (uintptr_t)_start);
    log_malloc_arena();
 
    return NULL;
@@ -475,15 +480,15 @@ void log_malloc_arena(void)
 {
    struct free_arena_header *nah;
 
-   bios_log(LOG_DEBUG, "COM32 sysargs %u, memsize (%s) %u\n",
-      __com32.cs_sysargs,
-      __com32.cs_sysargs >= 7 ?  "valid" : "invalid",
-      __com32.cs_memsize);
-   bios_log(LOG_DEBUG, "Malloc arena:\n");
+   Log(LOG_DEBUG, "COM32 sysargs %u, memsize (%s) %u",
+       __com32.cs_sysargs,
+       __com32.cs_sysargs >= 7 ?  "valid" : "invalid",
+       __com32.cs_memsize);
+   Log(LOG_DEBUG, "Malloc arena:");
    for (nah = __malloc_head.a.next; nah->a.type != ARENA_TYPE_HEAD;
         nah = nah->a.next) {
-      bios_log(LOG_DEBUG, "  (%s) address %p, size %zu\n",
-         nah->a.type == ARENA_TYPE_FREE ? "free" : "used",
-         nah, nah->a.size);
+      Log(LOG_DEBUG, "  (%s) address %p, size %zu",
+          nah->a.type == ARENA_TYPE_FREE ? "free" : "used",
+          nah, nah->a.size);
    }
 }
