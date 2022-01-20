@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020,2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -28,6 +28,9 @@ HOST_LIBCRYPTO  := -lcrypto
 #=============================================================
 # Target definitions.
 #=============================================================
+
+# Either python2 or python3 can be used
+PYTHON  := /usr/bin/python3
 
 ifeq ($(BUILDENV),uefiarm64)
 GCCROOT := <Path to aarch64 gcc sysroot>
