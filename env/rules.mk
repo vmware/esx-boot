@@ -29,6 +29,7 @@ CFLAGS      += $(patsubst %,-D%,$(CDEF)) $(patsubst %,-I%,$(STDINC) $(INC))
 $(ODIR)/%.c: %.json $(TOPDIR)/env/getkeys.py
 	$(call printcmd,GETKEYS)
 	LD_LIBRARY_PATH=$(HOST_OPENSSL_LIB):$(LD_LIBRARY_PATH) \
+	PYTHONPATH=$(GETKEYS_PYTHONPATH) \
 		$(PYTHON) $(TOPDIR)/env/getkeys.py < $< > $@
 
 $(ODIR)/%.o: %.c

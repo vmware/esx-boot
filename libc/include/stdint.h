@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -23,7 +23,7 @@ typedef __int32                  int32_t;
 typedef __int16                  int16_t;
 typedef __int8                   int8_t;
 
-#if defined(only_em64t) || defined(only_arm64)
+#if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
 typedef unsigned __int64         uintptr_t;
 typedef signed __int64           intptr_t;
 #else
@@ -40,7 +40,7 @@ typedef signed int               int32_t;
 typedef signed short             int16_t;
 typedef signed char              int8_t;
 
-#if defined(only_em64t) || defined(only_arm64)
+#if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
 typedef unsigned long int        uint64_t;
 #define PRIo64 "lo"
 #define PRIu64 "lu"

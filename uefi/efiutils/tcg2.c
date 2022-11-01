@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -346,7 +346,7 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
                                  uint64_t eventSize)
 {
    EFI_TCG2_EVENT *tcg2Event;
-   const uint32_t tcg2EventSize = sizeof(EFI_TCG2_EVENT) + eventSize;
+   const uint32_t tcg2EventSize = offsetof(EFI_TCG2_EVENT, Event) + eventSize;
    EFI_STATUS Status;
 
    if (tcg2 == NULL) {
@@ -369,6 +369,16 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
                                      (EFI_PHYSICAL_ADDRESS)(UINTN)data,
                                      dataSize, tcg2Event);
    sys_free(tcg2Event);
+
+   /*
+    * Ignore log full errors. This error condition will be detected by
+    * the OS as a truncated event log, and remote attestation may fail.
+    */
+   if (Status == EFI_VOLUME_FULL) {
+      Log(LOG_WARNING, "Event log full while measuring event type %u to PCR %u",
+          eventType, pcrIndex);
+      Status = EFI_SUCCESS;
+   }
 
    return Status;
 }
@@ -421,14 +431,16 @@ bool tcg2_init(void)
 
    Status = LocateProtocol(&tcg2_protocol, (void **)&tcg2Local);
    if (EFI_ERROR(Status)) {
-      Log(LOG_WARNING, "TCG2 protocol not available: %zx", Status);
+      Log(LOG_DEBUG, "TCG2 protocol not available: %s",
+          error_str[error_efi_to_generic(Status)]);
       return false;
    }
 
    capability.Size = sizeof (capability);
    Status = tcg2Local->GetCapability(tcg2Local, &capability);
    if (EFI_ERROR(Status)) {
-      Log(LOG_ERR, "Failed to query TPM capability: %zx", Status);
+      Log(LOG_ERR, "Failed to query TPM capability: %s",
+          error_str[error_efi_to_generic(Status)]);
       return false;
    }
 

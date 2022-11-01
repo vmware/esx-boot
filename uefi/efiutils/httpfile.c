@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -759,7 +759,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    }
    for (i = 0; i < RespMessage.HeaderCount; ++i) {
       /* Get the length of the file from the ContentLength header */
-      if (strcmp(RespMessage.Headers[i].FieldName, "Content-Length") == 0) {
+      if (strcasecmp(RespMessage.Headers[i].FieldName, "Content-Length") == 0) {
          size = strtol(RespMessage.Headers[i].FieldValue, NULL, 10);
          break;
       }

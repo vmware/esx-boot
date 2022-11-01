@@ -25,7 +25,7 @@
  *----------------------------------------------------------------------------*/
 static uint8_t ns16550_read(const uart_t *dev, uint16_t reg)
 {
-   return io_read8(&dev->io, reg);
+   return (uint8_t) io_read(&dev->io, reg);
 }
 
 /*-- ns16550_write -------------------------------------------------------------
@@ -39,7 +39,7 @@ static uint8_t ns16550_read(const uart_t *dev, uint16_t reg)
  *----------------------------------------------------------------------------*/
 static void ns16550_write(const uart_t *dev, uint16_t reg, uint8_t val)
 {
-   io_write8(&dev->io, reg, val);
+   io_write(&dev->io, reg, val);
 }
 
 /*-- ns16550_putc --------------------------------------------------------------

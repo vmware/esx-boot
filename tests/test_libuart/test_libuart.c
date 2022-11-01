@@ -136,10 +136,17 @@ int main(int argc, char **argv)
           original_baudrate);
    }
 
-   Log(LOG_ERR, "registers at %s 0x%"PRIxPTR" with scaling %u\n",
+   Log(LOG_ERR, "registers at %s 0x%"PRIxPTR"\n",
        serial_dev.io.type == IO_PORT_MAPPED ? "io" : "mmio",
-       serial_dev.io.channel.addr,
+       serial_dev.io.channel.addr);
+   Log(LOG_ERR, "Register offset scaling = %u\n",
        serial_dev.io.offset_scaling);
+   if (serial_dev.io.access == IO_ACCESS_LEGACY) {
+      Log(LOG_ERR, "Register access = legacy\n");
+   } else {
+      Log(LOG_ERR, "Register access = %u bytes\n",
+          8 << (serial_dev.io.access - 1));
+   }
 
    serial_dev.id = serial_com;
    if (arch_is_x86) {

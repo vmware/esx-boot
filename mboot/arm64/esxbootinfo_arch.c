@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018,2020,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2018,2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -23,11 +23,11 @@
  *      None.
  *
  * Results
- *      ESXBOOTINFO_ARCH_FLAG_ARM64_EL1.
+ *      ESXBOOTINFO_FLAG_ARM64_MODE0.
  *----------------------------------------------------------------------------*/
 int esxbootinfo_arch_supported_req_flags(void)
 {
-   return ESXBOOTINFO_ARCH_FLAG_ARM64_EL1;
+   return ESXBOOTINFO_FLAG_ARM64_MODE0;
 }
 
 /*-- esxbootinfo_arch_check_kernel----------------------------------------------
@@ -35,51 +35,53 @@ int esxbootinfo_arch_supported_req_flags(void)
  *      Extra arch-specific kernel checks.
  *
  * Parameters
- *      IN mbh: ESXBootIinfo header.
+ *      IN mbh: ESXBootInfo header.
  *
  * Results
  *      False if kernel is not supported (with error logged).
  *----------------------------------------------------------------------------*/
 bool esxbootinfo_arch_check_kernel(ESXBootInfo_Header *mbh)
 {
-   unsigned system_el = el_is_hyp() ? 2 : 1;
-   unsigned kernel_el =
-      (mbh->flags & ESXBOOTINFO_ARCH_FLAG_ARM64_EL1) == 0 ? 2 : 1;
-   bool kernel_vhe = (mbh->flags & ESXBOOTINFO_ARCH_FLAG_ARM64_VHE) != 0;
+   ESXBOOTINFO_ARM64_MODE kernel_mode = mbh->flags & (ESXBOOTINFO_FLAG_ARM64_MODE0 |
+                                                      ESXBOOTINFO_FLAG_ARM64_MODE1);
 
-   if (el_is_hyp()) {
-      if (vhe_enabled()) {
-         /*
-          * Some CPUs can only run in VHE mode, and thus we'll enter esxboot
-          * with the E2H bit set in HCR_EL2. These CPUs can only run OSes
-          * that are meant to run in VHE mode.
-          */
-         if (!kernel_vhe) {
-            Log(LOG_ERR, "This system only supports VHE-enabled kernels\n");
+   switch (kernel_mode) {
+      case ESXBOOTINFO_ARM64_MODE_EL2:
+         if (!el_is_hyp()) {
+            Log(LOG_ERR, "System (EL1) incompatible with kernel (EL2 non-VHE).\n");
             return false;
          }
-
-         return true;
-      } else if (vhe_supported() && kernel_vhe) {
          /*
-          * VHE is not enabled, but VHE is supported by the CPU.
-          *
-          * Allow any kernel with VHE support, regardless of the
-          * ESXBOOTINFO_ARCH_FLAG_ARM64_EL1 flag.
+          * Some CPUs can only run in VHE mode, and thus we'll enter
+          * esxboot with the E2H bit set in HCR_EL2. These CPUs can't
+          * run OSes in pure v8.0 mode.
           */
-         return true;
-      }
-   }
+         if (vhe_enabled()) {
+            Log(LOG_ERR, "System (EL2 VHE-only) incompatible with kernel (EL2 non-VHE).\n");
+            return false;
+         }
+         break;
 
-   /*
-    * No VHE support in CPU or kernel. Fall back to checking the architecture
-    * EL1/EL2 flag.
-    */
+      case ESXBOOTINFO_ARM64_MODE_EL1:
+         if (el_is_hyp()) {
+            Log(LOG_ERR, "System (EL2) incompatible with kernel (EL1).\n");
+            return false;
+         }
+         break;
 
-   if (system_el != kernel_el) {
-      Log(LOG_ERR, "System EL(%u) != kernel EL(%u) (ESXBootInfo flags 0x%x)\n",
-          system_el, kernel_el, mbh->flags);
-      return false;
+      case ESXBOOTINFO_ARM64_MODE_UNIFIED:
+         /*
+          * Whatever the current EL or VHE support, VMK will be able to
+          * support it.
+          */
+         break;
+
+      case ESXBOOTINFO_ARM64_MODE_EL1_VHE:
+         if (el_is_hyp() && !vhe_supported()) {
+            Log(LOG_ERR, "System (EL2 non-VHE) incompatible with kernel (EL1 or EL2 VHE).\n");
+            return false;
+         }
+         break;
    }
 
    return true;

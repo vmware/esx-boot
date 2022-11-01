@@ -85,6 +85,7 @@
  *      - Allocate fixed run-time memory for the 'k' objects (kernel sections)
  *      - Allocate contiguous run-time memory for the 'm' objects (modules)
  *      - Allocate whatever run-time memory for the 's' objects (system info)
+ *      - Allocate low memory for a copy of the trampoline code (for x86)
  *
  *   4. Blacklist bootloader's memory
  *      At this point, system memory and hidden memory have been blacklisted.
@@ -125,6 +126,10 @@
 
 static reloc_t relocs[MAX_RELOCS_NR];    /* The relocation table */
 static size_t reloc_count = 0;           /* Number of reloc table entries */
+
+#if only_x86
+run_addr_t trampo_lowmem;                /* Allocated trampoline low-mem */
+#endif
 
 #define add_runtime_object_delimiter()    \
    memset(&relocs[reloc_count++], 0, sizeof (reloc_t));
@@ -604,11 +609,7 @@ int install_trampoline(trampoline_t *run_trampo, handoff_t **run_handoff)
    reloc_sanity_check(data, 3);
 
    /* Compute the trampoline run-time addresses. */
-#if only_x86
-   status = set_runtime_addr(data, 2, 0, ALLOC_32BIT);
-#else
    status = set_runtime_addr(data, 2, 0, ALLOC_ANY);
-#endif
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Trampoline relocation error: out of safe memory.\n");
       return status;
@@ -629,6 +630,11 @@ int install_trampoline(trampoline_t *run_trampo, handoff_t **run_handoff)
    data->dest += data_size;
    data->size -= data_size;
    do_reloc(data);
+
+#if only_x86
+   /* Trampoline code will get copied to this region */
+   handoff->trampo_low = trampo_lowmem;
+#endif
 
 #if defined(only_em64t) || defined(only_arm64)
    status = relocate_page_tables2();
@@ -735,12 +741,23 @@ static int blacklist_bootloader_mem(UNUSED_PARAM(e820_range_t *mmap),
  *----------------------------------------------------------------------------*/
 int compute_relocations(e820_range_t *mmap, size_t count)
 {
-   int k = 0, m = 0, s = 0;
+   int k = 0, m = 0, s = 0, t = 0;
    run_addr_t kmem_end = 0;
    size_t i;
    int status;
 
    Log(LOG_DEBUG, "Calculating relocations...\n");
+
+#if only_x86
+   /*
+    * Add lower memory trampoline code copy and stack region.
+    */
+   status = add_safe_object(0, TRAMPOLINE_SIZE() + TRAMPOLINE_STACK_SIZE,
+                            ALIGN_FUNC);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+#endif
 
    /*
     * Sort the relocation table by object type and by insertion order.
@@ -760,6 +777,8 @@ int compute_relocations(e820_range_t *mmap, size_t count)
          m++;
       } else if (relocs[i].type == 's') {
          s++;
+      } else if (relocs[i].type == 't') {
+         t++;
       } else {
          Log(LOG_ERR, "Invalid run-time object type.\n");
          return ERR_INCONSISTENT_DATA;
@@ -783,6 +802,22 @@ int compute_relocations(e820_range_t *mmap, size_t count)
       Log(LOG_ERR, "Boot info relocation error: %s", error_str[status]);
       return status;
    }
+
+#if only_x86
+   /*
+    * Allocate low memory region immediately after 's' objects for the
+    * trampoline code to be copied to and jump into for launching x86
+    * vmkBoot. The stack for the code will also reside in the same region.
+    */
+   i = (size_t)(k + m + s);
+   status = set_runtime_addr(&relocs[i], 1, relocs[i-1].dest + relocs[i-1].size,
+                             ALLOC_32BIT);
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Trampoline reservation error: %s", error_str[status]);
+      return status;
+   }
+   trampo_lowmem = relocs[i].dest;
+#endif
 
    /*
     * Finally relocate the modules sections.  These must be in low

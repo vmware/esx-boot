@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2011,2015 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2011,2015,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -44,7 +44,7 @@ static inline void write8(le8_t * _p, uint8_t _v)
     *_p = _v;
 }
 
-#if defined(only_x86) || defined(only_arm64)
+#if defined(only_x86) || defined(only_arm64) || defined(only_riscv64)
 
 /* Littleendian architectures which support unaligned memory accesses */
 

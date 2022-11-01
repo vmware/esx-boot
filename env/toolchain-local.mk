@@ -31,6 +31,7 @@ HOST_LIBCRYPTO  := -lcrypto
 
 # Either python2 or python3 can be used
 PYTHON  := /usr/bin/python3
+GETKEYS_PYTHONPATH := $(PYTHONPATH)
 
 ifeq ($(BUILDENV),uefiarm64)
 GCCROOT := <Path to aarch64 gcc sysroot>

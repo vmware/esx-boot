@@ -310,11 +310,36 @@ static INLINE uint64_t get_sctlr(void)
    return sctlr;
 }
 
+static INLINE void set_sctlr(uintptr_t reg)
+{
+   if (el_is_hyp()) {
+      MSR(sctlr_el2, reg);
+   } else {
+      MSR(sctlr_el1, reg);
+   }
+}
+
 static INLINE bool is_paging_enabled(void)
 {
    uintptr_t sctlr = get_sctlr();
 
    return sctlr & SCTLR_MMU;
+}
+
+static INLINE void paging_disable(void)
+{
+   set_sctlr(get_sctlr() & ~SCTLR_MMU);
+   ISB();
+
+   tlbi_all();
+}
+
+static INLINE void paging_enable(void)
+{
+   set_sctlr(get_sctlr() | SCTLR_MMU);
+   ISB();
+
+   tlbi_all();
 }
 
 static INLINE uint64_t get_tcr(void)
@@ -328,6 +353,15 @@ static INLINE uint64_t get_tcr(void)
    }
 
    return tcr;
+}
+
+static INLINE void set_tcr(uintptr_t reg)
+{
+   if (el_is_hyp()) {
+      MSR(tcr_el2, reg);
+   } else {
+      MSR(tcr_el1, reg);
+   }
 }
 
 static INLINE unsigned mmu_t0sz(void)
@@ -467,6 +501,28 @@ static INLINE bool vhe_enabled(void)
    }
 
    return false;
+}
+
+static INLINE uint64_t rdtsc(void)
+{
+  uint64_t cnt;
+
+  if (el_is_hyp()) {
+    MRS(cnt, cntpct_el0);
+  } else {
+    MRS(cnt, cntvct_el0);
+  }
+
+  return cnt;
+}
+
+static INLINE uint64_t tscfreq(void)
+{
+  uint64_t freq;
+
+  MRS(freq, cntfrq_el0);
+
+  return freq;
 }
 
 static INLINE bool mmu_supported_configuration(void)

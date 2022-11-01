@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013,2015,2019,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013,2015,2019,2021,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -33,7 +33,9 @@
 #include <boot_services.h>
 
 #ifndef ISO9660_DRIVER
-   #if defined(only_arm64)
+   #if defined(only_riscv64)
+      #define ISO9660_DRIVER L"\\EFI\\DRIVERS\\ISO9660RISCV64.EFI"
+   #elif defined(only_arm64)
       #define ISO9660_DRIVER L"\\EFI\\DRIVERS\\ISO9660AA64.EFI"
    #elif defined(only_em64t)
       #define ISO9660_DRIVER L"\\EFI\\DRIVERS\\ISO9660x64.EFI"
@@ -43,7 +45,9 @@
 #endif
 
 #ifndef NEXT_LOADER
-   #if defined(only_arm64)
+   #if defined(only_riscv64)
+      #define NEXT_LOADER L"EFI\\BOOT\\BOOTRISCV64.EFI"
+   #elif defined(only_arm64)
       #define NEXT_LOADER L"EFI\\BOOT\\BOOTAA64.EFI"
    #elif defined(only_em64t)
       #define NEXT_LOADER L"EFI\\BOOT\\BOOTx64.EFI"

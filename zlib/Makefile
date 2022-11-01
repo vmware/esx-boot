@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2011,2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -21,6 +21,6 @@ SRC         := adler32.c        \
 BASENAME    := z
 TARGETTYPE  := lib
 CDEF        =  NO_GZCOMPRESS NO_STRERROR
-CFLAGS      += -Wno-type-limits
+CFLAGS      += -Wno-strict-prototypes
 
 include rules.mk

@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2020 VMware, Inc.  All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2020-2021 VMware, Inc. All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -24,6 +24,12 @@ SECTION .trampoline
 ;;
 ;;      This is the function that actually processes the relocations, sets up an
 ;;      ESXBootInfo or Multiboot compliant environment and jumps to the kernel.
+;;
+;;      The safe memory copy of the trampoline may reside in memory above 4GB,
+;;      so a copy of it is made to low memory (at handoff->trampo_low) after the
+;;      relocations have completed, from which it continues to execute. This is
+;;      required because a far jump to 32-bit code from 64-bits needs to be in
+;;      low memory.
 ;;
 ;; STACK USAGE
 ;;      The trampoline allocates dynamic memory from the stack. This memory is
@@ -72,9 +78,26 @@ trampoline:
       mov     rdi, [r12 + OFFSET_RELOCS]  ; RDI = handoff->reloc_table
       call    [r12 + OFFSET_RELOCATE]     ; handoff->do_reloc(RDI)
 
+                                          ; Copy trampoline to low-mem
+      call    .copy_trampoline            ; Push RIP
+.copy_trampoline:
+      mov     rsi, [rsp]                  ; Src = trampoline address
+      sub     rsi,  .copy_trampoline - trampoline
+      mov     rdi, [r12 + OFFSET_TRLOW]   ; Dest = handoff->trampo_low
+      mov     rcx, .trampoline_end - trampoline
+      rep movsb                           ; Memcpy(RSI -> RDI, RCX)
+
+      mov     rax, [r12 + OFFSET_TRLOW]
+      add     rax, .lowmem_rip - trampoline
+      jmp     rax                         ; Jump to code in low-mem
+.lowmem_rip:
+
       mov     rbx, [r12 + OFFSET_EBI]     ; RBX = handoff->ebi
       mov     rbp, [r12 + OFFSET_KERNEL]  ; RBP = handoff->kernel
       mov     rdx, [r12 + OFFSET_MAGIC]   ; RDX = handoff->ebi_magic
+
+      mov     rsp, [r12 + OFFSET_TRLOW]   ; Switch stack to low-mem
+      add     rsp, .trampoline_end - trampoline + TRAMPOLINE_STACK_SIZE
 
       and     rsp, ~(GDT_DESC_SIZE - 1)   ; Align the GDT on 8 bytes
       pushq   GDT_DESC_4GB_FLAT_DATA32    ; GDT[2] = Data Segment Descriptor
@@ -176,3 +199,4 @@ trampoline:
 .not_reached:                             ; Kernel is not supposed to return!
       hlt
       jmp     .not_reached
+.trampoline_end:

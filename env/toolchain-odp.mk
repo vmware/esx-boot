@@ -49,3 +49,5 @@ AR      := $(BINUTILS)/ar
 OBJCOPY := $(BINUTILS)/objcopy
 AS      := $(TCROOT)/nasm-2.01/bin/nasm
 endif
+
+GETKEYS_PYTHONPATH := $(PYTHONPATH):$(TCROOT)/lin64/psutil-0.6.1/lib/python2.7/site-packages

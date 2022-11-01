@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2019-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2019-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -37,6 +37,8 @@
  *                           loaded via native UEFI HTTP.
  *                        2: Use native UEFI HTTP if it allows plain http URLs.
  *                        3: Always use native UEFI HTTP.
+ *         -b <BLKSIZE>   For TFTP transfers, set the blksize option to the
+ *                        given value, default 1468.  UEFI only.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -93,6 +95,7 @@
  *      EFI NOHTTP s      - Evaluate s if HTTP loading is not available.
  *      EFI NATIVEHTTP n  - Set the criteria for using native UEFI HTTP to n.
  *                            See list of values under the -N option above.
+ *      EFI TFTPBLKSIZE n - Set the TFTP blksize option, as with -b.
  *      EFI s             - Evaluate s (ignored if pxelinux parses the menu).
  *
  *      LABEL s           - Starts and names a menu item.  The following
@@ -106,7 +109,7 @@
  *                            was invoked directly by the UEFI boot manager, -1
  *                            should go on to the next boot option in the UEFI
  *                            boot order, while -2 should stop in the UEFI UI.
- *      CONFIG s          - Restart with s as the menu.
+ *      CONFIG s          - Restart with file s as the menu.
  *      MENU HIDE         - Don't display this item.
  *      MENU LABEL s      - Display this string instead of the item's label.
  *      MENU DEFAULT      - Make this item the default.
@@ -127,7 +130,7 @@
  *        with its argument as the menu, instead of loading a new instance.
  *        This is essentially just an optimization.
  *
- *      * if{gpxe,vm,ver410}.{efi,c32} expects arguments of the form
+ *      * if{gpxe,vm,ver410}.c32 expects arguments of the form
  *        "s1 -- s2".  It executes s1 as either a label or command
  *        line.  s2 is ignored.  This kludge helps deal with some
  *        existing pxelinux menus used at VMware, where an "if*.c32"
@@ -578,6 +581,9 @@ bool parse_efi_subcommand(Menu *menu)
 
    } else if (match_token(menu, "NATIVEHTTP")) {
       set_http_criteria(parse_int(menu));
+
+   } else if (match_token(menu, "TFTPBLKSIZE")) {
+      tftp_set_block_size(parse_int(menu));
 
    } else {
       // This "EFI" is just hiding a command from pxelinux
@@ -1308,7 +1314,7 @@ int main(int argc, char **argv)
 
       optind = 1;
       do {
-         opt = getopt(argc, argv, "D:S:s:VhH:N:");
+         opt = getopt(argc, argv, "D:S:s:VhH:N:b:");
          switch (opt) {
          case 'D': /* debug flags */
             debug = atoi(optarg);
@@ -1336,6 +1342,9 @@ int main(int argc, char **argv)
             set_http_criteria(atoi(optarg));
             break;
          case -1:
+            break;
+         case 'b': /* tftpblksize */
+            tftp_set_block_size(atoi(optarg));
             break;
          case '?':
          default:

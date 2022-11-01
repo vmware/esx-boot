@@ -7,6 +7,4 @@ Main contributors
   Tim Mann <mann@vmware.com>
   Xavier Deguillard <xdeguillard@vmware.com>
   Tobias Stumpf <tstumpf@vmware.com>
-
-ARM64 support
-  Andrei Warkentin <awarkentin@vmware.com>
+  Andrei Warkentin <awarkentin@vmware.com> (ARM64 and RISC-V)

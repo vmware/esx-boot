@@ -146,11 +146,12 @@ char *str_merge_spaces(char *str)
  * Parameters
  *      IN  str:  the C-string formatted command line
  *      OUT argc: number of arguments in the command line
+ *      IN  amp:  if true, treat '&' as a space as well
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int cmdline_split(char *str, int *argc)
+static int cmdline_split(char *str, int *argc, bool amp)
 {
    bool onseparator;
    char quote;
@@ -173,7 +174,7 @@ static int cmdline_split(char *str, int *argc)
          }
       }
 
-      if (isspace(*str) && quote == '\0') {
+      if ((isspace(*str) || (amp && *str == '&')) && quote == '\0') {
          if (!onseparator) {
             *p++ = '\0';
             onseparator = true;
@@ -210,6 +211,7 @@ static int cmdline_split(char *str, int *argc)
  *      IN  cmdline: the C-string formatted command line
  *      OUT argc:    number of arguments in the command line
  *      OUT argv:    pointer to the arguments array
+ *      IN  amp:     if true, treat '&' as an argument separator
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -217,12 +219,12 @@ static int cmdline_split(char *str, int *argc)
  * Side effects
  *      The command line is modified in place.
  *----------------------------------------------------------------------------*/
-int str_to_argv(char *cmdline, int *argc, char ***argv)
+int str_to_argv(char *cmdline, int *argc, char ***argv, bool amp)
 {
    char **args;
    int n, status;
 
-   status = cmdline_split(cmdline, &n);
+   status = cmdline_split(cmdline, &n, amp);
    if (status != ERR_SUCCESS) {
       return status;
    }

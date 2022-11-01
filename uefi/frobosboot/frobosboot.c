@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -27,7 +27,9 @@
  * unrelated to ESXi.
  */
 #ifndef NEXT_LOADER
-   #if defined(only_arm64)
+   #if defined(only_riscv64)
+      #define NEXT_LOADER L"\\EFI\\BOOT\\MBOOTRISCV64.EFI"
+   #elif defined(only_arm64)
       #define NEXT_LOADER L"\\EFI\\BOOT\\MBOOTAA64.EFI"
    #elif defined(only_em64t)
       #define NEXT_LOADER L"\\EFI\\BOOT\\MBOOTx64.EFI"

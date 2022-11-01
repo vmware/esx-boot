@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015,2019-2021 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2015,2019-2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -46,6 +46,8 @@ else
 
    ifeq ($(BUILDENV),uefiarm64)
       ARCH       := arm64
+   else ifeq ($(BUILDENV),uefiriscv64)
+      ARCH       := riscv64
    else ifeq ($(BUILDENV),uefi64)
       ARCH       := em64t
    else ifeq ($(BUILDENV),uefi32)
@@ -68,7 +70,9 @@ TOOLS_DIR  := $(TOPDIR)/build/tools
 ifeq ($(FIRMWARE),bios)
    RELOCS     := $(TOOLS_DIR)/relocs
 else
-   ifeq ($(ARCH),arm64)
+   ifeq ($(ARCH),riscv64)
+      ELF2EFI    := $(TOOLS_DIR)/elf2efi-riscv64
+   else ifeq ($(ARCH),arm64)
       ELF2EFI    := $(TOOLS_DIR)/elf2efi-arm64
    else ifeq ($(ARCH),em64t)
       ELF2EFI    := $(TOOLS_DIR)/elf2efi64
@@ -80,26 +84,38 @@ endif
 #
 #-- Compilation flags ----------------------------------------------------------
 #
-ifeq ($(ARCH),arm64)
+ifeq ($(ARCH),riscv64)
+   IARCH      := riscv64
+   UEFIARCH   := RiscV64
+   AFLAGS     :=
+   CFLAGS     := -march=rv64gc -mabi=lp64d -fno-short-enums -fsigned-char \
+                 -ffunction-sections -fdata-sections -fomit-frame-pointer \
+                 -fno-builtin -Wno-address -mcmodel=medany -mno-relax \
+                 -fpack-struct=8 -fno-asynchronous-unwind-tables \
+                 -fno-builtin-memcpy -fno-stack-protector
+   LDFLAGS    :=
+else ifeq ($(ARCH),arm64)
    IARCH      := arm64
    UEFIARCH   := AArch64
    AFLAGS     :=
    CFLAGS     := -march=armv8-a -mlittle-endian -mgeneral-regs-only \
                  -mcmodel=large -fno-short-enums -fsigned-char \
                  -ffunction-sections -fdata-sections -fomit-frame-pointer \
-                 -fno-builtin -Wno-address
+                 -fno-builtin -Wno-address -mstack-protector-guard=global
    LDFLAGS    :=
 else ifeq ($(ARCH),em64t)
    IARCH      := x86
    UEFIARCH   := X64
    AFLAGS     := -f elf64
-   CFLAGS     := -m64 -mno-red-zone -msoft-float -DNO_MSABI_VA_FUNCS
+   CFLAGS     := -m64 -mno-red-zone -msoft-float -DNO_MSABI_VA_FUNCS \
+                 -mstack-protector-guard=global
    LDFLAGS    := -m elf_x86_64
 else ifeq ($(ARCH),ia32)
    IARCH      := x86
    UEFIARCH   := Ia32
    AFLAGS     := -f elf32
-   CFLAGS     := -m32 -march=i386 -mpreferred-stack-boundary=2 -msoft-float
+   CFLAGS     := -m32 -march=i386 -mpreferred-stack-boundary=2 -msoft-float \
+                 -mstack-protector-guard=global
    LDFLAGS    := -m elf_i386
 endif
 
@@ -130,7 +146,6 @@ CFLAGS     += --sysroot=$(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
               -fno-strict-aliasing -falign-functions=0 -falign-jumps=0       \
               -falign-labels=0 -falign-loops=0 -fwrapv -fvisibility=hidden   \
               -fstack-protector -fstack-protector-all                        \
-              -mstack-protector-guard=global                                 \
                                                                              \
               -W -Wall -Werror -std=c99 -Wwrite-strings -Wstrict-prototypes  \
               -Wpointer-arith -Wdeclaration-after-statement                  \
@@ -184,7 +199,7 @@ UEFIINC    := $(TOPDIR)/uefi                        \
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 FDTINC     := $(TOPDIR)/libfdt
 
-ifeq ($(ARCH),arm64)
+ifneq ($(filter arm64 riscv64,$(ARCH)),)
 ENV_LIB += $(FDTLIB)
 STDINC += $(FDTINC)
 endif

@@ -1,5 +1,5 @@
 #******************************************************************************
-# Copyright (c) 2016,2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2016,2020-2021 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #******************************************************************************
 
@@ -22,7 +22,8 @@
 #define OFFSET_RELOCATE       (2 * 8)
 #define OFFSET_MBI            (3 * 8)
 #define OFFSET_KERNEL         (4 * 8)
-#define OFFSET_MAGIC          (5 * 8)
+#define OFFSET_TRLOW          (5 * 8)
+#define OFFSET_MAGIC          (6 * 8)
 #define TRAMPOLINE_STACK_SIZE 0x2000
 
 #-- trampoline ----------------------------------------------------------------
@@ -44,6 +45,9 @@ trampoline:
       add      x0, x0, #TRAMPOLINE_STACK_SIZE
       bic      sp, x0, #0xf
 
+#
+# do_reloc(reloc_t *)
+#
       ldr      x0, [x20, #OFFSET_RELOCS]
       ldr      x1, [x20, #OFFSET_RELOCATE]
       blr      x1

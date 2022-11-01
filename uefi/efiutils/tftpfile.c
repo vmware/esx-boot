@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2015,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2015,2021-2022 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -64,23 +64,55 @@
 #define OPT_BOOTFILE_URL 59
 
 /*
- * RFC3986 specifies that URLs shoud not be longer than 255 characters.
+ * RFC3986 specifies that URLs should not be longer than 255 characters.
  * Let's tolerate more, in case a DHCP server chose to ignore that.
  */
 #define URL_SIZE_MAX 1024
 
 /*
+ * TFTP block size to request (RFC 2348).  The server can always choose to use
+ * a smaller size.  Using a large block size makes transfers faster by
+ * increasing the amount of data that is transferred per ack.  It also allows
+ * larger files to be transferred without sequence number wrapping, which not
+ * all servers support.  On the other hand, if the block size is larger than
+ * the path MTU, the blocks will be fragmented at the IP level, so if the
+ * network is lossy, that increases the probability of the block needing to be
+ * retransmitted because a fragment was lost.
+ *
+ * The default value set here can be overridden by calling tftp_set_block_size.
+ *
  * Contrary to the EFI spec, the EDK implementation of Mtftp() will not
  * negotiate the largest block size with the server if the BlockSize argument
- * is NULL. Further, the elilo sources mention that some real firmware
- * implementations timeout when given a NULL BlockSize. Therefore, we pass in
- * the following as an explicit BlockSize request. Beyond avoiding bugs, doing
- * so may also make transfers faster and allow larger files to be
- * downloaded. At worst, the server will simply request a smaller block size.
+ * is NULL.  Further, the elilo sources mention that some real firmware
+ * implementations timeout when given a NULL BlockSize.  Therefore, we always
+ * pass in an explicit BlockSize request, never NULL.
  */
-static const UINTN DEFAULT_BLOCK_SIZE = 4096;
+#define TFTP_BLKSIZE_MIN 512   // defined by UEFI standard
+#define TFTP_BLKSIZE_MAX 65464 // defined by RFC 2348
+static UINTN tftp_block_size = 1468; // default; fits in 1500 byte MTU
 
 static bool isIPv6 = false;
+
+/*-- tftp_set_block_size  ------------------------------------------------------
+ *
+ *      Set the blksize option value to be used in TFTP requests.
+ *
+ * Parameters
+ *      IN size:  block size
+ *----------------------------------------------------------------------------*/
+void tftp_set_block_size(size_t blksize)
+{
+   if (blksize < TFTP_BLKSIZE_MIN || blksize > TFTP_BLKSIZE_MAX) {
+      Log(LOG_WARNING,
+          "Requested TFTP blksize %zu not in range %u-%u; using %zu",
+          blksize, TFTP_BLKSIZE_MIN, TFTP_BLKSIZE_MAX, tftp_block_size);
+      return;
+   }
+   Log(LOG_DEBUG, "Switching TFTP blksize from %zu to %zu",
+       tftp_block_size, blksize);
+   tftp_block_size = blksize;
+}
+
 
 /*-- get_ipv6_boot_url ---------------------------------------------------------
  *
@@ -458,7 +490,7 @@ EFI_STATUS tftp_file_get_size(UNUSED_PARAM(EFI_HANDLE Volume),
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
 
    Status = Pxe->Mtftp(Pxe, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE,
-                       &DummyBuf, FALSE, &Size, (UINTN *)&DEFAULT_BLOCK_SIZE,
+                       &DummyBuf, FALSE, &Size, &tftp_block_size,
                        &ServerIp, (UINT8 *)filepath, NULL, TRUE);
 
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
@@ -529,7 +561,7 @@ EFI_STATUS tftp_file_load(EFI_HANDLE Volume, const char *filepath,
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
 
    Status = Pxe->Mtftp(Pxe, EFI_PXE_BASE_CODE_TFTP_READ_FILE,
-                       Data, FALSE, &Size64, (UINTN *)&DEFAULT_BLOCK_SIZE,
+                       Data, FALSE, &Size64, &tftp_block_size,
                        &ServerIp, (UINT8 *)filepath, NULL, FALSE);
 
   efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);

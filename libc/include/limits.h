@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2021,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -19,7 +19,7 @@
 #define UINT_MAX    UINT32_MAX
 #define INT_MAX     INT32_MAX
 
-#if defined(only_em64t) || defined(only_arm64)
+#if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
 #define LONG_MIN    (-9223372036854775807L-1)
 #define LONG_MAX    (9223372036854775807L)
 #define ULONG_MAX   (18446744073709551615UL)
@@ -28,5 +28,7 @@
 #define LONG_MAX    (2147483647L)
 #define ULONG_MAX   (4294967295UL)
 #endif
+
+#define SSIZE_MAX   LONG_MAX
 
 #endif /* !_LIMITS_H */

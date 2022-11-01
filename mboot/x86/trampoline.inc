@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016 VMware, Inc.  All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2021 VMware, Inc.  All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -59,7 +59,8 @@
 %define OFFSET_RELOCATE    (2 * SIZEOF_RUNADDR) ; handoff->relocate
 %define OFFSET_EBI         (3 * SIZEOF_RUNADDR) ; handoff->ebi
 %define OFFSET_KERNEL      (4 * SIZEOF_RUNADDR) ; handoff->kernel
-%define OFFSET_MAGIC       (5 * SIZEOF_RUNADDR) ; handoff->ebi_magic
+%define OFFSET_TRLOW       (5 * SIZEOF_RUNADDR) ; handoff->trampo_low
+%define OFFSET_MAGIC       (6 * SIZEOF_RUNADDR) ; handoff->ebi_magic
 
 ;;
 ;; Long Mode control

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -27,9 +27,39 @@ static INLINE uint8_t io_read8(const io_channel_t *ioch, off_t offset)
    return *((volatile uint8_t *) (ioch->channel.addr + (offset * ioch->offset_scaling)));
 }
 
-#define io_read16 _Static_assert(0, "io_read16 not implemented")
-#define io_read32 _Static_assert(0, "io_read32 not implemented")
-#define io_read64 _Static_assert(0, "io_read64 not implemented")
+static INLINE uint16_t io_read16(const io_channel_t *ioch, off_t offset)
+{
+   if (ioch->type == IO_PORT_MAPPED) {
+      uint16_t val;
+      __asm__ __volatile__ ("inw %w1, %w0"
+                            : "=a" (val)
+                            : "Nd" (ioch->channel.port + (offset * ioch->offset_scaling)));
+      return val;
+   }
+
+   /* channel->type == IO_MEMORY_MAPPED */
+   return *((volatile uint16_t *) (ioch->channel.addr + (offset * ioch->offset_scaling)));
+}
+
+static INLINE uint32_t io_read32(const io_channel_t *ioch, off_t offset)
+{
+   if (ioch->type == IO_PORT_MAPPED) {
+      uint32_t val;
+      __asm__ __volatile__ ("inl %w1, %0"
+                            : "=a" (val)
+                            : "Nd" (ioch->channel.port + (offset * ioch->offset_scaling)));
+      return val;
+   }
+
+   /* channel->type == IO_MEMORY_MAPPED */
+   return *((volatile uint32_t *) (ioch->channel.addr + (offset * ioch->offset_scaling)));
+}
+
+static INLINE uint64_t io_read64(const io_channel_t *ioch, off_t offset)
+{
+   /* channel->type == IO_MEMORY_MAPPED */
+   return *((volatile uint64_t *) (ioch->channel.addr + (offset * ioch->offset_scaling)));
+}
 
 static INLINE void io_write8(const io_channel_t *ioch, off_t offset, uint8_t val)
 {
@@ -43,12 +73,46 @@ static INLINE void io_write8(const io_channel_t *ioch, off_t offset, uint8_t val
       __asm__ __volatile__ ("outb %al, $0x80");
    } else {
       /* channel->type == IO_MEMORY_MAPPED */
-     *((volatile uint8_t *) (ioch->channel.addr + (offset * ioch->offset_scaling))) = val;
+      *((volatile uint8_t *) (ioch->channel.addr + (offset * ioch->offset_scaling))) = val;
    }
 }
 
-#define io_write16 _Static_assert(0, "io_write16 not implemented")
-#define io_write32 _Static_assert(0, "io_write32 not implemented")
-#define io_write64 _Static_assert(0, "io_write64 not implemented")
+static INLINE void io_write16(const io_channel_t *ioch, off_t offset, uint16_t val)
+{
+   if (ioch->type == IO_PORT_MAPPED) {
+      __asm__ __volatile__ ("outw %w1, %w0"
+                            :
+                            : "Nd" (ioch->channel.port + (offset * ioch->offset_scaling)),
+                              "a" (val));
+
+      /* Magic io delay. */
+      __asm__ __volatile__ ("outb %al, $0x80");
+   } else {
+      /* channel->type == IO_MEMORY_MAPPED */
+      *((volatile uint16_t *) (ioch->channel.addr + (offset * ioch->offset_scaling))) = val;
+   }
+}
+
+static INLINE void io_write32(const io_channel_t *ioch, off_t offset, uint32_t val)
+{
+   if (ioch->type == IO_PORT_MAPPED) {
+      __asm__ __volatile__ ("outl %1, %w0"
+                            :
+                            : "Nd" (ioch->channel.port + (offset * ioch->offset_scaling)),
+                              "a" (val));
+
+      /* Magic io delay. */
+      __asm__ __volatile__ ("outb %al, $0x80");
+   } else {
+      /* channel->type == IO_MEMORY_MAPPED */
+      *((volatile uint32_t *) (ioch->channel.addr + (offset * ioch->offset_scaling))) = val;
+   }
+}
+
+static INLINE void io_write64(const io_channel_t *ioch, off_t offset, uint64_t val)
+{
+   /* channel->type == IO_MEMORY_MAPPED */
+   *((volatile uint64_t *) (ioch->channel.addr + (offset * ioch->offset_scaling))) = val;
+}
 
 #endif /* !IO_H_ */

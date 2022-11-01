@@ -556,6 +556,49 @@ static int e820_to_esxbootinfo(e820_range_t *e820, size_t *count)
    return ERR_SUCCESS;
 }
 
+
+/*-- esxbootinfo_set_runtimewd -------------------------------------------------
+ *
+ *      Set runtime watchdog fields in the EBI.
+ *
+ * Parameters
+ *      None.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *
+ *----------------------------------------------------------------------------*/
+static int esxbootinfo_set_runtimewd(void)
+{
+   ESXBootInfo_RuntimeWdt *rwd = (ESXBootInfo_RuntimeWdt *)next_elmt;
+   int status;
+   unsigned int minTimeoutSec = 0;
+   unsigned int maxTimeoutSec = 0;
+   int watchdogType = 0;
+   uint64_t baseAddr = 0;
+
+   status = eb_check_space(sizeof(ESXBootInfo_RuntimeWdt));
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+   dump_runtime_watchdog(&minTimeoutSec, &maxTimeoutSec, &watchdogType,
+                         &baseAddr);
+
+   rwd->type = ESXBOOTINFO_RWD_TYPE;
+   rwd->elmtSize = sizeof(ESXBootInfo_RuntimeWdt);
+
+   rwd->watchdogBasicType = VMW_RUNTIME_WATCHDOG_PROTOCOL;
+   rwd->watchdogSubType = watchdogType;
+   rwd->base = baseAddr;
+   rwd->maxTimeout = maxTimeoutSec;
+   rwd->minTimeout = minTimeoutSec;
+   rwd->timeout = maxTimeoutSec;
+
+   eb_advance_next_elmt();
+   return ERR_SUCCESS;
+}
+
+
 /*-- esxbootinfo_set_runtime_pointers ------------------------------------------
  *
  *      1) Convert boot.mmap from e820 format to esxbootinfo format.
@@ -616,6 +659,13 @@ int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi)
                             boot.efi_info.desc_size,
                             boot.efi_info.version,
                             boot.efi_info.secure_boot);
+      if (status != ERR_SUCCESS) {
+         return status;
+      }
+   }
+
+   if (boot.runtimewd) {
+      status = esxbootinfo_set_runtimewd();
       if (status != ERR_SUCCESS) {
          return status;
       }
@@ -897,6 +947,7 @@ int esxbootinfo_init(void)
       (num_e820_ranges + NUM_E820_SLACK);
    size_ebi += size_mod * boot.modules_nr;
    size_ebi += sizeof(ESXBootInfo_Vbe);
+   size_ebi += sizeof(ESXBootInfo_RuntimeWdt);
    if (tpm_event_log.size != 0) {
       size_ebi += sizeof(ESXBootInfo_Tpm) + tpm_event_log.size;
    }

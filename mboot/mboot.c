@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -39,6 +39,9 @@
  *                           loaded via native UEFI HTTP (default).
  *                        2: Use native UEFI HTTP if it allows plain http URLs.
  *                        3: Always use native UEFI HTTP.
+ *         -r             Enable the hardware runtime watchdog.
+ *         -b <BLKSIZE>   For TFTP transfers, set the blksize option to the
+ *                        given value, default 1468.  UEFI only.
  *
  * Note: if you add more options that take arguments, be sure to update
  * safeboot.c so that safeboot can pass them through to mboot.
@@ -54,7 +57,7 @@
 #include "mboot.h"
 
 #if defined(SECURE_BOOT) && defined(CRYPTO_MODULE)
-   #if defined(only_arm64) || defined(only_em64t)
+   #if defined(only_arm64) || defined(only_em64t) || defined(only_riscv64)
       #define CRYPTO_DRIVER "crypto64.efi"
    #else
       #define CRYPTO_DRIVER "crypto32.efi"
@@ -92,6 +95,7 @@ static int clean(int status)
 
    sys_free(kopts);
    sys_free(boot.cfgfile);
+   uninstall_acpi_tables();
    unload_boot_modules();
    config_clear();
 
@@ -135,7 +139,7 @@ static int mboot_init(int argc, char **argv)
    optind = 1;
 
    do {
-      opt = getopt(argc, argv, ":ac:R:p:S:s:t:VeDHQUFN:");
+      opt = getopt(argc, argv, ":ac:R:p:S:s:t:VeDHQUFN:rb:");
       switch (opt) {
          case -1:
             break;
@@ -200,6 +204,16 @@ static int mboot_init(int argc, char **argv)
                return ERR_SYNTAX;
             }
             set_http_criteria(atoi(optarg));
+            break;
+         case 'r':
+            boot.runtimewd = true;
+            break;
+         case 'b':
+            if (!is_number(optarg)) {
+               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
+               return ERR_SYNTAX;
+            }
+            tftp_set_block_size(atoi(optarg));
             break;
          case 'd':
             /*
@@ -305,6 +319,58 @@ static int ipappend_2(void)
    Log(LOG_DEBUG, "Network boot: %s", bootif);
 
    return append_kernel_options(bootif);
+}
+
+/*-- start_runtimewd -----------------------------------------------------------
+ *
+ *      Start the hardware runtime watchdog.
+ *
+ * Parameters
+ *      None.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int start_runtimewd(void)
+{
+   int status;
+   unsigned int minTimeoutSec = 0;
+   unsigned int maxTimeoutSec = 0;
+   int watchdogType;
+   uint64_t baseAddr;
+   unsigned int timeoutSec;
+
+   status = init_runtime_watchdog();
+
+   /*
+    * If watchdog option is set on firmware that does not support the protocol
+    * then we disable the option and boot without the watchdog.
+    */
+   if (status != ERR_SUCCESS) {
+      Log(LOG_INFO, "Failed to locate runtime watchdog protocol. "
+          "Continue boot without watchdog.");
+      boot.runtimewd = false;
+      return ERR_SUCCESS;
+   }
+
+   dump_runtime_watchdog(&minTimeoutSec, &maxTimeoutSec, &watchdogType,
+                         &baseAddr);
+   if (boot.runtimewd_timeout > 0) {
+      Log(LOG_INFO, "Setting runtime watchdog timeout based on cfg: %u seconds",
+          boot.runtimewd_timeout);
+      timeoutSec = boot.runtimewd_timeout;
+   } else {
+      Log(LOG_INFO, "Setting runtime watchdog timeout based on max: %u seconds",
+          maxTimeoutSec);
+      timeoutSec = maxTimeoutSec;
+   }
+   status = set_runtime_watchdog(timeoutSec);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
+   // TODO: Add a refresh timer here
+   return ERR_SUCCESS;
 }
 
 #if defined(SECURE_BOOT) && defined(CRYPTO_MODULE)
@@ -474,6 +540,15 @@ int main(int argc, char **argv)
       return clean(status);
    }
 
+   if (boot.runtimewd) {
+      Log(LOG_DEBUG, "Initializing hardware runtime watchdog...");
+      status = start_runtimewd();
+
+      if (status != ERR_SUCCESS) {
+         return clean(status);
+      }
+   }
+
    if (kopts != NULL) {
       status = append_kernel_options(kopts);
       if (status != ERR_SUCCESS) {
@@ -524,6 +599,11 @@ int main(int argc, char **argv)
    }
 #endif
 #endif
+
+   status = install_acpi_tables();
+   if (status != ERR_SUCCESS) {
+      return clean(status);
+   }
 
    status = load_boot_modules();
    if (status != ERR_SUCCESS) {

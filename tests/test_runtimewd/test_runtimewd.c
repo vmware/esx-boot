@@ -83,10 +83,10 @@ static int parse_args(int argc, char **argv, unsigned int *timeoutSec)
 int main(int argc, char **argv) {
    int status;
    unsigned int timeoutSec = 0;
-   unsigned int minTimeoutSec;
-   unsigned int maxTimeoutSec;
-   int watchdogType;
-   unsigned int baseAddr;
+   unsigned int minTimeoutSec = 0;
+   unsigned int maxTimeoutSec = 0;
+   int watchdogType = 0;
+   uint64_t baseAddr = 0;
 
    status = log_init(true);
    if (status != ERR_SUCCESS) {
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
    Log(LOG_INFO, "Min timeout seconds: %u\n", minTimeoutSec);
    Log(LOG_INFO, "Max timeout: %u\n", maxTimeoutSec);
    Log(LOG_INFO, "Watchdog type: %u.\n", watchdogType);
-   Log(LOG_INFO, "Watchdog base address: 0x%x\n", baseAddr);
+   Log(LOG_INFO, "Watchdog base address: 0x%"PRIx64"\n", baseAddr);
 
    if (timeoutSec == 0) {
       Log(LOG_INFO,

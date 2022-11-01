@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2018,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -132,12 +132,15 @@ int sanitize_page_tables(void)
    tcr &= ~TCR_ELx_TnSZ_MASK;
    tcr |= TCR_ELx_TnSZ_MIN_WITH_PML4_LOOKUP;
 
-   if (el_is_hyp()) {
-      MSR(tcr_el2, tcr);
-   } else {
-      MSR(tcr_el1, tcr);
-   }
+   /*
+    * Because we're changing the page table walker configuration, disable
+    * the MMU. Esp. in a virtualized environment, we can easily find ourselves
+    * with a new TCR, the old page tables and a TLB miss.
+    */
+   paging_disable();
+   set_tcr(tcr);
    set_page_table_reg(&pdbr);
+   paging_enable();
 
    return ERR_SUCCESS;
 }

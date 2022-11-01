@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2014,2016,2019-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2014,2016,2019-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -15,7 +15,7 @@
 #include "mboot.h"
 
 #define DEFAULT_CFGFILE         "boot.cfg"      /* Default configuration file */
-#define MODULE_SEPARATOR        "---"
+#define LISTITEM_SEPARATOR      "---"
 
 /*
  * mboot configuration file options.
@@ -24,6 +24,41 @@
  * them.  Otherwise it will print warnings when upgrading from a boot.cfg file
  * that contains the new options, though it will still copy the options to the
  * new boot.cfg.  See bora/apps/pythonroot/vmware/esximage/Utils/BootCfg.py.
+ *
+ * Configuration file syntax:
+ * kernel=<FILEPATH>
+ *    Kernel filename.
+ * kernelopt=<OPTION_STRING>
+ *    Append OPTION_STRING to kernel command line.
+ * modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>
+ *    Module list separated by \"---\".
+ * title=<TITLE>
+ *    Bootloader banner title (-t option).
+ * prefix=<DIRECTORY>
+ *    Directory from which kernel and modules are loaded (if filenames are
+ *    relative). Default: directory containing this configuration file.
+ * nobootif=<0|1>
+ *    1: do not add BOOTIF=<MAC_addr> to kernel command line. Default: 0.
+ * timeout=<SECONDS>
+ *    Bootloader autoboot timeout, in seconds. Default: 5.
+ * noquirks=<0|1>
+ *    1: disable workarounds for platform quirks (-Q option). Default: 0.
+ * norts=<0|1>
+ *    1: disable support for UEFI Runtime Services (-U option). Default: 0.
+ * nativehttp=<0|1|2|3>
+ *    Use native UEFI HTTP (-N option). 0: never, 1: if HTTP booted (default),
+ *    2: if plain http:// URLs are allowed, 3: always.
+ * crypto=<FILEPATH>
+ *    Crypto module filename.
+ * runtimewd=<0|1>
+ *    1: Enable hardware runtime watchdog. Default: 0.
+ * tftpblksize=<BYTES>
+ *    For TFTP transfers, set the blksize option to the given value, default
+ *    1468.  UEFI only.
+ * acpitables=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>
+ *    ACPI table list separated by \"---\".
+ * runtimewdtimeout=<SECONDS>
+ *    Timeout in seconds before watchdog resets in seconds. Default: 0.
  */
 static option_t mboot_options[] = {
    {"kernel", "=", {NULL}, OPT_STRING, {0}},
@@ -37,46 +72,12 @@ static option_t mboot_options[] = {
    {"norts", "=", {.integer = 0}, OPT_INTEGER, {0}},
    {"nativehttp", "=", {.integer = -1}, OPT_INTEGER, {0}},
    {"crypto", "=", {NULL}, OPT_STRING, {0}},
+   {"runtimewd", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"tftpblksize", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"acpitables", "=", {NULL}, OPT_STRING, {0}},
+   {"runtimewdtimeout", "=", {.integer = 0}, OPT_INTEGER, {0}},
    {NULL, NULL, {NULL}, OPT_INVAL, {0}}
 };
-
-/*-- config_usage --------------------------------------------------------------
- *
- *      Print the bootloader configuration file syntax.
- *----------------------------------------------------------------------------*/
-static void config_usage(void)
-{
-   Log(LOG_INFO, "Configuration file syntax:\n"
-       "kernel=<FILEPATH>\n"
-       "   Kernel filename.\n"
-       "kernelopt=<OPTION_STRING>\n"
-       "   Append OPTION_STRING to kernel command line.\n"
-       "modules=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>\n"
-       "   Module list separated by \"---\".\n"
-       "title=<TITLE>\n"
-       "   Bootloader banner title.\n"
-       "prefix=<DIRECTORY>\n"
-       "   Directory from which kernel and modules are loaded (if\n"
-       "   filenames are relative). Default: directory containing\n"
-       "   this configuration file.\n"
-       "nobootif=<0|1>\n"
-       "   1: do not add BOOTIF=<MAC_addr> to kernel command line.\n"
-       "   Default: 0.\n"
-       "timeout=<SECONDS>\n"
-       "   Bootloader autoboot timeout, in seconds. Default: 5.\n"
-       "noquirks=<0|1>\n"
-       "   1: disable workarounds for platform quirks. Default:\n"
-       "   if -Q is on the command line, 1; else 0.\n"
-       "norts=<0|1>\n"
-       "   1: disable support for UEFI Runtime Services. Default:\n"
-       "   if -U is on the command line, 1; else 0.\n"
-       "nativehttp=<0|1|2|3>\n"
-       "   Use native UEFI HTTP. 0: never, 1: if HTTP booted (default),\n"
-       "   2: if plain http:// URLs are allowed, 3: always.\n"
-       "crypto=<FILEPATH>\n"
-       "   Crypto module filename.\n"
-       );
-}
 
 /*-- append_kernel_options -----------------------------------------------------
  *
@@ -131,50 +132,171 @@ int measure_kernel_options(void)
    return tpm_extend_cmdline(boot.modules[0].filename, boot.modules[0].options);
 }
 
-/*-- find_next_mod -------------------------------------------------------------
+/*-- find_next_listitem --------------------------------------------------------
  *
- *      Return a pointer to the next module string within the given module list.
- *      The module list is a string formated as follow:
+ *      Return a pointer to the next list item string within the given list.
+ *      The list is a string formated as follow:
  *
- *      MOD_STR1 --- MOD_STR2... --- MOD_STRn
+ *      STR1 --- STR2... --- STRn
  *
  * Parameters
- *      IN  mod_list: pointer to the module list
- *      OUT mod_list: pointer to the updated module list (to be passed at next
- *                    call to this function)
+ *      IN  list: pointer to the item list
+ *      OUT list: pointer to the updated item list (to be passed at next
+ *                call to this function)
  *
  * Results
- *      A pointer to the next module string, or NULL.
+ *      A pointer to the next item string, or NULL.
  *----------------------------------------------------------------------------*/
-static char *find_next_mod(char **mod_list)
+static char *find_next_listitem(char **list)
 {
    char *s, *separator;
-   const size_t sep_len = strlen(MODULE_SEPARATOR);
+   const size_t sep_len = strlen(LISTITEM_SEPARATOR);
 
-   if (mod_list == NULL || *mod_list == NULL) {
+   if (list == NULL || *list == NULL) {
       return NULL;
    }
 
-   for (s = *mod_list; *s != '\0'; s++) {
+   for (s = *list; *s != '\0'; s++) {
       if (!isspace(*s)) {
-         separator = strstr(s, MODULE_SEPARATOR);
+         separator = strstr(s, LISTITEM_SEPARATOR);
 
          if (separator == NULL) {
-            *mod_list = s + strlen(s);
+            *list = s + strlen(s);
             return s;
          } else if (separator == s) {
             s += sep_len;
             continue;
          } else {
-            *mod_list = separator + sep_len;
+            *list = separator + sep_len;
             return s;
          }
       }
    }
 
-   *mod_list = s;
+   *list = s;
 
    return NULL;
+}
+
+/*-- parse_filelist ------------------------------------------------------------
+ *
+ *      Parse the list of files and populate the descriptors table.
+ *
+ * Parameters
+ *      IN list:       list of files separated by "---"
+ *      IN prefix_dir: relative paths are relative to there
+ *      IN context:    callback context
+ *      IN setitem:    callback to set filename and options for a list item
+ *      IN clearitem:  callback to free filename and options for a list item
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int parse_filelist(char *list, const char *prefix_dir, void *context,
+                          void (*setitem)(void *, unsigned int, char *, char *),
+                          void (*clearitem)(void *, unsigned int))
+{
+   char *delim, *p, *parameter, *filename, *options;
+   unsigned int i;
+   int status;
+   char c;
+
+   for (i = 0; ; i++) {
+      parameter = find_next_listitem(&list);
+      if (parameter == NULL) {
+         return ERR_SUCCESS;
+      }
+
+      delim = strstr(parameter, LISTITEM_SEPARATOR);
+      if (delim == NULL) {
+         delim = parameter + strlen(parameter);
+      }
+
+      p = parameter;
+      while (p < delim && !isspace(*p)) {
+         p++;
+      }
+
+      c = *p;
+      *p = '\0';
+      status = make_path(prefix_dir, parameter, &filename);
+      *p = c;
+      if (status != ERR_SUCCESS) {
+         break;
+      }
+
+      while (p < delim && isspace(*p)) {
+         p++;
+      }
+      while (delim > p && isspace(*(delim - 1))) {
+         delim--;
+      }
+
+      if (delim > p) {
+         c = *delim;
+         *delim = '\0';
+         options = strdup(p);
+         *delim = c;
+         if (options == NULL) {
+            sys_free(filename);
+            status = ERR_OUT_OF_RESOURCES;
+            break;
+         }
+      } else {
+         options = NULL;
+      }
+
+      setitem(context, i, filename, options);
+   }
+
+   do {
+      clearitem(context, i);
+   } while (i-- > 0);
+
+   return status;
+}
+
+/*-- parse_modules_setitem -----------------------------------------------------
+ *
+ *      Populate a single module descriptor table entry.
+ *
+ * Parameters
+ *      IN context:    pointer to the module info array
+ *      IN index:      table entry offset
+ *      IN filename:   module filename
+ *      IN options:    module options
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static void parse_modules_setitem(void *context, unsigned int index,
+                                  char *filename, char *options)
+{
+   module_t *modules = context;
+
+   modules[index].filename = filename;
+   modules[index].options = options;
+}
+
+/*-- parse_modules_clearitem ---------------------------------------------------
+ *
+ *      Free resources and reset a single module descriptor table entry.
+ *
+ * Parameters
+ *      IN context:    pointer to the module info array
+ *      IN index:      table entry offset
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static void parse_modules_clearitem(void *context, unsigned int index)
+{
+   module_t *modules = context;
+
+   sys_free(modules[index].filename);
+   sys_free(modules[index].options);
+   modules[index].filename = NULL;
+   modules[index].options = NULL;
 }
 
 /*-- parse_modules -------------------------------------------------------------
@@ -192,71 +314,80 @@ static char *find_next_mod(char **mod_list)
 static int parse_modules(char *mod_list, const char *prefix_dir,
                          module_t *modules)
 {
-   char *delim, *p, *parameter;
-   unsigned int i;
-   int status;
-   char c;
+   return parse_filelist(mod_list, prefix_dir, modules,
+                         parse_modules_setitem, parse_modules_clearitem);
+}
 
-   for (i = 0; ; i++) {
-      parameter = find_next_mod(&mod_list);
-      if (parameter == NULL) {
-         return ERR_SUCCESS;
-      }
+/*-- parse_acpitab_setitem -----------------------------------------------------
+ *
+ *      Populate a single acpitab descriptor table entry.
+ *
+ * Parameters
+ *      IN context:    pointer to the acpitab info array
+ *      IN index:      table entry offset
+ *      IN filename:   ACPI table filename
+ *      IN options:    ignored
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static void parse_acpitab_setitem(void *context, unsigned int index,
+                                  char *filename, char *options)
+{
+   acpitab_t *acpitab = context;
 
-      delim = strstr(parameter, MODULE_SEPARATOR);
-      if (delim == NULL) {
-         delim = parameter + strlen(parameter);
-      }
+   acpitab[index].filename = filename;
+   sys_free(options);
+}
 
-      p = parameter;
-      while (p < delim && !isspace(*p)) {
-         p++;
-      }
+/*-- parse_acpitab_clearitem ---------------------------------------------------
+ *
+ *      Free resources and reset a single acpitab descriptor table entry.
+ *
+ * Parameters
+ *      IN context:    pointer to the acpitab info array
+ *      IN index:      table entry offset
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static void parse_acpitab_clearitem(void *context, unsigned int index)
+{
+   acpitab_t *acpitab = context;
 
-      c = *p;
-      *p = '\0';
-      status = make_path(prefix_dir, parameter, &modules[i].filename);
-      *p = c;
-      if (status != ERR_SUCCESS) {
-         break;
-      }
+   sys_free(acpitab[index].filename);
+   acpitab[index].filename = NULL;
+}
 
-      while (p < delim && isspace(*p)) {
-         p++;
-      }
-      while (delim > p && isspace(*(delim - 1))) {
-         delim--;
-      }
-
-      if (delim > p) {
-         c = *delim;
-         *delim = '\0';
-         modules[i].options = strdup(p);
-         *delim = c;
-         if (modules[i].options == NULL) {
-            status = ERR_OUT_OF_RESOURCES;
-            break;
-         }
-      }
-   }
-
-   do {
-      sys_free(modules[i].filename);
-      sys_free(modules[i].options);
-   } while (i-- > 0);
-
-   return status;
+/*-- parse_acpitab -------------------------------------------------------------
+ *
+ *      Parse the acpitab list and populate the acpitab descriptors table.
+ *
+ * Parameters
+ *      IN acpitab_list: list of ACPI tables separated by "---"
+ *      IN prefix_dir:   relative paths are relative to there
+ *      IN acpitab:      pointer to the acpitab info array
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int parse_acpitab(char *acpitab_list, const char *prefix_dir,
+                         acpitab_t *acpitab)
+{
+   return parse_filelist(acpitab_list, prefix_dir, acpitab,
+                         parse_acpitab_setitem, parse_acpitab_clearitem);
 }
 
 /*-- parse_cmdlines ------------------------------------------------------------
  *
- *      Parse the kernel and modules command lines.
+ *      Parse the kernel, modules, and ACPI table command lines.
  *
  * Parameters
- *      IN prefix_dir: relative paths are relative to there
- *      IN kernel:     path to the kernel
- *      IN options:    option string to append to the kernel command line
- *      IN mod_list:   list of modules separated by "---"
+ *      IN prefix_dir:    relative paths are relative to there
+ *      IN kernel:        path to the kernel
+ *      IN options:       option string to append to the kernel command line
+ *      IN mod_list:      list of modules separated by "---"
+ *      IN acpitab_list:  list of ACPI tables separated by "---"
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -265,53 +396,81 @@ static int parse_modules(char *mod_list, const char *prefix_dir,
  *      Update the bootloader info structure with the kernel and modules info.
  *----------------------------------------------------------------------------*/
 static int parse_cmdlines(const char *prefix_dir, const char *kernel,
-                          const char *options, char *mod_list)
+                          const char *options, char *mod_list,
+                          char *acpitab_list)
 {
-   char *kname, *kopts, *m;
-   unsigned int count;
-   module_t *modules;
+   char *m;
+   char *kname = NULL, *kopts = NULL;
+   unsigned int mod_count, acpitab_count;
+   module_t *modules = NULL;
+   acpitab_t *acpitab = NULL;
    int status;
 
    status = make_path(prefix_dir, kernel, &kname);
    if (status != ERR_SUCCESS) {
-      return status;
+      goto error;
    }
 
    kopts = (options != NULL) ? strdup(options) : NULL;
    if (options != NULL && kopts == NULL) {
-      sys_free(kname);
-      return ERR_OUT_OF_RESOURCES;
+      status = ERR_OUT_OF_RESOURCES;
+      goto error;
    }
 
    m = mod_list;
-   for (count = 1; find_next_mod(&m) != NULL; count++) {
+   for (mod_count = 1; find_next_listitem(&m) != NULL; mod_count++) {
       ;
    }
 
-   modules = sys_malloc(count * sizeof (module_t));
-   if (modules == NULL) {
-      sys_free(kname);
-      sys_free(kopts);
-      return ERR_OUT_OF_RESOURCES;
+   m = acpitab_list;
+   for (acpitab_count = 0; find_next_listitem(&m) != NULL; acpitab_count++) {
+      ;
    }
-   memset(modules, 0, count * sizeof (module_t));
 
-   if (count > 1) {
+   modules = sys_malloc(mod_count * sizeof (module_t));
+   if (modules == NULL) {
+      status = ERR_OUT_OF_RESOURCES;
+      goto error;
+   }
+   memset(modules, 0, mod_count * sizeof (module_t));
+
+   if (mod_count > 1) {
       status = parse_modules(mod_list, prefix_dir, &modules[1]);
       if (status != ERR_SUCCESS) {
-         sys_free(kname);
-         sys_free(kopts);
-         sys_free(modules);
-         return status;
+         goto error;
+      }
+   }
+
+   if (acpitab_count > 0) {
+      acpitab = sys_malloc(acpitab_count * sizeof (acpitab_t));
+      if (acpitab == NULL) {
+         status = ERR_OUT_OF_RESOURCES;
+         goto error;
+      }
+      memset(acpitab, 0, acpitab_count * sizeof (acpitab_t));
+
+      status = parse_acpitab(acpitab_list, prefix_dir, acpitab);
+      if (status != ERR_SUCCESS) {
+         goto error;
       }
    }
 
    modules[0].filename = kname;
    modules[0].options = kopts;
    boot.modules = modules;
-   boot.modules_nr = count;
+   boot.modules_nr = mod_count;
+   boot.acpitab = acpitab;
+   boot.acpitab_nr = acpitab_count;
 
    return ERR_SUCCESS;
+
+ error:
+   sys_free(kname);
+   sys_free(kopts);
+   sys_free(modules);
+   sys_free(acpitab);
+
+   return status;
 }
 
 /*-- strip_basename ------------------------------------------------------------
@@ -469,7 +628,7 @@ static int locate_config_file(const char *filename, char **path)
  *----------------------------------------------------------------------------*/
 int parse_config(const char *filename)
 {
-   char *mod_list, *title, *prefix, *kernel, *kopts;
+   char *mod_list, *acpitab_list, *title, *prefix, *kernel, *kopts;
    char *path = NULL;
    int status;
 
@@ -480,15 +639,12 @@ int parse_config(const char *filename)
       return status;
    }
 
-   Log(LOG_INFO, "Loading %s\n", path);
+   Log(LOG_INFO, "Loading %s", path);
 
    status = parse_config_file(boot.volid, path, mboot_options);
    if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Configuration error while parsing %s\n", path);
+      Log(LOG_ERR, "Configuration error while parsing %s", path);
       sys_free(path);
-      if (status == ERR_SYNTAX) {
-         config_usage();
-      }
       return status;
    }
 
@@ -507,10 +663,15 @@ int parse_config(const char *filename)
       set_http_criteria(mboot_options[9].value.integer);
    }
    boot.crypto = mboot_options[10].value.str;
+   boot.runtimewd = mboot_options[11].value.integer;
+   if (mboot_options[12].value.integer != 0) {
+      tftp_set_block_size(mboot_options[12].value.integer);
+   }
+   acpitab_list = mboot_options[13].value.str;  /* ACPI table list */
+   boot.runtimewd_timeout = mboot_options[14].value.integer;
 
    if (kernel == NULL) {
-      config_usage();
-      Log(LOG_ERR, "kernel=<FILEPATH> must be set in %s\n", path);
+      Log(LOG_ERR, "kernel=<FILEPATH> must be set in %s", path);
       status = ERR_SYNTAX;
       goto error;
    }
@@ -527,9 +688,9 @@ int parse_config(const char *filename)
       }
    }
 
-   Log(LOG_DEBUG, "Prefix: %s\n", (prefix[0] != '\0') ? prefix : "(None)");
+   Log(LOG_DEBUG, "Prefix: %s", (prefix[0] != '\0') ? prefix : "(None)");
    boot.prefix = prefix;
-   status = parse_cmdlines(prefix, kernel, kopts, mod_list);
+   status = parse_cmdlines(prefix, kernel, kopts, mod_list, acpitab_list);
 
  error:
    if (boot.prefix != path) {
@@ -539,12 +700,13 @@ int parse_config(const char *filename)
    sys_free(mboot_options[1].value.str);   /* Kernel options */
    sys_free(mboot_options[2].value.str);   /* List of modules */
    sys_free(mboot_options[3].value.str);   /* Title string */
+   sys_free(mboot_options[13].value.str);  /* ACPI table list */
 
    if (status == ERR_SUCCESS) {
       status = get_load_size_hint();
       if (status != ERR_SUCCESS) {
-         Log(LOG_DEBUG, "The underlying protocol does not report module sizes\n");
-         Log(LOG_DEBUG, "Continuing boot process\n");
+         Log(LOG_DEBUG, "The underlying protocol does not report module sizes");
+         Log(LOG_DEBUG, "Continuing boot process");
          status = ERR_SUCCESS;
       }
    }
@@ -554,7 +716,7 @@ int parse_config(const char *filename)
 
 /*-- config_clear --------------------------------------------------------------
  *
- *      Clear the kernel/modules information.
+ *      Clear the kernel/modules/ACPI table information.
  *----------------------------------------------------------------------------*/
 void config_clear(void)
 {
@@ -566,5 +728,14 @@ void config_clear(void)
 
    sys_free(boot.modules);
    boot.modules = NULL;
+
+   while (boot.acpitab_nr > 0) {
+      boot.acpitab_nr--;
+      sys_free(boot.acpitab[boot.acpitab_nr].filename);
+   }
+
+   sys_free(boot.acpitab);
+   boot.acpitab = NULL;
+
    boot.load_size = 0;
 }

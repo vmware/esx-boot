@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,13 +14,13 @@
 
 #define _SIZE_T
 #if defined(_MSC_VER)
-#   if defined(only_em64t) || defined(only_arm64)
+#   if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
        typedef unsigned __int64        size_t;
 #   else
        typedef unsigned int            size_t;
 #   endif
 #elif defined(__GNUC__)
-#   if defined(only_em64t) || defined(only_arm64)
+#   if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
        typedef unsigned long int       size_t;
 #   else
        typedef unsigned int            size_t;
@@ -33,13 +33,13 @@ typedef size_t off_t;
 
 #define _PTRDIFF_T
 #if defined(_MSC_VER)
-#   if defined(only_em64t) || defined(only_arm64)
+#   if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
        typedef __int64                 ptrdiff_t;
 #   else
        typedef signed int              ptrdiff_t;
 #   endif
 #elif defined (__GNUC__)
-#   if defined(only_em64t) || defined(only_arm64)
+#   if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
        typedef signed long int         ptrdiff_t;
 #   else
        typedef signed int              ptrdiff_t;

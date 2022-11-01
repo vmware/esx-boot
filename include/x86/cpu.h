@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2019-2020,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,6 +11,7 @@
 #define CPU_H_
 
 #include <compat.h>
+#include <cpuid.h>
 #include <sys/types.h>
 #include <stdbool.h>
 
@@ -68,7 +69,8 @@ typedef enum {
 
 #define CPUID_LEVELS                                                           \
    CPUIDLEVEL(TRUE, 0, 0, 0, 0)                                                \
-   CPUIDLEVEL(TRUE, 1, 1, 0, 0)
+   CPUIDLEVEL(TRUE, 1, 1, 0, 0)                                                \
+   CPUIDLEVEL(TRUE, 81F, 0x8000001F, 0, 14)
 
 /* Define  CPUID levels in the form: CPUID_LEVEL_<ShortName> */
 typedef enum {
@@ -80,7 +82,7 @@ typedef enum {
 
 /* Enum to translate between shorthand name and actual CPUID level value. */
 enum {
-#define CPUIDLEVEL(t, s, v, c, h) CPUID_LEVEL_VAL_##s = v,
+#define CPUIDLEVEL(t, s, v, c, h) CPUID_LEVEL_VAL_##s = (int) v,
    CPUID_LEVELS
 #undef CPUIDLEVEL
 };
@@ -94,6 +96,8 @@ enum {
    CPUID_INTERNAL_EAXIN_##name = CPUID_LEVEL_VAL_##lvl,                        \
    CPUID_INTERNAL_ECXIN_##name = ecxIn,
 
+#define FLAG FIELD
+
 /*    LEVEL, SUB-LEVEL, REG, POS, SIZE, NAME,               MON SUPP, HWV  */
 #define CPUID_FIELD_DATA_LEVEL_1                                               \
    FIELD(1, 0, EAX, 0, 4, STEPPING, ANY, 4)                                    \
@@ -103,7 +107,14 @@ enum {
    FIELD(1, 0, EAX, 16, 4, EXTENDED_MODEL, ANY, 4)                             \
    FIELD(1, 0, EAX, 20, 8, EXTENDED_FAMILY, YES, 4)
 
-#define CPUID_FIELD_DATA CPUID_FIELD_DATA_LEVEL_1
+/*    LEVEL, SUB-LEVEL, REG, POS, SIZE, NAME,               MON SUPP, HWV  */
+#define CPUID_FIELD_DATA_LEVEL_81F                                             \
+   FLAG(81F, 0, EAX, 1, 1, SEV, YES, 17)                                       \
+   FIELD(81F, 0, EBX, 0, 6, SME_PAGE_TABLE_BIT_NUM, YES, 17 )
+
+#define CPUID_FIELD_DATA                                                       \
+   CPUID_FIELD_DATA_LEVEL_1                                                    \
+   CPUID_FIELD_DATA_LEVEL_81F
 
 enum {
    /* Define data for every CPUID field we have */
@@ -111,10 +122,83 @@ enum {
 };
 
 #define CPUID_GET(eaxIn, reg, field, data)                                     \
-   ({                                                                          \
-      (((unsigned int)(data)&CPUID_INTERNAL_MASK_##field) >>                   \
-       CPUID_INTERNAL_SHIFT_##field);                                          \
-   })
+   (((unsigned int)(data)&CPUID_INTERNAL_MASK_##field) >>                      \
+    CPUID_INTERNAL_SHIFT_##field)
+
+static INLINE bool __GET_CPUID(unsigned int leaf, CPUIDRegs *regs)
+{
+   return __get_cpuid(leaf, &regs->eax, &regs->ebx, &regs->ecx, &regs->edx);
+}
+
+static INLINE bool __GET_CPUID2(unsigned int leaf, unsigned int subleaf,
+                                CPUIDRegs *regs)
+{
+   return __get_cpuid_count(leaf, subleaf, &regs->eax, &regs->ebx, &regs->ecx,
+                            &regs->edx);
+}
+
+/* IN: %eax from CPUID with %eax=1. */
+static INLINE int CPUID_EFFECTIVE_FAMILY(unsigned int v)
+{
+   unsigned int f = CPUID_GET(1, EAX, FAMILY, v);
+   return f != CPUID_FAMILY_EXTENDED ? f : f +
+      CPUID_GET(1, EAX, EXTENDED_FAMILY, v);
+}
+
+static INLINE bool CPUID_FAMILY_IS_P6(unsigned int eax)
+{
+   return CPUID_EFFECTIVE_FAMILY(eax) == CPUID_FAMILY_P6;
+}
+
+/* IN: %eax from CPUID with %eax=1. */
+static INLINE unsigned int CPUID_EFFECTIVE_MODEL(unsigned int v)
+{
+   unsigned int m = CPUID_GET(1, EAX, MODEL, v);
+   unsigned int em = CPUID_GET(1, EAX, EXTENDED_MODEL, v);
+   return m + (em << 4);
+}
+
+/* IN: %eax from CPUID with %eax=1. */
+static INLINE bool CPUID_UARCH_IS_SKYLAKE(unsigned int v)
+{
+   unsigned int model = 0;
+
+   if (!CPUID_FAMILY_IS_P6(v)) {
+      return false;
+   }
+
+   model = CPUID_EFFECTIVE_MODEL(v);
+
+   return (model == CPUID_MODEL_SKYLAKE_4E    ||
+           model == CPUID_MODEL_SKYLAKE_55    ||
+           model == CPUID_MODEL_SKYLAKE_5E    ||
+           model == CPUID_MODEL_CANNONLAKE_66 ||
+           model == CPUID_MODEL_KABYLAKE_8E   ||
+           model == CPUID_MODEL_KABYLAKE_9E);
+}
+
+static INLINE bool CPUID_IsRawVendor(CPUIDRegs *id0, const char* vendor)
+{
+   return (id0->ebx == *(const unsigned int *)(uintptr_t) (vendor + 0) &&
+           id0->ecx == *(const unsigned int *)(uintptr_t) (vendor + 4) &&
+           id0->edx == *(const unsigned int *)(uintptr_t) (vendor + 8));
+}
+
+static INLINE bool CPUID_IsVendorIntel(CPUIDRegs *id0)
+{
+   return CPUID_IsRawVendor(id0, CPUID_INTEL_VENDOR_STRING);
+}
+
+/*
+ * Intel TDX
+ */
+#define CPUID_INTEL_TDX_VENDOR_STRING "Inte    lTDX"
+
+#define TDX_TDCALL_OPCODE ".byte 0x66, 0x0F, 0x01, 0xCC"
+#define TDX_TDCALL_TDG_VP_INFO 1
+#define TDX_GPAW_MASK 0x3F
+
+#define TDX_STATUS_SUCCESS 0
 
 /*
  * Interrupts
@@ -250,24 +334,35 @@ static INLINE void set_page_table_reg(uintptr_t *reg)
 
 static INLINE uint64_t get_page_table_mask(void)
 {
-   unsigned int eax, ebx;
+   CPUIDRegs regs;
+
+   /*
+    * If TDX is suported we must mask off the SHARED bit when mapping the PTEs.
+    */
+   if (__GET_CPUID2(0x21, 0, &regs) &&
+       CPUID_IsRawVendor(&regs, CPUID_INTEL_TDX_VENDOR_STRING)) {
+      uint64_t status, gpaw;
+      __asm__ __volatile__(TDX_TDCALL_OPCODE
+                           : "=a" (status), "=c" (gpaw)
+                           : "a" (TDX_TDCALL_TDG_VP_INFO)
+                           : "rdx", "r8", "r9", "r10", "r11");
+      if (status == TDX_STATUS_SUCCESS) {
+         uint8_t shared_bit = (gpaw & TDX_GPAW_MASK) - 1;
+         return (1ull << shared_bit) | PG_ATTR_MASK;
+      }
+   }
 
    /*
     * If SEV is supported we must mask off the memory encryption bit when
     * mapping the PTEs.
     */
-   __asm__ volatile("cpuid" :
-                    "=a"(eax) : "0"(0x80000000) : "ebx", "ecx", "edx");
-   __asm__ volatile("cpuid" :
-                    "=a"(eax) : "0"(0x80000000) : "ebx", "ecx", "edx");
-   if (eax >= 0x8000001F) {
-      __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx) :
-                             "0"(0x8000001F) :
-                             "ecx", "edx");
-      if ((eax & 2) != 0) {
-         return (1ull << (ebx & 0x3F)) | PG_ATTR_MASK;
-      }
+   if (__GET_CPUID(0x8000001F, &regs) &&
+       CPUID_GET(0x8000001F, EAX, SEV, regs.eax)) {
+      uint8_t c_bit = CPUID_GET(0x8000001F, EBX, SME_PAGE_TABLE_BIT_NUM,
+                                regs.ebx);
+      return (1ull << c_bit) | PG_ATTR_MASK;
    }
+
    return PG_ATTR_MASK;
 }
 

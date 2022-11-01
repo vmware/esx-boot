@@ -557,9 +557,12 @@ tpm2_unmarshal_nv_readpublic(const uint8_t *buffer,
    bool result;
    const uint8_t *next = buffer;
 
-   result = unmarshal_TPM2_RESPONSE_HEADER(buffer, size, &next, &nvRead->hdr) &&
-            unmarshal_TPM2B_NV_PUBLIC(buffer, size, &next, &nvRead->nvPublic) &&
-            unmarshal_TPM2B_NAME(buffer, size, &next, &nvRead->nvName,
-                                 sizeof nvRead->nvName.name);
+   result = unmarshal_TPM2_RESPONSE_HEADER(buffer, size, &next, &nvRead->hdr);
+   if (result && nvRead->hdr.responseCode == TPM_RC_SUCCESS) {
+      result = unmarshal_TPM2B_NV_PUBLIC(buffer, size, &next,
+                                         &nvRead->nvPublic) &&
+               unmarshal_TPM2B_NAME(buffer, size, &next, &nvRead->nvName,
+                                    sizeof nvRead->nvName.name);
+   }
    return result ? next - buffer : 0;
 }

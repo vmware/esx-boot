@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2020-2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -20,6 +20,7 @@
 #undef MAX
 
 #include <Uefi.h>
+#include <Protocol/AcpiTable.h>
 #include <Protocol/RuntimeWatchdog.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/GraphicsOutput.h>

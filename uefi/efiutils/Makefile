@@ -10,7 +10,8 @@
 TOPDIR      := ../..
 include common.mk
 
-SRC         := console.c    \
+SRC         := acpi_table.c \
+               console.c    \
                devpath.c    \
                devpathl.c   \
                dhcpv4.c     \

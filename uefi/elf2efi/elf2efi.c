@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015,2019-2021 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2015,2019-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -63,6 +63,14 @@ struct pe_section {
 	uint8_t contents[0];
 };
 
+#define PE_BASE_REL_SHIFT 12
+
+typedef enum pe_base_rel_type {
+	PE_BASE_REL_16 = 0x2,
+	PE_BASE_REL_32 = 0x3,
+	PE_BASE_REL_64 = 0xa
+} pe_base_rel_type;
+
 struct pe_relocs {
 	struct pe_relocs *next;
 	unsigned long start_rva;
@@ -76,7 +84,7 @@ struct pe_header {
 	uint8_t padding[128];
 #if defined(MDE_CPU_IA32)
 	EFI_IMAGE_NT_HEADERS32 nt;
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64)
+#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
 	EFI_IMAGE_NT_HEADERS64 nt;
 #endif
 };
@@ -95,6 +103,8 @@ static struct pe_header efi_pe_header = {
 			.Machine = EFI_IMAGE_MACHINE_X64,
 #elif defined(MDE_CPU_AARCH64)
 			.Machine = EFI_IMAGE_MACHINE_AARCH64,
+#elif defined(MDE_CPU_RISCV64)
+			.Machine = EFI_IMAGE_MACHINE_RISCV64,
 #endif
 			.TimeDateStamp = 0x10d1a884,
 			.SizeOfOptionalHeader =
@@ -108,7 +118,7 @@ static struct pe_header efi_pe_header = {
 		.OptionalHeader = {
 #if defined(MDE_CPU_IA32)
 			.Magic = EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC,
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64)
+#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
 			.Magic = EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC,
 #endif
 			.SectionAlignment = EFI_FILE_ALIGN,
@@ -168,7 +178,8 @@ static unsigned long efi_file_align ( unsigned long offset ) {
  * @v size		Size of relocation entry
  */
 static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
-				unsigned long rva, size_t size ) {
+				unsigned long rva,
+				pe_base_rel_type type ) {
 	unsigned long start_rva;
 	uint16_t reloc;
 	struct pe_relocs *pe_rel;
@@ -176,26 +187,13 @@ static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
 	uint16_t *relocs;
 
 	/* Construct */
-	start_rva = ( rva & ~0xfff );
-	reloc = ( rva & 0xfff );
-	switch ( size ) {
-	case 8:
-		reloc |= 0xa000;
-		break;
-	case 4:
-		reloc |= 0x3000;
-		break;
-	case 2:
-		reloc |= 0x2000;
-		break;
-	default:
-		eprintf ( "Unsupported relocation size %zd\n", size );
-		exit ( 1 );
-	}
+	start_rva = rva & ~0xfff;
+	reloc = rva & 0xfff;
+	reloc |= type << PE_BASE_REL_SHIFT;
 
 	/* Locate or create PE relocation table */
 	for ( pe_rel = *pe_reltab ; pe_rel ; pe_rel = pe_rel->next ) {
-                next_pe_rel = &pe_rel->next;
+		next_pe_rel = &pe_rel->next;
 		if ( pe_rel->start_rva == start_rva )
 			break;
 	}
@@ -378,7 +376,7 @@ static struct pe_section * process_section ( bfd *bfd,
 	code_end = ( code_start + pe_header->nt.OptionalHeader.SizeOfCode );
 #if defined(MDE_CPU_IA32)
 	data_start = pe_header->nt.OptionalHeader.BaseOfData;
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64)
+#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
 	data_start = code_end;
 #else
 #error Unsupported processor type
@@ -504,18 +502,19 @@ static void process_reloc ( bfd *bfd, asection *section, arelent *rel,
 		 * under EFI.
 		 */
 		eprintf ( "Absolute symbol %s\n", sym->name );
-        	fatalCount++;
+		fatalCount++;
 	} else if ( ( strcmp ( howto->name, "R_X86_64_64" ) == 0 ) ||
-		( strcmp ( howto->name, "R_AARCH64_ABS64" ) == 0 )) {
+		    ( strcmp ( howto->name, "R_AARCH64_ABS64" ) == 0 ) ||
+		    ( strcmp ( howto->name, "R_RISCV_64" ) == 0 ) ) {
 		/* Generate an 8-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, 8 );
+		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_64 );
 	} else if ( ( strcmp ( howto->name, "R_386_32" ) == 0 ) ||
 		    ( strcmp ( howto->name, "R_X86_64_32" ) == 0 ) ) {
 		/* Generate a 4-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, 4 );
+		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_32 );
 	} else if ( strcmp ( howto->name, "R_386_16" ) == 0 ) {
 		/* Generate a 2-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, 2 );
+		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_16 );
 	} else if ( ( strcmp ( howto->name, "R_386_PC32" ) == 0 ) ||
 		    ( strcmp ( howto->name, "R_X86_64_PC32" ) == 0 ) ) {
 		/* Skip PC-relative relocations; all relative offsets
@@ -552,6 +551,30 @@ static void process_reloc ( bfd *bfd, asection *section, arelent *rel,
 		/*
 		 * Skip PC-relative relocations; all relative offsets remain
 		 * unaltered when the object is loaded.
+		 */
+	} else if ( ( strcmp (howto->name, "R_RISCV_ADD64" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SUB64" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_ADD32" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SUB32" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_BRANCH" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_JAL" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_GPREL_I" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_GPREL_S" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_CALL" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_RVC_BRANCH" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_RVC_JUMP" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_RELAX" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SUB6" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SET6" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SET8" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SET16" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_SET32" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_PCREL_HI20" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_PCREL_LO12_I" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_PCREL_LO12_S" ) == 0 ) ||
+		    ( strcmp (howto->name, "R_RISCV_NONE" ) == 0 ) ) {
+		/*
+		 * Nothing to do for these.
 		 */
 	} else {
 		eprintf ( "Unrecognised relocation type %s\n", howto->name );

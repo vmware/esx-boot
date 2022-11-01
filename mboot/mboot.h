@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2017,2021,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -129,6 +129,12 @@ typedef struct {
 } module_t;
 
 typedef struct {
+   char *filename;            /* ACPI table file name */
+   bool is_installed;         /* True if the ACPI table has been installed */
+   unsigned int key;          /* Firmware key used to uninstall table */
+} acpitab_t;
+
+typedef struct {
    char name[MBOOT_ID_SIZE];  /* Bootloader identification string */
    char title[TITLE_MAX_LEN]; /* Title string */
    char *cfgfile;             /* Configuration filename */
@@ -138,6 +144,8 @@ typedef struct {
    kernel_t kernel;           /* Kernel information */
    unsigned int modules_nr;   /* Number of modules */
    module_t *modules;         /* Modules cmdlines, addresses and sizes */
+   unsigned int acpitab_nr;   /* Number of ACPI tables to load */
+   acpitab_t *acpitab;        /* ACPI tables to load */
    e820_range_t *mmap;        /* E820 Memory map */
    size_t mmap_count;         /* Number of entries in the memory map */
    framebuffer_t fb;          /* Framebuffer properties */
@@ -159,6 +167,8 @@ typedef struct {
    bool serial;               /* Is the serial log enabled? */
    bool tpm_measure;          /* Should TPM measurements be made? */
    uint32_t timeout;          /* Autoboot timeout in units of seconds */
+   bool runtimewd;            /* Is there a hardware runtime watchdog? */
+   uint32_t runtimewd_timeout;/* Hardware runtime watchdog timeout, seconds */
 } boot_info_t;
 
 EXTERN boot_info_t boot;
@@ -173,6 +183,7 @@ struct handoff_s {
    run_addr_t relocate;       /* Relocation routine */
    run_addr_t ebi;            /* EFIBootInfo or Multiboot Info structure addr */
    run_addr_t kernel;         /* Kernel entry point */
+   run_addr_t trampo_low;     /* Low memory trampoline code copy */
    uint32_t   ebi_magic;      /* EFIBootInfo or Multiboot magic */
 };
 #pragma pack()
@@ -210,12 +221,23 @@ int load_boot_modules(void);
 void unload_boot_modules(void);
 
 /*
+ * acpi.c
+ */
+int install_acpi_tables(void);
+void uninstall_acpi_tables(void);
+
+/*
  * config.c
  */
 int append_kernel_options(const char *options);
 int measure_kernel_options(void);
 int parse_config(const char *filename);
 void config_clear(void);
+
+/*
+ * fdt.c
+ */
+int fdt_blacklist_memory(void *fdt);
 
 /*
  * multiboot.c

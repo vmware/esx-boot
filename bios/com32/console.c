@@ -110,6 +110,7 @@ int get_serial_port(int com, serial_type_t *type,
    io->type = IO_PORT_MAPPED;
    io->channel.port = p;
    io->offset_scaling = 1;
+   io->access = IO_ACCESS_8;
 
    return ERR_SUCCESS;
 }

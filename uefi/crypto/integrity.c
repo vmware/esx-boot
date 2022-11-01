@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -20,7 +20,7 @@ extern uint8_t _text, _etext, _rodata, _data, _edata, __executable_start;
 
 #define HEADERS_SIZE 0x1000 // Must match uefi.lds
 
-#if defined(only_em64t) || defined(only_arm64)
+#if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
 #define REL_BASED_PTR EFI_IMAGE_REL_BASED_DIR64
 #else
 #define REL_BASED_PTR EFI_IMAGE_REL_BASED_HIGHLOW

@@ -8,10 +8,13 @@
  */
 
 #include "efi_private.h"
+#include "elf.h"
 #include "tpm2_int.h"
 
+#include <limits.h>
 
-typedef struct {
+
+typedef struct tpm_event {
    uint32_t pcrIndex;
    const uint8_t *data;
    uint64_t dataSize;
@@ -20,12 +23,30 @@ typedef struct {
    uint64_t eventDataSize;
 } tpm_event_t;
 
-typedef struct system_module_t {
+typedef struct system_module {
    const char *name;
    uint32_t pcrIndex;
    uint32_t eventType;
+   bool versioned;
    bool measured;
 } system_module_t;
+
+#pragma pack(push, 1)
+typedef struct vm_version_record {
+   uint32_t totalSize;
+   uint32_t formatVersion;
+   uint64_t flags;
+   uint16_t componentNameOffset;
+   uint16_t componentNameLen;
+   uint16_t productNameOffset;
+   uint16_t productnameLen;
+   uint16_t productVersionOffset;
+   uint16_t productVersionLen;
+   uint16_t fileNameOffset;
+   uint16_t fileNameLen;
+   char stringBuf[0];
+} vm_version_record_t;
+#pragma pack(pop)
 
 
 #define UPDATE_SYSTEM_PCR 11
@@ -38,14 +59,15 @@ typedef struct system_module_t {
 #define TPM_VMK_EVENT_CMD_OPT 4
 #define TPM_VMK_EVENT_TAG 6
 #define TPM_VMK_EVENT_SIGNER 7
+#define TPM_VMK_EVENT_VERSION 8
 
 static system_module_t systemModules [] = {
-   { "b",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false },
-   { "k",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false },
-   { "s",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false },
-   { "sb",       CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false },
-   { "esxupdt",  UPDATE_SYSTEM_PCR,  TPM_VMK_EVENT_MOD,  false },
-   { NULL, 0, 0, false }
+   { "b",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  true,   false },
+   { "k",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  true,   false },
+   { "s",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false,  false },
+   { "sb",       CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false,  false },
+   { "esxupdt",  UPDATE_SYSTEM_PCR,  TPM_VMK_EVENT_MOD,  false,  false },
+   { NULL, 0, 0, false, false }
 };
 
 static bool useTpm = false;
@@ -111,17 +133,21 @@ int tpm_get_event_log(tpm_event_log_t *log)
 static int tpm_extend_tagged_event(const tpm_event_t *event)
 {
    TCG_PCClientTaggedEvent *tEvent;
-   const uint32_t tEventSize = sizeof(*tEvent) + event->eventDataSize;
+   uint32_t tEventHeaderSize;
+   uint32_t tEventSize;
    uint8_t *tEventData;
    EFI_STATUS status;
 
    EFI_ASSERT(useTpm);
 
+   tEventHeaderSize = sizeof(tEvent->taggedEventID) +
+                      sizeof(tEvent->taggedEventDataSize);
+   tEventSize = tEventHeaderSize + event->eventDataSize;
    tEvent = sys_malloc(tEventSize);
    if (tEvent == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
-   tEventData = (uint8_t *)(UINTN)tEvent + sizeof(*tEvent);
+   tEventData = (uint8_t *)(UINTN)tEvent + tEventHeaderSize;
 
    tEvent->taggedEventID = event->eventType;
    tEvent->taggedEventDataSize = event->eventDataSize;
@@ -147,6 +173,158 @@ static int tpm_extend_tagged_event(const tpm_event_t *event)
    }
 
    return ERR_SUCCESS;
+}
+
+/*-- get_module_version_section ------------------------------------------------
+ *
+ *      Look for a ".version" section in a module.
+ *
+ *      This function will determine if a module is an ELF binary, and
+ *      if so search it for the .version section.
+ *
+ * Parameters
+ *      IN  buffer: Pointer to the binary buffer.
+ *      IN  buflen: The size of the binary buffer.
+ *      OUT addr:   Pointer to the .version section.
+ *      OUT size:   The size of the .version section.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int get_module_version_section(const void *buffer, size_t buflen,
+                                      void **addr, size_t *size)
+{
+   // Need to drop constness for ELF helpers, unfortunately.
+   Elf_CommonEhdr *ehdr = (Elf_CommonEhdr *)buffer;
+   uint16_t numSections;
+   int i;
+
+   // All modules should be 64-bit ELF, and 64-bit is bigger anyway.
+   if (buflen < Elf_CommonEhdrSize(TRUE) || !IS_ELF(*ehdr)) {
+      return ERR_NOT_FOUND;
+   }
+   if (buflen > SSIZE_MAX) {
+      return ERR_INVALID_PARAMETER;
+   }
+
+   numSections = Elf_CommonEhdrGetShNum(ehdr);
+
+   for (i = 0; i < numSections; i++) {
+      const Elf_CommonShdr *shdr = Elf_CommonShdrGet(ehdr, i);
+      ssize_t shdrEndOff;
+
+      shdrEndOff = (const uint8_t *)shdr + sizeof(Elf_CommonShdr) -
+                   (const uint8_t *)buffer;
+      if ((const uint8_t *)shdr < (const uint8_t *)buffer ||
+          shdrEndOff > (ssize_t)buflen) {
+         // Bad ELF
+         return ERR_INVALID_PARAMETER;
+      }
+
+      if (strcmp(".version", Elf_GetSectionName(ehdr, i)) == 0) {
+         uint8_t *secAddr = Elf_CommonShdrGetContents(ehdr, i);
+         size_t secSize = Elf_CommonShdrGetSize(ehdr, i);
+         ssize_t secEndOff;
+
+         secEndOff = secAddr + secSize - (const uint8_t*)buffer;
+         if (secAddr < (const uint8_t *)buffer || secEndOff > (ssize_t)buflen) {
+            // Bad ELF
+            return ERR_INVALID_PARAMETER;
+         }
+
+         *addr = secAddr;
+         *size = secSize;
+         return ERR_SUCCESS;
+      }
+   }
+
+   return ERR_NOT_FOUND;
+}
+
+/*-- tpm_extend_version --------------------------------------------------------
+ *
+ *      Extend the TPM with module version information.
+ *
+ *      Errors are logged, but ignored. A failure to log an event may
+ *      mean that an attestation verifier will be unable to determine
+ *      the kernel version. That may, in turn, cause remote attestation
+ *      to fail.
+ *
+ * Parameters
+ *      IN filename: The file path of the module.
+ *      IN moduleAddr: The address of the module.
+ *      IN moduleSize: The size of the module in memory.
+ *
+ * Results
+ *      ERR_SUCCESS, or an error status.
+ *----------------------------------------------------------------------------*/
+static int tpm_extend_version(const char *filename,
+                              const void *moduleAddr,
+                              size_t moduleSize)
+{
+   size_t filenameSize = strlen(filename) + 1;
+   size_t sectionSize = 0;
+   void *sectionAddr = NULL;
+   vm_version_record_t *record;
+   uint8_t *eventData;
+   uint64_t eventDataSize;
+   tpm_event_t event;
+   int error;
+
+   EFI_ASSERT(useTpm);
+
+   error = get_module_version_section(moduleAddr, moduleSize,
+                                      &sectionAddr, &sectionSize);
+   if (error != ERR_SUCCESS) {
+      // No version information available.
+      return error;
+   }
+   EFI_ASSERT(sectionAddr != NULL);
+
+   record = sectionAddr;
+   if (sectionSize < sizeof(*record) || sectionSize < record->totalSize ||
+       record->formatVersion == 0 || filenameSize > UINT16_MAX) {
+      return ERR_INVALID_PARAMETER;
+   }
+
+   /*
+    * The ".version" section may contain multiple records, but we
+    * currently only expect one. Take only the first record if there
+    * is more than one.
+    */
+   eventDataSize = record->totalSize + filenameSize;
+   if (eventDataSize > UINT32_MAX) {
+      return ERR_INVALID_PARAMETER;
+   }
+   eventData = sys_malloc(eventDataSize);
+   if (eventData == NULL) {
+      return ERR_OUT_OF_RESOURCES;
+   }
+
+   event.pcrIndex = STATIC_DATA_PCR;
+   event.data = eventData;
+   event.dataSize = eventDataSize;
+   event.eventType = TPM_VMK_EVENT_VERSION;
+   event.eventData = eventData;
+   event.eventDataSize = eventDataSize;
+
+   /*
+    * We don't validate the record offsets and lengths. These will need
+    * to be validated by anyone parsing the event log.
+    */
+   memcpy(eventData, record, record->totalSize);
+   memcpy(eventData + record->totalSize, filename, filenameSize);
+
+   // Fixup the record sizes and offsets based on adding the filename.
+   record = (vm_version_record_t *)eventData;
+   record->fileNameOffset = record->totalSize;
+   record->fileNameLen = (uint16_t)filenameSize;
+   record->totalSize = eventDataSize;
+
+   error = tpm_extend_tagged_event(&event);
+
+   sys_free(eventData);
+   return error;
 }
 
 /*-- tpm_extend_module ---------------------------------------------------------
@@ -228,6 +406,14 @@ int tpm_extend_module(const char *filename,
           */
          if (module->measured) {
             Log(LOG_WARNING, "Duplicate modules named %s", module->name);
+         }
+
+         if (module->versioned) {
+            int error = tpm_extend_version(filename, addr, size);
+            if (error != ERR_SUCCESS && error != ERR_NOT_FOUND) {
+               Log(LOG_WARNING, "Failed to measure version for %s: %s",
+                   filename, error_str[error]);
+            }
          }
 
          pcrIndex = module->pcrIndex;

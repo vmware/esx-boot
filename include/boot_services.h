@@ -249,7 +249,7 @@ static INLINE int
 dump_runtime_watchdog(unsigned int *minTimeoutSec,
                       unsigned int *maxTimeoutSec,
                       int *watchdogType,
-                      unsigned int *baseAddr)
+                      uint64_t *baseAddr)
 {
    (void)minTimeoutSec;
    (void)maxTimeoutSec;
@@ -268,7 +268,7 @@ EXTERN int set_runtime_watchdog(unsigned int timeout);
 EXTERN void dump_runtime_watchdog(unsigned int *minTimeoutSec,
                                  unsigned int *maxTimeoutSec,
                                  int *watchdogType,
-                                 unsigned int *baseAddr);
+                                 uint64_t *baseAddr);
 EXTERN int init_runtime_watchdog(void);
 #endif
 
@@ -298,6 +298,37 @@ EXTERN int get_serial_port(int com, serial_type_t *type,
                            io_channel_t *channel, uint32_t *current_baudrate);
 
 /*
+ * ACPI
+ */
+#ifdef __COM32__
+static INLINE void
+firmware_init_acpi_table(void)
+{
+}
+
+static INLINE int
+firmware_install_acpi_table(void *buffer, size_t size, unsigned int *key)
+{
+   (void)buffer;
+   (void)size;
+   (void)key;
+   return ERR_UNSUPPORTED;
+}
+
+static INLINE int
+firmware_uninstall_acpi_table(unsigned int key)
+{
+   (void)key;
+   return ERR_UNSUPPORTED;
+}
+#else
+extern void firmware_init_acpi_table(void);
+EXTERN int firmware_install_acpi_table(void *buffer, size_t size,
+                                       unsigned int *key);
+EXTERN int firmware_uninstall_acpi_table(unsigned int key);
+#endif
+
+/*
  * Misc
  */
 EXTERN int set_graphic_mode(void);
@@ -317,8 +348,10 @@ typedef enum {
 
 #ifdef __COM32__
 #   define set_http_criteria(mode)
+#   define tftp_set_block_size(size)
 #else
 EXTERN void set_http_criteria(http_criteria_t mode);
+EXTERN void tftp_set_block_size(size_t blksize);
 #endif
 
 #endif /* !BOOT_SERVICES_H_ */

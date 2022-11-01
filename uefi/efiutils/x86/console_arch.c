@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -48,6 +48,7 @@ int get_serial_port(int com, serial_type_t *type,
       io->channel.port = com;
    }
    io->offset_scaling = 1;
+   io->access = IO_ACCESS_8;
 
    /*
     * It is always ok to return SERIAL_BAUDRATE_UNKNOWN.

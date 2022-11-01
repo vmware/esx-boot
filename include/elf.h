@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Portions Copyright (c) 2009-2011,2015 VMware, Inc.  All rights reserved.
+ * Portions Copyright (c) 2009-2011,2015,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -141,28 +141,10 @@ typedef struct {
 
 /* Values for e_machine */
 #define EM_NONE            0        /* Unknown machine */
-#define EM_M32             1        /* AT&T WE32100 */
-#define EM_SPARC           2        /* Sun SPARC */
 #define EM_386             3        /* Intel i386 */
-#define EM_68K             4        /* Motorola 68000 */
-#define EM_88K             5        /* Motorola 88000 */
-#define EM_486             6        /* Intel i486 */
-#define EM_860             7        /* Intel i860 */
-#define EM_MIPS            8        /* MIPS R3000 Big-Endian only */
-
-/* Extensions. This list is not complete */
-#define EM_S370            9        /* IBM System/370 */
-#define EM_MIPS_RS4_BE     10       /* MIPS R4000 Big-Endian (Depreciated) */
-#define EM_PARISC          15       /* HPPA */
-#define EM_SPARC32PLUS     18       /* SPARC v8plus */
-#define EM_PPC             20       /* PowerPC 32-bit */
-#define EM_PPC64           21       /* PowerPC 64-bit */
-#define EM_ARM             40       /* ARM */
-#define EM_SPARCV9         43       /* SPARC v9 64-bit */
-#define EM_IA_64           50       /* Intel IA-64 Processor */
 #define EM_X86_64          62       /* Advanced Micro Devices x86-64 */
-#define EM_ALPHA           0x9026   /* Alpha (written in the absence of an ABI */
-#define EM_AARCH64         183      /* ARM64 */
+#define EM_AARCH64         183      /* 64-bit Arm Architecture */
+#define EM_RISCV64         243      /* 64-bit RISC-V Architecture */
 
 /* Special section indexes */
 #define SHN_UNDEF          0        /* Undefined, missing, irrelevant */
@@ -792,7 +774,8 @@ static INLINE void Elf_CommonPhdrSetAlign(bool is64, uint32_t align,
 static INLINE bool Elf_CommonEhdrIs64(Elf_CommonEhdr *ehdr)
 {
    return ehdr->e_machine == EM_X86_64 ||
-      ehdr->e_machine == EM_AARCH64;
+      ehdr->e_machine == EM_AARCH64 ||
+      ehdr->e_machine == EM_RISCV64;
 }
 
 static INLINE Elf64_Addr Elf_CommonEhdrGetEntry(Elf_CommonEhdr *ehdr)

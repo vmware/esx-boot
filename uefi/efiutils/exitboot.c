@@ -49,18 +49,21 @@ static void set_memtop(void)
  *
  * Parameters
  *      IN  va:            memory address
+ *      IN  length:        length of region to check
  *      OUT in_memory_map: true if address is in the UEFI memory map
  *
  * Results
  *      true if the address is safe to assume to be RAM
  *----------------------------------------------------------------------------*/
-static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
+static bool va_is_usable_ram(uintptr_t va, size_t length, bool *in_memory_map)
 {
    unsigned i;
+   uintptr_t va_end = va + length - 1;
    unsigned max_entries = pt_reloc_cached_mmap_size /
       pt_reloc_cached_mmap_desc_size;
    EFI_MEMORY_DESCRIPTOR *MMap = pt_reloc_cached_mmap;
-   bool good_ram = false;
+   bool good_ram = true;
+   unsigned match_count = 0;
 
    if (va >= pt_reloc_cached_mmap_memtop) {
       *in_memory_map = false;
@@ -68,23 +71,36 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
    }
 
    for (i = 0; i < max_entries; i++) {
-      uintptr_t bottom = MMap->PhysicalStart;
-      uintptr_t top = bottom + (MMap->NumberOfPages << EFI_PAGE_SHIFT);
+      uintptr_t mmap_pa = MMap->PhysicalStart;
+      uintptr_t mmap_end = mmap_pa + (MMap->NumberOfPages << EFI_PAGE_SHIFT) - 1;
+      /*
+       * The only ways the closed intervals [mmap_pa, mmap_end] and
+       * [va, va_end] can fail to overlap is if one is entirely to the left or
+       * entirely to the right of the other.
+       */
+      if (!(mmap_end < va || va_end < mmap_pa)) {
+         /*
+          * Examine any overlapping region.
+          */
+         match_count++;
 
-      if (va >= bottom && va < top) {
          switch (MMap->Type) {
             /*
              * This list is ordered exactly as the
              * EFI_MEMORY_TYPE enum.
              */
          case EfiReservedMemoryType:
-            good_ram = false; // paranoia; this type could be anything
+           /*
+            * This could be anything. But by itself let's not have it affect
+            * good_ram: if the examined range overlaps other acceptable
+            * memory ranges, then this is okay.
+            */
+            match_count--;
             break;
          case EfiLoaderCode:
          case EfiLoaderData:
          case EfiBootServicesCode:
          case EfiBootServicesData:
-            good_ram = true;
             break;
          case EfiRuntimeServicesCode:
          case EfiRuntimeServicesData:
@@ -93,17 +109,14 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
              * might crash inside gRT->SetVirtualAddressMap on some
              * implementations (e.g. AArch64 AMI Aptio).
              */
-            good_ram = true;
             break;
          case EfiConventionalMemory:
-            good_ram = true;
             break;
          case EfiUnusableMemory:
             good_ram = false;
             break;
          case EfiACPIReclaimMemory:
          case EfiACPIMemoryNVS:
-            good_ram = true;
             break;
          case EfiMemoryMappedIO:
                /*
@@ -115,23 +128,21 @@ static bool va_is_usable_ram(uintptr_t va, bool *in_memory_map)
             good_ram = false;
             break;
          case EfiPersistentMemory:
-            good_ram = true;
             break;
          default:
             good_ram = false;
             break;
          }
+      }
 
-         /*
-          * Found a matching range.
-          */
+      if (!good_ram) {
          break;
       }
 
       MMap = NextMemoryDescriptor(MMap, pt_reloc_cached_mmap_desc_size);
    }
 
-   if (i == max_entries) {
+   if (match_count == 0) {
       if (in_memory_map != NULL) {
          *in_memory_map = false;
       }
@@ -283,8 +294,8 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
          entry_paddr = entry & ~pa_mask;
       }
 
-      is_usable_ram = va_is_usable_ram(next_vaddr, &in_memory_map);
-
+      is_usable_ram = va_is_usable_ram(next_vaddr,
+         PG_TABLE_LnE_SIZE(level), &in_memory_map);
       if (PG_IS_LARGE(level, entry) || level == 1) {
          if (entry_paddr != next_vaddr) {
             /*
@@ -344,7 +355,7 @@ static size_t traverse_page_tables_rec(uint64_t *table, int level,
          uint64_t *next_table = UINT_TO_PTR(entry_paddr);
          uint64_t *next_buf;
 
-         if (!va_is_usable_ram(PTR_TO_UINT(next_table), NULL)) {
+         if (!va_is_usable_ram(PTR_TO_UINT(next_table), PAGE_SIZE, NULL)) {
             /*
              * We have something that looks like a pointer to
              * a page table directory, but it's obviously corrupt

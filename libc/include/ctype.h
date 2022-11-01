@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -33,6 +33,11 @@ static INLINE int isspace(int c)
 static INLINE int isdigit(int c)
 {
    return libc_ctype[c] & C_DIGIT;
+}
+
+static INLINE int isxdigit(int c)
+{
+   return libc_ctype[c] & C_XDIGIT;
 }
 
 static INLINE int isupper(int c)

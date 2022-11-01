@@ -10,7 +10,8 @@
 TOPDIR      := ..
 include common.mk
 
-SRC         := config.c              \
+SRC         := acpi.c	             \
+               config.c              \
                elf.c                 \
                $(IARCH)/elf_arch.c   \
                gui.c                 \
@@ -27,14 +28,9 @@ SRC         := config.c              \
                signinfo.json         \
 
 ifeq ($(IARCH),x86)
-#
-# NASM source - x86 and x64.
-#
 SRC += $(IARCH)/trampoline.s
 else
-#
-# GNU AS source - arm64.
-#
+SRC += fdt.c
 SRC += $(IARCH)/trampoline.S
 endif
 

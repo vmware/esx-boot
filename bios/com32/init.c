@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2017,2019-2020 VMware, Inc.
+ * Copyright (c) 2008-2013,2015-2017,2019-2021 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -275,7 +275,7 @@ static int com32_create_argv(int *argc, char ***argv)
       return ERR_OUT_OF_RESOURCES;
    }
 
-   status = str_to_argv(cmdline, argc, argv);
+   status = str_to_argv(cmdline, argc, argv, false);
    if (status != ERR_SUCCESS) {
       sys_free(cmdline);
       return status;

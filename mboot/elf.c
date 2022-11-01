@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014-2015,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2014-2015,2018,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -276,3 +276,43 @@ int elf_register(void *buffer, Elf_CommonAddr *entry)
    *entry = Elf_CommonEhdrGetEntry(ehdr) + run_addend;
    return ERR_SUCCESS;
 }
+
+
+#if defined(only_arm64) || defined(only_riscv64)
+/*-- elf_arch_alloc_anywhere ---------------------------------------------------
+ *
+ *      Allocate away the memory ranges that will contain the ELF image
+ *      post relocation.
+ *
+ *      AARCH64/RISCV64 binaries can be loaded anywhere, provided the alignment
+ *      requirements have been met. This means that the ranges allocated may be
+ *      different from the image linked address, with a non-zero reported
+ *      addend.
+ *
+ * Parameters
+ *      IN  link_base:  image base address.
+ *      IN  link_size:  image size.
+ *      IN  align:      allocation alignment.
+ *      OUT run_addend: used to calculate where the ELF binary will
+ *                      be relocated to.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int elf_arch_alloc_anywhere(Elf_CommonAddr link_base, Elf64_Size link_size,
+                            size_t align, Elf_CommonAddr *run_addend)
+{
+   int status;
+   Elf_CommonAddr reloc_base;
+
+   status = runtime_alloc(&reloc_base, link_size, align, ALLOC_ANY);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
+   Log(LOG_DEBUG, "Reloc range is [0x%"PRIx64":0x%"PRIx64")\n",
+       reloc_base, reloc_base + link_size);
+   *run_addend = reloc_base - link_base;
+   return ERR_SUCCESS;
+}
+#endif /* defined(only_arm64) || defined(only_riscv64) */

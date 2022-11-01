@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2012,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2012,2015,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -27,7 +27,7 @@
 #define INLINE __inline__
 #define ALWAYS_INLINE __attribute__ ((always_inline)) INLINE
 
-#if defined(only_em64t) || defined(only_arm64)
+#if defined(only_em64t) || defined(only_arm64) || defined(only_riscv64)
 #  define CDECL
 #else
 #  define CDECL  __attribute__ ((cdecl,regparm(0)))

@@ -128,7 +128,7 @@ EXTERN int str_alloc(size_t length, char **str);
 EXTERN void mem_swap(void *m1, void *m2, size_t n);
 EXTERN char *mem_strcasestr(const void *src, const char *str, size_t n);
 EXTERN char *str_merge_spaces(char *str);
-EXTERN int str_to_argv(char *cmdline, int *argc, char ***argv);
+EXTERN int str_to_argv(char *cmdline, int *argc, char ***argv, bool amp);
 EXTERN int argv_to_str(int argc, char **argv, char **s);
 EXTERN bool is_number(const char *str);
 EXTERN int make_path(const char *root, const char *filepath, char **buffer);
@@ -287,6 +287,8 @@ EXTERN int video_set_text_mode(void);
 EXTERN void acpi_init(void);
 EXTERN int acpi_is_present(void);
 EXTERN acpi_sdt *acpi_find_sdt(const char *sig);
+EXTERN int acpi_install_table(void *, size_t, unsigned int *);
+EXTERN int acpi_uninstall_table(unsigned int);
 
 /*
  * smbios.c

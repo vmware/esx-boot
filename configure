@@ -1,11 +1,11 @@
 #!/bin/sh
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020,2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
 copyright='#*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2012,2015,2017-2020,2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 '
@@ -65,7 +65,7 @@ export CRYPTO_MODULE := 1
 
 include env/common.mk
 
-SUBDIRS := com32 uefi64 uefi32 # uefiarm64
+SUBDIRS := com32 uefi64 # uefiarm64
 
 TOPDIR := $(CURDIR)
 export TOPDIR

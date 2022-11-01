@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2017-2018,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -66,17 +66,6 @@ int elf_arch_supported(void *buffer)
 int elf_arch_alloc(Elf_CommonAddr link_base, Elf64_Size link_size,
                    Elf_CommonAddr *run_addend)
 {
-   int status;
-   Elf_CommonAddr reloc_base;
-
-   status = runtime_alloc(&reloc_base, link_size,
-                          ELF_EXEC_ALIGNMENT, ALLOC_ANY);
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
-   Log(LOG_DEBUG, "Reloc range is [0x%lx:0x%lx)\n", reloc_base, reloc_base +
-       link_size);
-   *run_addend = reloc_base - link_base;
-   return ERR_SUCCESS;
+   return elf_arch_alloc_anywhere(link_base, link_size, ELF_EXEC_ALIGNMENT,
+                                  run_addend);
 }

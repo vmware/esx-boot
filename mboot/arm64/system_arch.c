@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2017-2019,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,16 +9,14 @@
 
 #include <cpu.h>
 #include <boot_services.h>
-
 #include "mboot.h"
 
 /*-- system_arch_blacklist_memory ----------------------------------------------
  *
- *      List all the memory ranges that may not be used by the bootloader.
+ *      Blacklist architecture-specific memory ranges.
  *
  * Parameters
- *      IN mmap:  pointer to the system memory map
- *      IN count: number of entries in the memory map
+ *      None.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.

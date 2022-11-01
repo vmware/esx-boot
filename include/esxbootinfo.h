@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -49,15 +49,38 @@
  * 0. Flag 16 - 31 describes optional features. The boot loader continues, even
  * if it does not support all of the optional flags.
  */
-#define ESXBOOTINFO_ARCH_FLAG_ARM64_EL1   (1 << 0)   /* Kernel runs in EL1, not EL2 */
+#define ESXBOOTINFO_FLAG_ARM64_MODE0      (1 << 0)   /* bit 0 of ARM Mode */
 #define ESXBOOTINFO_FLAG_VIDEO            (1 << 2)   /* Must pass video info to OS;
                                                         non-min video fields valid */
-#define ESXBOOTINFO_ARCH_FLAG_ARM64_VHE   (1 << 16)  /* Kernel supports VHE */
+#define ESXBOOTINFO_FLAG_ARM64_MODE1      (1 << 16)  /* bit 1 of ARM Mode */
 #define ESXBOOTINFO_FLAG_EFI_RTS_OLD      (1 << 17)  /* Reserved; do not redefine */
 #define ESXBOOTINFO_FLAG_EFI_RTS          (1 << 18)  /* EFI RTS fields valid */
 #define ESXBOOTINFO_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */
 #define ESXBOOTINFO_FLAG_VIDEO_MIN        (1 << 20)  /* Video min fields valid */
 #define ESXBOOTINFO_FLAG_TPM_MEASUREMENT  (1 << 21)  /* TPM measurement field valid */
+
+/*
+ * ARM64 supports multiple image types identified by a mode which is
+ * built as described by this table:
+ *
+ *         +-------+-------+---------+
+ *         | Mode1 | Mode0 | Meaning |
+ *         ===========================
+ *         |   0   |   0   | v80 EL2 |
+ *         +-------+-------+---------+
+ *         |   0   |   1   | EL1     |
+ *         +-------+-------+---------+
+ *         |   1   |   0   | UNIFIED |
+ *         +-------+-------+---------+
+ *         |   1   |   1   | EL1+VHE |
+ *         +-------+-------+---------+
+ */
+typedef enum {
+   ESXBOOTINFO_ARM64_MODE_EL2     = 0x00000, /* Support v80 EL2 */
+   ESXBOOTINFO_ARM64_MODE_EL1     = 0x00001, /* Support EL1 */
+   ESXBOOTINFO_ARM64_MODE_UNIFIED = 0x10000, /* Support EL1, v80 EL2, VHE EL2 */
+   ESXBOOTINFO_ARM64_MODE_EL1_VHE = 0x10001  /* Support EL1, VHE EL2 */
+} ESXBOOTINFO_ARM64_MODE;
 
 #define ESXBOOTINFO_VIDEO_GRAPHIC         0          /* Linear graphics mode */
 #define ESXBOOTINFO_VIDEO_TEXT            1          /* EGA-standard text mode */
@@ -71,6 +94,16 @@
  */
 #define ESXBOOTINFO_TPM_MEASURE_NONE      0          /* No measurement */
 #define ESXBOOTINFO_TPM_MEASURE_V1        (1 << 0)   /* Mods, cmdline, certs, tag. */
+
+/*
+ * Basic runtime watchdog types. Currently only support VMW-defined
+ * VMW_RUNTIME_WATCHDOG_PROTOCOL, but in the future may support additional ways of
+ * describing watchdog hardware.
+ */
+typedef enum {
+   NONE,
+   VMW_RUNTIME_WATCHDOG_PROTOCOL
+} RUNTIME_WATCHDOG_BASIC_TYPE;
 
 /*
  * ESXBootInfo_Header passed statically from kernel to bootloader.
@@ -129,6 +162,7 @@ typedef enum ESXBootInfo_Type {
    ESXBOOTINFO_LOADESX_TYPE,
    ESXBOOTINFO_LOADESX_CHECKS_TYPE,
    ESXBOOTINFO_TPM_TYPE,
+   ESXBOOTINFO_RWD_TYPE,
    NUM_ESXBOOTINFO_TYPE
 } ESXBootInfo_Type;
 
@@ -162,6 +196,18 @@ typedef struct ESXBootInfo_Module {
    uint32_t numRanges;
    ESXBootInfo_ModuleRange ranges[0];
 } __attribute__((packed)) ESXBootInfo_Module;
+
+typedef struct ESXBootInfo_RuntimeWdt {
+   ESXBootInfo_Type type;
+   uint64_t elmtSize;
+
+   RUNTIME_WATCHDOG_BASIC_TYPE watchdogBasicType;
+   int watchdogSubType;
+   uint64_t base;
+   uint64_t maxTimeout;
+   uint64_t minTimeout;
+   uint64_t timeout;
+} __attribute__((packed)) ESXBootInfo_RuntimeWdt;
 
 /* VBE flags */
 #define ESXBOOTINFO_VBE_FB64              (1UL << 0)  /* fbBaseAddress in use */

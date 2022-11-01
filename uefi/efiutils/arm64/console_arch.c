@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <io.h>
 #include <fdt_vmware.h>
+#include "efi_private.h"
 
 /*
  * Microsoft Debug Port Table 2
@@ -31,8 +32,6 @@
 #define SPCR_TYPE_SDM845_18432    0x11
 #define SPCR_TYPE_16550_HONOR_GAS 0x12
 #define SPCR_TYPE_SDM845_7372     0x13
-
-#include "efi_private.h"
 
 /*-- get_nvidia_rshim_console_port ---------------------------------------------
  *
@@ -64,11 +63,13 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
    io->type = IO_MEMORY_MAPPED;
    io->channel.addr = tmff->base;
    io->offset_scaling = 1;
+   io->access = IO_ACCESS_64;
    *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
    *type = SERIAL_TMFIFO;
 
    return ERR_SUCCESS;
 }
+
 
 /*-- get_fdt_serial_port -------------------------------------------------------
  *
@@ -78,7 +79,7 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
  *      IN  com:  unused
  *      OUT type: serial port type
  *      OUT io:   serial port base address
- *      OUT original_baudrate: current baudrate from SPCR
+ *      OUT original_baudrate: current baudrate from FDT
  *
  * Results
  *      A generic error status.
@@ -89,9 +90,13 @@ static int get_fdt_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
    void *fdt;
    int node;
    int status;
-   const char *prop;
-   char *baud;
-   int prop_len;
+   const char *baud = NULL;
+   static fdt_serial_id_t const match_ids[] = {
+      { "AAPL,s5l-uart", SERIAL_AAPL_S5L },
+      { "apple,s5l-uart", SERIAL_AAPL_S5L },
+      { "apple,uart", SERIAL_AAPL_S5L },
+      { NULL, 0 },
+   };
 
    status = get_fdt(&fdt);
    if (status != ERR_SUCCESS) {
@@ -102,50 +107,31 @@ static int get_fdt_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       return ERR_UNSUPPORTED;
    }
 
-   node = fdt_path_offset(fdt, "/chosen");
-   if (node < 0) {
-      return ERR_UNSUPPORTED;
+   if (fdt_match_serial_port(fdt, "/chosen", "stdout-path", match_ids,
+                             &node, type, &baud) != 0) {
+     /*
+      * Best effort at this point. The Asahi/OpenBSD U-Boot on M1 Macs under some
+      * circumstances sets stdout-path to the framebuffer.
+      */
+      if (fdt_match_serial_port(fdt, "/aliases", "serial0", match_ids,
+                                &node, type, &baud) != 0) {
+         return ERR_NOT_FOUND;
+      }
    }
 
-   prop = fdt_getprop(fdt, node, "stdout-path", &prop_len);
-   if (prop == NULL || prop_len == 0) {
-      return ERR_NOT_FOUND;
-   }
 
-   /*
-    * stdout-path will look like "serial0:1500000", where the thing
-    * after the : is the baud rate.
-    */
-
-   baud = strchr(prop, ':');
-   if (baud != NULL) {
-      prop_len = baud - prop;
-      baud++;
-   }
-
-   node = fdt_path_offset_namelen(fdt, prop, prop_len);
-   if (node < 0) {
-      return ERR_NOT_FOUND;
-   }
-
-   prop = fdt_getprop(fdt, node, "compatible", &prop_len);
-   if (prop == NULL || prop_len == 0) {
-      return ERR_NOT_FOUND;
-   }
-
-   if (!strcmp(prop, "AAPL,s5l-uart") ||
-       !strcmp(prop, "apple,uart")) {
+   if (*type == SERIAL_AAPL_S5L) {
       if (fdt_get_reg(fdt, node, "reg", &io->channel.addr) < 0) {
          return ERR_UNSUPPORTED;
       }
       io->type = IO_MEMORY_MAPPED;
       io->offset_scaling = 1;
+      io->access = IO_ACCESS_32;
       if (baud != NULL) {
          *original_baudrate = strtol(baud, NULL, 0);
       } else {
          *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
       }
-      *type = SERIAL_AAPL_S5L;
       return ERR_SUCCESS;
    }
 
@@ -182,6 +168,8 @@ static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
    io->type = IO_MEMORY_MAPPED;
 
    io->channel.addr = spcr->BaseAddress.Address;
+   io->access = spcr->BaseAddress.AccessSize;
+
    switch (spcr->InterfaceType) {
    case SPCR_TYPE_BCM2835:
      /*
@@ -194,11 +182,20 @@ static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
    case EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_INTERFACE_TYPE_16550:
    case EFI_ACPI_SERIAL_PORT_CONSOLE_REDIRECTION_TABLE_INTERFACE_TYPE_16450:
    case SPCR_TYPE_16550_HONOR_GAS:
+   case SPCR_TYPE_NVIDIA_16550:
       *type = SERIAL_NS16550;
       /*
        * Regs are 8-bit wide, but are likely on a 32-bit boundary.
        */
       io->offset_scaling = spcr->BaseAddress.RegisterBitWidth / 8;
+      if (io->access == IO_ACCESS_LEGACY) {
+         io->access = IO_ACCESS_8;
+      }
+
+      if (io->access != IO_ACCESS_8 &&
+          io->access != IO_ACCESS_32) {
+         return ERR_UNSUPPORTED;
+      }
       break;
    case SPCR_TYPE_PL011:
    case SPCR_TYPE_SBSA_32BIT:
@@ -210,6 +207,13 @@ static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
       io->offset_scaling = spcr->BaseAddress.RegisterBitWidth / 32;
       if (io->offset_scaling == 0) {
          io->offset_scaling = 1;
+      }
+      if (io->access == IO_ACCESS_LEGACY) {
+         io->access = IO_ACCESS_32;
+      }
+
+      if (io->access != IO_ACCESS_32) {
+         return ERR_UNSUPPORTED;
       }
       break;
    default:
@@ -250,7 +254,7 @@ static int get_spcr_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
  * Results
  *      A generic error status.
  *----------------------------------------------------------------------------*/
-int get_serial_port(int com, serial_type_t *type, io_channel_t *io,
+int get_serial_port(int com, serial_type_t *type , io_channel_t *io,
                     uint32_t *original_baudrate)
 {
    int status;

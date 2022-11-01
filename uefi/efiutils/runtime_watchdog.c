@@ -56,18 +56,14 @@ int set_runtime_watchdog(unsigned int timeout)
 void dump_runtime_watchdog(unsigned int *minTimeoutSec,
                            unsigned int *maxTimeoutSec,
                            int *watchdogType,
-                           unsigned int *baseAddr)
+                           uint64_t *baseAddr)
 {
-   Log(LOG_DEBUG, "inside dump_runtime_watchdog");
    EFI_ASSERT(wdog != NULL);
 
-   Log(LOG_DEBUG, "past assert");
    *minTimeoutSec = wdog->MinTimeoutSeconds;
    *maxTimeoutSec = wdog->MaxTimeoutSeconds;
    *watchdogType = wdog->Type;
    *baseAddr = wdog->Base;
-
-   Log(LOG_DEBUG, "done dumping");
 }
 
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019,2021 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -101,9 +101,54 @@ acpi_sdt *acpi_find_sdt(const char *sig)
    return NULL;
 }
 
+/*-- acpi_install_table --------------------------------------------------------
+ *
+ *      Installs an ACPI table to the RSDT/XSDT.
+ *
+ *      If a table with the same signature is already installed, whether
+ *      the new table replaces the existing table, is added, or an error
+ *      is returned is implementation specific.
+ *
+ * Parameters
+ *      IN data:   pointer to ACPI SDT
+ *      IN length: length of ACPI SDT in bytes
+ *      OUT key:   key used to refer to the ACPI table when uninstalling
+ *
+ * Results
+ *      ERR_SUCCESS, or an error status.
+ *----------------------------------------------------------------------------*/
+int acpi_install_table(void *buffer, size_t size, unsigned int *key)
+{
+   if (buffer == NULL) {
+      return ERR_INVALID_PARAMETER;
+   }
+   if (size == 0) {
+      return ERR_BAD_BUFFER_SIZE;
+   }
+
+   return firmware_install_acpi_table(buffer, size, key);
+}
+
+/*-- acpi_uninstall_table ------------------------------------------------------
+ *
+ *      Removes an ACPI table from the RSDT/XSDT.
+ *
+ * Parameters
+ *      IN key: specifies the table to uninstall, returned by
+ *              acpi_table_install()
+ *
+ * Results
+ *      ERR_SUCCESS, or an error status.
+ *----------------------------------------------------------------------------*/
+int acpi_uninstall_table(unsigned int key)
+{
+   return firmware_uninstall_acpi_table(key);
+}
+
 /*-- acpi_init -----------------------------------------------------------------
  *
  *      Find ACPI tables, storing pointers to interesting tables if they exist.
+ *      Also initializes firmware ACPI table interfaces, if available.
  *
  * Parameters
  *      None
@@ -123,6 +168,8 @@ void acpi_init(void)
       LOG(LOG_DEBUG, "No ACPI present");
       return;
    }
+
+   firmware_init_acpi_table();
 
    if (rsdp->revision >= ACPI_RSDP_V2) {
       xsdt = (acpi_sdt *) (uintptr_t) rsdp->xsdt_address;

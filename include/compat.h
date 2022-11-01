@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -13,6 +13,12 @@
 #include <compiler.h>
 #include <error.h>
 #include <sys/types.h>
+
+#if defined(only_riscv64)
+#define arch_is_riscv64 1
+#else
+#define arch_is_riscv64 0
+#endif
 
 #if defined(only_arm64)
 #define arch_is_arm64 1
@@ -29,7 +35,7 @@
 #define arch_is_x86 0
 #endif
 
-#if defined(only_arm64) || defined(only_em64t)
+#if defined(only_arm64) || defined(only_em64t) || defined(only_riscv64)
 #define arch_is_64 1
 #else
 #define arch_is_64 0
