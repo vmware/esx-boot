@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -369,6 +369,16 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
                                      (EFI_PHYSICAL_ADDRESS)(UINTN)data,
                                      dataSize, tcg2Event);
    sys_free(tcg2Event);
+
+   /*
+    * Ignore log full errors. This error condition will be detected by
+    * the OS as a truncated event log, and remote attestation may fail.
+    */
+   if (Status == EFI_VOLUME_FULL) {
+      Log(LOG_WARNING, "Event log full while measuring event type %u to PCR %u",
+          eventType, pcrIndex);
+      Status = EFI_SUCCESS;
+   }
 
    return Status;
 }
