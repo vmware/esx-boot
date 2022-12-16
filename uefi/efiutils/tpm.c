@@ -28,16 +28,16 @@ typedef struct system_module_t {
 } system_module_t;
 
 
-static const uint32_t UPDATE_SYSTEM_PCR = 11;
-static const uint32_t CORE_SYSTEM_PCR = 12;
-static const uint32_t STATIC_DATA_PCR = 13;
-static const uint32_t VARIABLE_DATA_PCR = 14;
+#define UPDATE_SYSTEM_PCR 11
+#define CORE_SYSTEM_PCR 12
+#define STATIC_DATA_PCR 13
+#define VARIABLE_DATA_PCR 14
 
-static const uint32_t TPM_VMK_EVENT_MOD = 2;
-static const uint32_t TPM_VMK_EVENT_BOOT_OPT = 3;
-static const uint32_t TPM_VMK_EVENT_CMD_OPT = 4;
-static const uint32_t TPM_VMK_EVENT_TAG = 6;
-static const uint32_t TPM_VMK_EVENT_SIGNER = 7;
+#define TPM_VMK_EVENT_MOD 2
+#define TPM_VMK_EVENT_BOOT_OPT 3
+#define TPM_VMK_EVENT_CMD_OPT 4
+#define TPM_VMK_EVENT_TAG 6
+#define TPM_VMK_EVENT_SIGNER 7
 
 static system_module_t systemModules [] = {
    { "b",        CORE_SYSTEM_PCR,    TPM_VMK_EVENT_MOD,  false },
@@ -171,8 +171,8 @@ int tpm_extend_module(const char *filename,
    const char *basename;
    const char *ext;
    size_t normalizedLen;
-   uint32_t pcrIndex;
-   uint32_t eventType;
+   uint32_t pcrIndex = 0;  // mollify older gcc
+   uint32_t eventType = 0; // ditto
    tpm_event_t event;
 
    if (!useTpm) {
