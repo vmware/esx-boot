@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -374,11 +374,18 @@ int tpm_extend_module(const char *filename,
 
    if (size == 0) {
       /*
-       * Zero-sized ranges can't be measured by the UEFI runtime
-       * support, but we want to include all loaded modules. Use a
-       * single zero byte instead.
+       * The addr will be zero when size is zero. But the UEFI runtime
+       * will return an error when addr is zero. Give a valid addr to
+       * make the UEFI runtime happy.
        */
       addr = &zeroByte;
+
+      /*
+       * Specifying a zero-length buffer should work, but we have seen
+       * some firmware implementations that are unable to handle it and
+       * instead produce a corrupt event log. Use a single zero-byte
+       * instead. See PR 3018228.
+       */
       size = sizeof(zeroByte);
    }
 

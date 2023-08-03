@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -105,6 +105,15 @@ EFI_STATUS efi_set_watchdog_timer(UINTN Timeout)
    }
 
    return Status;
+}
+
+/*-- firmware_reset_watchdog ---------------------------------------------------
+ *
+ *      Reset the watchdog timer, if any, to the default timeout.
+ *----------------------------------------------------------------------------*/
+void firmware_reset_watchdog()
+{
+   efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
 }
 
 /*-- chainload_parent ----------------------------------------------------------

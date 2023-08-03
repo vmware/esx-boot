@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2020-2021 VMware, Inc. All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2020-2022 VMware, Inc. All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -112,8 +112,13 @@ trampoline:
 
       sub     rsp, 2                      ; Allocate far pointer CS on the stack
       call    .get_current_rip            ; Push RIP
-.get_current_rip:                         ; FarPtr.offset = .disable_paging
-      add     DWORD [rsp], .disable_paging - .get_current_rip
+.get_current_rip:
+      mov     r9d, .disable_paging - .get_current_rip
+      mov     r10d, .reload_segments - .get_current_rip
+      call    .tdx_enabled                ; Check if TDX is enabled
+      test    r8d, r8d
+      cmovnz  r9d, r10d                   ; Skip clearing CR0.PG and EFER.LME
+      add     DWORD [rsp], r9d            ; FarPtr.offset = R9
       mov     WORD [rsp + 4], BOOT_CS     ; FarPtr.cs = BOOT_CS
 
       lgdt    [rax]                       ; Load 32-bit (compatibility mode) GDT
@@ -161,6 +166,7 @@ trampoline:
 ;;      New GDT is up, and describes a 4-Gb flat 32-bit memory.
 ;;
 ;;      EBX = ESXBootInfo or Multiboot Info structure address
+;;      EDX = ESXBootInfo or Multiboot magic
 ;;      EBP = kernel entry point
 ;;------------------------------------------------------------------------------
 .disable_paging:
@@ -179,8 +185,10 @@ trampoline:
       mov      edx, esi                   ; Restore ESXBootInfo magic
 %endif
 
+.reload_segments:
 ;;
 ;; Here we are in protected mode, paging disabled.
+;; On Intel TDX, we are still in compatibility mode.
 ;;
       mov      ax, BOOT_DS                ; For reloading data segments
       mov      ds, ax                     ; DS = BOOT_DS
@@ -199,4 +207,37 @@ trampoline:
 .not_reached:                             ; Kernel is not supposed to return!
       hlt
       jmp     .not_reached
+
+%if IS_64_BIT
+[BITS 64]
+;;
+;; Returns 1 in R8 if Intel TDX is enabled and 0 otherwise.
+;;
+.tdx_enabled:
+      push    rax                         ; Save registers clobbered by CPUID
+      push    rbx
+      push    rcx
+      push    rdx
+      xor     r8d, r8d                    ; R8 = false
+      xor     eax, eax                    ; EAX = Max Leaf/Vendor String
+      cpuid                               ; Check if leaf 0x21 is supported
+      cmp     eax, CPUID_INTEL_TDX_CAPS
+      jne     .tdx_enabled_ret
+      mov     eax, CPUID_INTEL_TDX_CAPS   ; EAX = Intel TDX Capabilities
+      xor     ecx, ecx                    ; ECX = Max Leaf/Vendor String
+      cpuid                               ; Check if Intel TDX is enabled
+      cmp     ebx, INTEL_TDX_VENDOR_ID_EBX
+      jne     .tdx_enabled_ret
+      cmp     ecx, INTEL_TDX_VENDOR_ID_ECX
+      jne     .tdx_enabled_ret
+      cmp     edx, INTEL_TDX_VENDOR_ID_EDX
+      inc     r8d                         ; R8 = true
+.tdx_enabled_ret:
+      pop     rdx                         ; Restore registers clobbered by CPUID
+      pop     rcx
+      pop     rbx
+      pop     rax
+      ret
+%endif
+
 .trampoline_end:

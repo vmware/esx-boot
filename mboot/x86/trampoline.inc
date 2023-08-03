@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2021 VMware, Inc.  All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2021-2022 VMware, Inc.  All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -87,3 +87,12 @@
 %define GDT_DESC_4GB_FLAT_CODE32 0x00cf9a000000ffff
 %define GDT_DESC_4GB_FLAT_DATA32 0x00cf92000000ffff
 %define GDT_LIMIT                (3 * GDT_DESC_SIZE - 1)
+
+;;
+;; CPUID
+;;
+
+%define CPUID_INTEL_TDX_CAPS    0x21
+%define INTEL_TDX_VENDOR_ID_EBX 0x65746e49      ; "Inte"
+%define INTEL_TDX_VENDOR_ID_ECX 0x20202020      ; "    "
+%define INTEL_TDX_VENDOR_ID_EDX 0x5844546c      ; "lTDX"

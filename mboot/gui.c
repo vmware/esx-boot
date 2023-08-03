@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2013-2014,2017,2022 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -32,8 +32,6 @@
 #define ASCII_ENTER        0x0d
 #define ASCII_ESCAPE       0x1b
 #define ASCII_DELETE       0x7f
-
-#define EXIT_DEFAULT_TIMEOUT 30
 
 typedef enum {
    RENDER_REFRESH,     /* Only draw changin pixels */
@@ -521,7 +519,7 @@ int gui_resize(unsigned int width, unsigned int height, unsigned int depth,
  *      True if mboot should exit so the calling program can handle the error.
  *      For example, by rebooting the machine.
  *----------------------------------------------------------------------------*/
-bool gui_exit(void)
+bool gui_exit(int timeout)
 {
    bool status = true;
    unsigned int w;
@@ -542,7 +540,7 @@ bool gui_exit(void)
    fb_print(fb, " ANY OTHER KEY         ", x, y, w,
             TRANSPARENT, COLOR_KEY, ALIGN_RIGHT);
 
-   for (n = EXIT_DEFAULT_TIMEOUT; n >= 0; n--) {
+   for (n = timeout; n >= 0; n--) {
       fb_draw_rect(fb, x, y + font_height(1), w, font_height(1), COLOR_BG);
 
       snprintf(msg, sizeof(msg), "Exiting in %d second%s...",

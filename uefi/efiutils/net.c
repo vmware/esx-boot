@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2015,2019-2020,2022 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -74,6 +74,8 @@ int get_bootif_option(const char **bootif)
    EFI_SIMPLE_NETWORK *Network;
    EFI_HANDLE BootVolume, Nic;
    int ipv;
+   EFI_MAC_ADDRESS mac;
+   UINT8 macType = MAC_UNKNOWN;
    EFI_STATUS Status;
 
    Status = get_boot_volume(&BootVolume);
@@ -82,7 +84,7 @@ int get_bootif_option(const char **bootif)
    }
 
    if (is_http_boot()) {
-      Status = get_http_nic_and_ipv(BootVolume, &Nic, &ipv);
+      Status = get_http_nic_info(BootVolume, &Nic, &ipv, &mac, &macType);
       if (EFI_ERROR(Status)) {
          return error_efi_to_generic(Status);
       }
@@ -90,21 +92,20 @@ int get_bootif_option(const char **bootif)
       Nic = BootVolume;
    }
 
-   Status = get_protocol_interface(Nic, &SimpleNetworkProto,
-                                   (VOID **)&Network);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
+   if (macType == MAC_UNKNOWN) {
+      Status = get_protocol_interface(Nic, &SimpleNetworkProto,
+                                      (VOID **)&Network);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+      macType = Network->Mode->IfType;
+      mac = Network->Mode->CurrentAddress;
    }
 
    snprintf(ipappend, sizeof (ipappend),
             "BOOTIF=%02x-%02x-%02x-%02x-%02x-%02x-%02x",
-            (uint32_t)Network->Mode->IfType,
-            (uint32_t)Network->Mode->CurrentAddress.Addr[0],
-            (uint32_t)Network->Mode->CurrentAddress.Addr[1],
-            (uint32_t)Network->Mode->CurrentAddress.Addr[2],
-            (uint32_t)Network->Mode->CurrentAddress.Addr[3],
-            (uint32_t)Network->Mode->CurrentAddress.Addr[4],
-            (uint32_t)Network->Mode->CurrentAddress.Addr[5]);
+            macType, mac.Addr[0], mac.Addr[1], mac.Addr[2],
+            mac.Addr[3], mac.Addr[4], mac.Addr[5]);
 
    *bootif = ipappend;
 

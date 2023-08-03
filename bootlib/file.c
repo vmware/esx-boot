@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2016,2019-2020,2022 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -385,6 +385,7 @@ int file_get_size_hint(int volid, const char *filename, size_t *filesize)
 
    *filesize = size;
 
+   firmware_reset_watchdog();
    return ERR_SUCCESS;
 }
 
@@ -417,6 +418,7 @@ int file_load(int volid, const char *filename, int (*callback)(size_t),
       status = firmware_file_read(filename, callback, buffer, bufsize);
    }
 
+   firmware_reset_watchdog();
    return status;
 }
 
@@ -442,11 +444,14 @@ int file_load(int volid, const char *filename, int (*callback)(size_t),
 int file_save(int volid, const char *filename, int (*callback)(size_t),
               void *buffer, size_t bufsize)
 {
+   int status;
    if (volid != FIRMWARE_BOOT_VOLUME) {
       return ERR_UNSUPPORTED;
    }
 
-   return firmware_file_write(filename, callback, buffer, bufsize);
+   status = firmware_file_write(filename, callback, buffer, bufsize);
+   firmware_reset_watchdog();
+   return status;
 }
 
 /*-- file_overwrite ------------------------------------------------------------
@@ -512,5 +517,6 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
    libfat_close(fs);
 
    sys_free(sectorbuf);
+   firmware_reset_watchdog();
    return status;
 }

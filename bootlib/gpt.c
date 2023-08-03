@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018,2021-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -21,6 +21,10 @@ typedef struct {
 } GUID;
 
 #define GPT_SIGNATURE   0x5452415020494645ULL
+
+#define GPT_UNUSED_PARTITION_GUID \
+   { 0x00000000, 0x0000, 0x00, \
+      { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } }
 
 #define GPT_BASIC_DATA_PARTITION_GUID \
    { 0xEBD0A0A2, 0xB9E5, 0x4433, \
@@ -56,6 +60,7 @@ typedef struct {
    uint16_t name[36];
 } gpt_entry;
 
+static const GUID unused_partition_guid = GPT_UNUSED_PARTITION_GUID;
 static const GUID basic_data_partition_guid = GPT_BASIC_DATA_PARTITION_GUID;
 static const GUID efi_system_partition_guid = GPT_EFI_SYSTEM_PARTITION_GUID;
 
@@ -82,6 +87,9 @@ static void gpt_to_partinfo(gpt_entry *gpt_part, int part_id,
    } else if (memcmp(&efi_system_partition_guid,
                      &gpt_part->type, sizeof(GUID)) == 0) {
       partition->info.type = PART_TYPE_EFI;
+   } else if (memcmp(&unused_partition_guid,
+                     &gpt_part->type, sizeof(GUID)) == 0) {
+      partition->info.type = PART_TYPE_EMPTY;
    } else {
       /*
        * Could check for more GUIDs here, but we don't care about the exact

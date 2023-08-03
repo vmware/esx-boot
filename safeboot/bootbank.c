@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018-2019 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2018-2019,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -128,7 +128,10 @@ static int bank_scan(int volid, bootbank_t *bank)
    /* Get bank UUID */
    status = vmfat_get_uuid(volid, bank->uuid, VMWARE_FAT_UUID_LEN);
    if (status != ERR_SUCCESS) {
-      Log(LOG_DEBUG, "BANK%d: no bank UUID.\n", volid);
+      if (status != ERR_NO_MEDIA) { // don't log unused partition table entries
+         Log(LOG_DEBUG, "BANK%d: no bank UUID: %s.\n",
+             volid, error_str[status]);
+      }
       return status;
    }
 

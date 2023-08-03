@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2017,2019-2021 VMware, Inc.
+ * Copyright (c) 2008-2013,2015-2017,2019-2022 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -209,6 +209,15 @@ int chainload_parent(const char *cmdline)
    sys_free(bin);
 
    return status;
+}
+
+/*-- firmware_reset_watchdog ---------------------------------------------------
+ *
+ *      Reset the watchdog timer, if any, to the default timeout.
+ *----------------------------------------------------------------------------*/
+void firmware_reset_watchdog()
+{
+   // There is no watchdog timer on com32
 }
 
 /*-- com32_get_boot_drive ------------------------------------------------------

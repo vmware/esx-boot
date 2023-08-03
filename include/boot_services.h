@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -56,6 +56,7 @@ EXTERN int get_memory_map(size_t desc_extra_mem, e820_range_t **mmap,
 EXTERN void log_memory_map(efi_info_t *efi_info);
 EXTERN void free_memory_map(e820_range_t *mmap, efi_info_t *efi_info);
 EXTERN int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks);
+EXTERN void firmware_reset_watchdog(void);
 
 /*
  * System information

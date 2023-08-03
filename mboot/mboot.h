@@ -157,7 +157,6 @@ typedef struct {
    bool verbose;              /* Verbose mode (true = on, false = off) */
    bool debug;                /* Debug mode (true = on, false = off) */
    bool headless;             /* True if no video adapter is found */
-   bool exit_on_errors;       /* Exit on transient errors */
    bool bootif;               /* Force BOOTIF= on the kernel command line */
    bool no_mem_attr;          /* Do not pass extended attr in Multiboot mmap */
    bool is_network_boot;      /* Is the boot process via network? */
@@ -166,9 +165,10 @@ typedef struct {
    bool no_rts;               /* Disable UEFI runtime services support */
    bool serial;               /* Is the serial log enabled? */
    bool tpm_measure;          /* Should TPM measurements be made? */
-   uint32_t timeout;          /* Autoboot timeout in units of seconds */
    bool runtimewd;            /* Is there a hardware runtime watchdog? */
+   uint32_t timeout;          /* Autoboot timeout in units of seconds */
    uint32_t runtimewd_timeout;/* Hardware runtime watchdog timeout, seconds */
+   int32_t err_timeout;       /* Exit on errors after timeout (-1 = hang) */
 } boot_info_t;
 
 EXTERN boot_info_t boot;
@@ -312,6 +312,6 @@ int gui_resize(unsigned int width, unsigned int height, unsigned int depth,
                unsigned int min_width, unsigned int min_height,
                unsigned int min_depth);
 int gui_text(void);
-bool gui_exit(void);
+bool gui_exit(int timeout);
 
 #endif /* !MBOOT_H_ */

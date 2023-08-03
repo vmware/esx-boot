@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -86,57 +86,6 @@ EFI_STATUS has_ipv4_addr(EFI_HANDLE NicHandle)
    return Status;
 }
 
-/*-- set_policy_dhcp4 ----------------------------------------------------------
- *
- *      Set IPv4 policy to DHCP.
- *
- * Parameters
- *      IN  NicHandle: Handle for NIC to use.
- *
- * Results
- *      EFI_SUCCESS or an error.
- *----------------------------------------------------------------------------*/
-EFI_STATUS set_policy_dhcp4(EFI_HANDLE NicHandle)
-{
-   EFI_STATUS Status;
-   EFI_IP4_CONFIG2_PROTOCOL *Ip4Config2;
-   UINTN DataSize;
-   EFI_IP4_CONFIG2_POLICY Policy;
-
-   Status = get_protocol_interface(NicHandle, &Ip4Config2Proto,
-                                   (void**)&Ip4Config2);
-   if (EFI_ERROR(Status)) {
-      Log(LOG_ERR, "Error getting Ip4Config2 protocol: %s",
-          error_str[error_efi_to_generic(Status)]);
-      return Status;
-   }
-
-   DataSize = sizeof(Policy);
-   Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypePolicy,
-                                &DataSize, &Policy);
-   if (EFI_ERROR(Status)) {
-      Log(LOG_ERR, "Error in Ip4Config2->GetData (policy): %s",
-          error_str[error_efi_to_generic(Status)]);
-      return Status;
-   }
-
-   if (Policy == Ip4Config2PolicyDhcp) {
-      return EFI_SUCCESS;
-   }
-
-   Log(LOG_DEBUG, "Changing IPv4 policy to DHCP");
-   Policy = Ip4Config2PolicyDhcp;
-   Status = Ip4Config2->SetData(Ip4Config2, Ip4Config2DataTypePolicy,
-                                sizeof(Policy), &Policy);
-   if (EFI_ERROR(Status)) {
-      Log(LOG_ERR, "Error in Ip4Config2->SetData (policy): %s",
-          error_str[error_efi_to_generic(Status)]);
-      return Status;
-   }
-
-   return EFI_SUCCESS;
-}
-
 /*-- dhcp4_cleanup -------------------------------------------------------------
  *
  *      Clean up cached Dhcp4 instance.
@@ -171,8 +120,10 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
    EFI_STATUS Status;
    EFI_DHCP4_CONFIG_DATA Dhcp4CfgData;
    EFI_DHCP4_MODE_DATA Dhcp4ModeData;
+   EFI_DHCP4_STATE prevState = (EFI_DHCP4_STATE) -1;
 
    if (Dhcp4NicHandle != NULL && NicHandle != Dhcp4NicHandle) {
+      Log(LOG_DEBUG, "New NicHandle; calling dhcp4_cleanup");
       dhcp4_cleanup();
    }
 
@@ -215,6 +166,9 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
          Log(LOG_ERR, "Error in Dhcp4->GetModeData: %s",
              error_str[error_efi_to_generic(Status)]);
          return Status;
+      }
+      if (Dhcp4ModeData.State != prevState) {
+         Log(LOG_DEBUG, "Dhcp4ModeData.State %u", Dhcp4ModeData.State);
       }
 
       switch (Dhcp4ModeData.State) {
@@ -275,8 +229,26 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
              Dhcp4ModeData.SubnetMask.Addr[3],
              Dhcp4ModeData.LeaseTime);
          Dhcp4NicHandle = NicHandle;
+
+         Status = has_ipv4_addr(NicHandle);
+         if (Status != EFI_SUCCESS) {
+            /*
+             * XXX This is actually happening, but moments later the
+             * IP address is used by HTTP and working!  It seems some
+             * magic in the network stack finds the DHCP object and
+             * pulls the address out of it on demand.  Possibly we
+             * should explicitly copy in the IP address here just in
+             * case.  We don't get the DNS server address in
+             * Dhcp4ModeData, however, so that still would have to
+             * come in by similar magic, as it does now.
+             */
+            Log(LOG_DEBUG, "Dhcp4Bound but IP address not set (yet): %s",
+                error_str[error_efi_to_generic(Status)]);
+         }
+
          return EFI_SUCCESS;
       }
+      prevState = Dhcp4ModeData.State;
    }
 }
 
@@ -297,10 +269,6 @@ EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle)
 
    Status = has_ipv4_addr(NicHandle);
    if (Status != EFI_NO_MAPPING) {
-      return Status;
-   }
-   Status = set_policy_dhcp4(NicHandle);
-   if (EFI_ERROR(Status)) {
       return Status;
    }
    return run_dhcpv4(NicHandle);

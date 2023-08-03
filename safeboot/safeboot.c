@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2016,2018,2020-2021 VMware, Inc.
+ * Copyright (c) 2008-2011,2014,2016,2018,2020-2022 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -73,7 +73,7 @@ static int safeboot_init(int argc, char **argv)
    if (argc > 1) {
       optind = 1;
       do {
-         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:fN:b:");
+         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:E:fN:b:");
          switch (opt) {
             case -1:
                break;
@@ -104,6 +104,7 @@ static int safeboot_init(int argc, char **argv)
             case 't':
             case 'R':
             case 'p':
+            case 'E':
             case 'N':
             case 'b':
                /*

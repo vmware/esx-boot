@@ -171,6 +171,7 @@ CFLAGS     += -g
 BUILD_DIR  := $(TOPDIR)/build/$(BUILDENV)
 
 LIB_DIR    := $(BUILD_DIR)/lib
+LIBBP      := $(LIB_DIR)/bp/libbp.a
 LIBC       := $(LIB_DIR)/c/libc.a
 LIBFAT     := $(LIB_DIR)/fat/libfat.a
 LIBCRC     := $(LIB_DIR)/crc/libcrc.a
@@ -184,7 +185,7 @@ CRYPTOLIB  := $(LIB_DIR)/mbedtls/libmbedtls.a
 FDTLIB     := $(LIB_DIR)/fdt/libfdt.a
 
 ENV_LIB    := $(FIRMLIB) $(LIBFAT) $(LIBC) $(LIBCRC) $(LIBMD5) $(LIBUART) \
-              $(ZLIB) $(LIBGCC)
+              $(ZLIB) $(LIBGCC) $(LIBBP)
 
 LIBMD5_INC := $(TOPDIR)/libmd5
 STDINC     := $(TOPDIR)/libc/include $(TOPDIR)/include $(TOPDIR)/include/$(IARCH) $(LIBMD5_INC)
@@ -198,6 +199,7 @@ UEFIINC    := $(TOPDIR)/uefi                        \
               $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 FDTINC     := $(TOPDIR)/libfdt
+BPINC      := $(TOPDIR)/libbp
 
 ifneq ($(filter arm64 riscv64,$(ARCH)),)
 ENV_LIB += $(FDTLIB)

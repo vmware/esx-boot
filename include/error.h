@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015,2019-2020,2022 VMware, Inc. All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,6 +9,20 @@
 
 #ifndef ERROR_H_
 #define ERROR_H_
+
+/*
+ * Note: If you add new errors, add them at the end of the table.  ERR_SUCCESS
+ * and ERR_UNKNOWN must be first, as error_efi_to_generic() relies on this.
+ * Moreover, do not change the numeric value of any generic error, because the
+ * numeric values sometimes appear in the UI.
+ *
+ * Try to avoid adding new generic errors that don't have EFI equivalents,
+ * because error_generic_to_efi() will lose information if it needs to
+ * translate such an error.  If a generic error does not have an EFI
+ * equivalent, use EFI_UNDEFINED_ERROR (which is actually
+ * EFI_INVALID_PARAMETER) in the second column of the table.
+ */
+#define EFI_UNDEFINED_ERROR EFI_INVALID_PARAMETER
 
 #define ERROR_TABLE \
 D(ERR_SUCCESS,              EFI_SUCCESS,              "Success")              \
@@ -60,7 +74,7 @@ D(ERR_PORT_UNREACHABLE,     EFI_PORT_UNREACHABLE,     "Port unreachable")     \
 D(ERR_CONNECTION_FIN,       EFI_CONNECTION_FIN,       "Connection closed")    \
 D(ERR_CONNECTION_RESET,     EFI_CONNECTION_RESET,     "Connection reset")     \
 D(ERR_CONNECTION_REFUSED,   EFI_CONNECTION_REFUSED,   "Connection refused")   \
-D(ERR_TEST_FAILURE,         EFI_UNSUPPORTED,          "Test error")           \
+D(ERR_TEST_FAILURE,         EFI_UNDEFINED_ERROR,      "Test error")           \
 
 #define D(symbol, efi_symbol, string) symbol,
 enum {

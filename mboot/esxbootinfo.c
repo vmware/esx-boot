@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -15,6 +15,7 @@
 #include <e820.h>
 #include <boot_services.h>
 #include <cpu.h>
+#include <bapply.h>
 
 #include "mboot.h"
 
@@ -40,6 +41,7 @@ static size_t size_ebi;
 static ESXBootInfo_Elmt *next_elmt; /* Next ESXBootInfo element to use */
 static char **cmdlines;
 static vbe_info_t vbe;              /* VBE information */
+
 
 /*-- esxbootinfo_scan ----------------------------------------------------------
  *
@@ -769,6 +771,10 @@ int esxbootinfo_register(void)
       Log(LOG_ERR, "Kernel registration error.\n");
       return status;
    }
+
+#if defined(only_arm64)
+   status = bapply_patch_esxinfo((void *)boot.modules[0].addr);
+#endif
 
    /*
     * Ensure the EBI and all subsequent system objects start on a page boundary.

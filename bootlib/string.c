@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2020-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -412,7 +412,8 @@ int make_path(const char *default_root_dir, const char *filepath, char **buffer)
 
 /*-- is_number -----------------------------------------------------------------
  *
- *      Check whether a string contains only digit characters.
+ *      Check whether a string consists of an optional leading minus sign
+ *      followed only by digit characters.
  *
  * Parameters
  *      IN str: input string
@@ -422,6 +423,9 @@ int make_path(const char *default_root_dir, const char *filepath, char **buffer)
  *----------------------------------------------------------------------------*/
 bool is_number(const char *str)
 {
+   if (*str == '-') {
+      str++;
+   }
    while (*str != '\0') {
       if (!isdigit((int)*str++)) {
          return false;

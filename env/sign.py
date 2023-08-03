@@ -1,15 +1,14 @@
 #! /usr/bin/python
 
 #*******************************************************************************
-# Copyright (c) 2015-2017 VMware, Inc.  All rights reserved.
+# Copyright (c) 2015-2018,2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
 # Wrapper script around the signing process.
 # Usage: sign.py key1+key2+...+keyn inputFile [outputFile]
 # Environment variables:
-#  SIGN_RELEASE_BINARIES, LOCALKEYS,
-#  SBSIGN, SBATTACH, SBVERIFY, AUTHENTICODESIGNC
+#  SIGN_RELEASE_BINARIES, LOCALKEYS, SBSIGN, SBATTACH, SBVERIFY, SIGNC
 
 import sys
 import os
@@ -20,7 +19,7 @@ official = os.getenv('SIGN_RELEASE_BINARIES') == '1'
 sbsign = os.getenv('SBSIGN') or 'sbsign'
 sbattach = os.getenv('SBATTACH') or 'sbattach'
 sbverify = os.getenv('SBVERIFY') or 'sbverify'
-authenticodesignc = os.getenv('AUTHENTICODESIGNC') or 'authenticodesignc'
+signc = os.getenv('SIGNC') or 'signc'
 topdir = os.getenv('TOPDIR') or '.'
 sigcache = topdir + '/sigcache'
 localkeys = os.getenv('LOCALKEYS') or topdir + '/localkeys'
@@ -42,16 +41,17 @@ def localsign(iname, key):
                           '--output', signame(iname, key),
                           iname])
 
-# Sign remotely with authenticodesignc.  Usable with official keys.
+# Sign remotely with signc.  Usable with official keys.
 # Creates detached signature file signame(iname, key).
 def remotesign(iname, key):
    tmpname = iname + '-' + key + '.tmp'
-   subprocess.check_call([authenticodesignc,
+   subprocess.check_call([signc,
                           '--verbose',
+                          '--signmethod', 'winddk-8.1',
                           '--hash', 'sha256',
                           '--key', key,
-                          '--infile', iname,
-                          '--outfile', tmpname])
+                          '--input', iname,
+                          '--output', tmpname])
    ret = subprocess.check_call([sbattach,
                                 '--detach', signame(iname, key), tmpname])
    os.remove(tmpname)

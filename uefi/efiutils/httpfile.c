@@ -107,24 +107,30 @@ static EFI_STATUS
 http_file_load_try(const CHAR16 *Url, const char *hostname,
                    int (*callback)(size_t), VOID **Buffer, UINTN *BufSize);
 
-/*-- get_http_nic_and_ipv ------------------------------------------------------
+/*-- get_http_nic_info --------------------------------------------------------
  *
- *      Get a NIC handle and IP version implied by the given handle's devpath.
+ *      Get the NIC handle, IP version, and MAC address implied by the given
+ *      handle's devpath.
  *
  * Parameters
- *      IN  volumeIn:  EFI handle
- *      OUT nicOut:    EFI handle
- *      OUT ipvOut:    4 or 6.
+ *      IN  volumeIn:   EFI handle
+ *      OUT nicOut:     EFI handle
+ *      OUT ipvOut:     4 or 6.
+ *      OUT macOut:     MAC address if found in path
+ *      OUT macTypeOut: MAC address interface type, MAC_UNKNOWN if not found
  *
  * Results
  *      EFI_SUCCESS, or an EFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS get_http_nic_and_ipv(EFI_HANDLE volumeIn,
-                                EFI_HANDLE *nicOut, int *ipvOut)
+EFI_STATUS get_http_nic_info(EFI_HANDLE volumeIn,
+                             EFI_HANDLE *nicOut, int *ipvOut,
+                             EFI_MAC_ADDRESS *macOut, UINT8 *macTypeOut)
 {
    static EFI_HANDLE volume = NULL;
    static EFI_HANDLE nic = NULL;
    static int ipv = 0;
+   static EFI_MAC_ADDRESS mac;
+   static UINT8 macType = MAC_UNKNOWN;
    static EFI_STATUS Status;
    EFI_DEVICE_PATH *DevPath, *node, *tmp;
    EFI_DEVICE_PATH *NewDevPath = NULL;
@@ -150,12 +156,38 @@ EFI_STATUS get_http_nic_and_ipv(EFI_HANDLE volumeIn,
       goto done;
    }
 
+   /*
+    * A typical HTTP boot volume handle's devpath looks like this:
+    * PcieRoot(0x8)/Pci(0x2,0x0)/MAC(000C2947C8BE,0x1)/IPv4(0.0.0.0,TCP,DHCP,10.20.72.24,10.20.75.253,255.255.252.0)/Dns(10.20.145.1,10.33.4.1,10.33.38.1)/Uri(http://suite-http.eng.vmware.com/linux-install/menu.efi)
+    *
+    * When booting from a VLAN trunk port on an explicitly selected VLAN, there
+    * is an extra node between the MAC node and IP version node that gives the
+    * VLAN ID, similar to this:
+    * PcieRoot(0x8)/Pci(0x2,0x0)/MAC(000C2947C8BE,0x1)/Vlan(3125)/IPv4(0.0.0.0,TCP,DHCP,10.20.72.24,10.20.75.253,255.255.252.0)/Dns(10.20.145.1,10.33.4.1,10.33.38.1)/Uri(http://suite-http.eng.vmware.com/linux-install/menu.efi)
+    *
+    * The following code scans the devpath to find the MAC address and
+    * IP version, then uses bs->LocateDevicePath to find the handle on
+    * the path that has HttpServiceBindingProto.  In the non-VLAN
+    * case, that's the MAC node; in the VLAN case, it's the Vlan node.
+    *
+    * (Historical note: PR 3020233 occurred because get_bootif_option
+    * was assuming nicOut would have the SimpleNetworkProtocol
+    * installed, which it could use to get the MAC address.  But that
+    * isn't true in the VLAN case.  The bug was fixed by instead
+    * getting the MAC address here while scanning the devpath.)
+    */
    FOREACH_DEVPATH_NODE(NewDevPath, node) {
-      if (node->Type == MESSAGING_DEVICE_PATH &&
-          (node->SubType == MSG_IPv4_DP || node->SubType == MSG_IPv6_DP)) {
-         ipv = (node->SubType == MSG_IPv4_DP) ? 4 : 6;
-         SetDevPathEndNode(node);
-         break;
+      if (node->Type == MESSAGING_DEVICE_PATH) {
+         if (node->SubType == MSG_MAC_ADDR_DP) {
+            MAC_ADDR_DEVICE_PATH *ma = (MAC_ADDR_DEVICE_PATH *)node;
+            macType = ma->IfType;
+            mac = ma->MacAddress;
+         } else if (node->SubType == MSG_IPv4_DP ||
+                    node->SubType == MSG_IPv6_DP) {
+            ipv = (node->SubType == MSG_IPv4_DP) ? 4 : 6;
+            SetDevPathEndNode(node);
+            break;
+         }
       }
    }
 
@@ -175,10 +207,21 @@ EFI_STATUS get_http_nic_and_ipv(EFI_HANDLE volumeIn,
       Status = EFI_NOT_FOUND;
    }
 
+   if (macType != MAC_UNKNOWN) {
+      Log(LOG_DEBUG, "MAC address in volume devpath: "
+          "%02x-%02x-%02x-%02x-%02x-%02x-%02x",
+          macType, mac.Addr[0], mac.Addr[1], mac.Addr[2],
+          mac.Addr[3], mac.Addr[5], mac.Addr[6]);
+   } else {
+      Log(LOG_DEBUG, "No MAC address in volume devpath");
+   }
+
  done:
    sys_free(NewDevPath);
-   *nicOut = nic;
-   *ipvOut = ipv;
+   if (nicOut) *nicOut = nic;
+   if (ipvOut) *ipvOut = ipv;
+   if (macOut) *macOut = mac;
+   if (macTypeOut) *macTypeOut = macType;
    return Status;
 }
 
@@ -420,7 +463,7 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
    /*
     * Find which NIC and IP version to use.
     */
-   Status = get_http_nic_and_ipv(Volume, &NicHandle, &ipv);
+   Status = get_http_nic_info(Volume, &NicHandle, &ipv, NULL, NULL);
    if (EFI_ERROR(Status)) {
       /*
        * Fail silently in this case, and cache the error.  It can occur when
@@ -440,7 +483,7 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
                                    (void**)&HttpServiceBinding);
    if (EFI_ERROR(Status)) {
       /*
-       * This shouldn't be possible, because get_http_nic_and_ipv has already
+       * This shouldn't be possible, because get_http_nic_info has already
        * looked for HttpServiceBindingProto on the NicHandle.
        */
       Log(LOG_ERR, "Error getting HttpServiceBinding protocol: %s",
@@ -769,7 +812,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
       RespMessage.Headers = NULL;
    }
    if (size == (size_t)-1) {
-      Log(LOG_ERR, "No http Content-Length header");
+      Log(LOG_DEBUG, "No http Content-Length header");
       Status = EFI_PROTOCOL_ERROR;
       goto out;
    }
@@ -907,7 +950,7 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
    ascii_to_ucs2(filepath, &Url);
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
 
-   Status = get_http_nic_and_ipv(Volume, &NicHandle, &ipv);
+   Status = get_http_nic_info(Volume, &NicHandle, &ipv, NULL, NULL);
    if (EFI_ERROR(Status)) {
       goto out;
    }

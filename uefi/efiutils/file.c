@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -331,6 +331,7 @@ int firmware_image_start(EFI_HANDLE ChildHandle)
    CHAR16 *ExitData = NULL;
    int status;
 
+   firmware_reset_watchdog();
    Status = bs->StartImage(ChildHandle, &ExitDataSize, &ExitData);
    status = error_efi_to_generic(Status);
    if (EFI_ERROR(Status)) {

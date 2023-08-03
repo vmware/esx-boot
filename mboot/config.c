@@ -58,7 +58,15 @@
  * acpitables=<FILEPATH1 --- FILEPATH2... --- FILEPATHn>
  *    ACPI table list separated by \"---\".
  * runtimewdtimeout=<SECONDS>
- *    Timeout in seconds before watchdog resets in seconds. Default: 0.
+ *    Timeout in seconds before watchdog resets. Default: 0.
+ * skip=<0|1>
+ *    If skip=1, exit with a fatal error.  If booting from the system's
+ *    configured UEFI boot order, the error will cause the UEFI boot manager to
+ *    move on and try booting the next boot option in the boot order.
+ * errtimeout=<SECONDS>
+ *    When a fatal error occurs: if SECONDS >= 0, exit with error status after
+ *    SECONDS, or immediately if in headless mode; if SECONDS < 0, hang.
+ *    Default: -1 if skip=0, 5 if skip=1.
  */
 static option_t mboot_options[] = {
    {"kernel", "=", {NULL}, OPT_STRING, {0}},
@@ -76,6 +84,8 @@ static option_t mboot_options[] = {
    {"tftpblksize", "=", {.integer = 0}, OPT_INTEGER, {0}},
    {"acpitables", "=", {NULL}, OPT_STRING, {0}},
    {"runtimewdtimeout", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"skip", "=", {.integer = 0}, OPT_INTEGER, {0}},
+   {"errtimeout", "=", {.integer = -1}, OPT_INTEGER, {0}},
    {NULL, NULL, {NULL}, OPT_INVAL, {0}}
 };
 
@@ -631,6 +641,7 @@ int parse_config(const char *filename)
    char *mod_list, *acpitab_list, *title, *prefix, *kernel, *kopts;
    char *path = NULL;
    int status;
+   bool skip = false;
 
    status = locate_config_file(filename, &path);
    if (status != ERR_SUCCESS) {
@@ -669,15 +680,31 @@ int parse_config(const char *filename)
    }
    acpitab_list = mboot_options[13].value.str;  /* ACPI table list */
    boot.runtimewd_timeout = mboot_options[14].value.integer;
+   skip = mboot_options[15].value.integer;
+   if (mboot_options[16].value.integer !=
+       mboot_options[16].default_value.integer) {
+      boot.err_timeout = mboot_options[16].value.integer;
+   }
 
-   if (kernel == NULL) {
-      Log(LOG_ERR, "kernel=<FILEPATH> must be set in %s", path);
-      status = ERR_SYNTAX;
-      goto error;
+   if (skip && boot.err_timeout == -1) {
+      boot.err_timeout = 5;
    }
 
    if (title != NULL) {
       gui_set_title(title);
+      gui_refresh();
+   }
+
+   if (skip) {
+      Log(LOG_WARNING, "Skipping boot from this configuration");
+      status = ERR_ABORTED;
+      goto error;
+   }
+
+   if (kernel == NULL) {
+      Log(LOG_ERR, "kernel=<FILEPATH> must be set");
+      status = ERR_SYNTAX;
+      goto error;
    }
 
    if (prefix == NULL) {

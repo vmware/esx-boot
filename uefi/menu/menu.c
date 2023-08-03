@@ -39,6 +39,10 @@
  *                        3: Always use native UEFI HTTP.
  *         -b <BLKSIZE>   For TFTP transfers, set the blksize option to the
  *                        given value, default 1468.  UEFI only.
+ *         -E <SECONDS>   If a program that is chained to returns an error,
+ *                        wait the given number of seconds for the user to press
+ *                        a key before returning the error back to the boot
+ *                        manager.  Default: 30.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -96,6 +100,7 @@
  *      EFI NATIVEHTTP n  - Set the criteria for using native UEFI HTTP to n.
  *                            See list of values under the -N option above.
  *      EFI TFTPBLKSIZE n - Set the TFTP blksize option, as with -b.
+ *      EFI ERRTIMEOUT n  - Set the error timeout, as with -E.
  *      EFI s             - Evaluate s (ignored if pxelinux parses the menu).
  *
  *      LABEL s           - Starts and names a menu item.  The following
@@ -193,6 +198,7 @@ char *menuefi_d;
 char *pxelinux_cfg;
 Menu *rootmenu;
 EFI_HANDLE Volume;
+int err_timeout = 30;
 
 /*
  * Debug bit flags
@@ -584,6 +590,9 @@ bool parse_efi_subcommand(Menu *menu)
 
    } else if (match_token(menu, "TFTPBLKSIZE")) {
       tftp_set_block_size(parse_int(menu));
+
+   } else if (match_token(menu, "ERRTIMEOUT")) {
+      err_timeout = parse_int(menu);
 
    } else {
       // This "EFI" is just hiding a command from pxelinux
@@ -1189,7 +1198,10 @@ int chain_to(const char *program, const char *arguments)
     * Start the child.  Typically the child is a bootloader, in which case it
     * won't return.
     */
-   return firmware_image_start(ChildHandle);
+   status = firmware_image_start(ChildHandle);
+   Log(LOG_DEBUG, "Child returned; status = %d (%s)",
+       status, error_str[status]);
+   return status;
 }
 
 /*-- do_menu -------------------------------------------------------------------
@@ -1346,6 +1358,9 @@ int main(int argc, char **argv)
          case 'b': /* tftpblksize */
             tftp_set_block_size(atoi(optarg));
             break;
+         case 'E': /* errtimeout */
+            err_timeout = atoi(optarg);
+            break;
          case '?':
          default:
             status = ERR_SYNTAX;
@@ -1412,7 +1427,7 @@ int main(int argc, char **argv)
           "Error %d (%s)\n"
           "Press a key to continue UEFI boot sequence...",
           status, error_str[status]);
-      kbd_waitkey_timeout(&key, 300);
+      kbd_waitkey_timeout(&key, err_timeout);
    }
    return status;
 }

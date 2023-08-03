@@ -13,6 +13,7 @@ include env/common.mk
 MAKEFLAGS  += -I ../env
 
 SHAREDLIBS := bootlib       \
+              libbp         \
               libc          \
               libfat        \
               libcrc        \

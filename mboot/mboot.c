@@ -24,7 +24,10 @@
  *                        pressed. <CMDLINE> is only executed if the underlying
  *                        firmware library does not allow to return from main().
  *         -p <0...n>     Set the boot partition to boot from.
- *         -e             Exit on transient errors.
+ *         -E <TIMEOUT>   When a fatal error occurs: if TIMEOUT >= 0, exit with
+ *                        error status after TIMEOUT seconds, or immediately if
+ *                        in headless mode; if TIMEOUT < 0, hang.  Default: -1.
+ *         -e             Exit on errors after 30 seconds.  Same as -E 30.
  *         -V             Enable verbose mode.  Causes all log messages to be
  *                        sent to the GUI, once the GUI is sufficiently
  *                        initialized.  Without this option only LOG_INFO and
@@ -77,15 +80,8 @@ static int clean(int status)
 {
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Fatal error: %d (%s)", status, error_str[status]);
-      if (boot.exit_on_errors && ((status == ERR_LOAD_ERROR)   ||
-                                  (status == ERR_DEVICE_ERROR) ||
-                                  (status == ERR_NOT_FOUND)    ||
-                                  (status == ERR_NO_RESPONSE)  ||
-                                  (status == ERR_TIMEOUT)      ||
-                                  (status == ERR_TFTP_ERROR)   ||
-                                  (status == ERR_END_OF_FILE)  ||
-                                  (status == ERR_UNEXPECTED_EOF))) {
-         if (!gui_exit()) {
+      if (boot.err_timeout >= 0) {
+         if (!boot.headless && !gui_exit(boot.err_timeout)) {
             while (1);
          }
       } else {
@@ -119,6 +115,7 @@ static int mboot_init(int argc, char **argv)
 
    memset(&boot, 0, sizeof(boot));
    boot.bootif = true;
+   boot.err_timeout = -1;
 #ifdef DEBUG
    boot.verbose = true;
    boot.debug = true;
@@ -129,7 +126,7 @@ static int mboot_init(int argc, char **argv)
 
    status = log_init(boot.verbose);
    if (status != ERR_SUCCESS) {
-      return clean(status);
+      return status;
    }
 
    if (argc < 1) {
@@ -183,8 +180,15 @@ static int mboot_init(int argc, char **argv)
          case 't':
             gui_set_title(optarg);
             break;
+         case 'E':
+            if (!is_number(optarg)) {
+               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
+               return ERR_SYNTAX;
+            }
+            boot.err_timeout = atoi(optarg);
+            break;
          case 'e':
-            boot.exit_on_errors = true;
+            boot.err_timeout = 30;
             break;
          case 'D':
             boot.debug = true;
@@ -648,6 +652,8 @@ int main(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       return clean(status);
    }
+
+   firmware_reset_watchdog();
 
    Log(LOG_INFO, "Shutting down firmware services...");
 

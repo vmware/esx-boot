@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -109,6 +109,7 @@ EFI_STATUS image_load(EFI_HANDLE Volume, const CHAR16 *FilePath, VOID *OptBuf,
    Child->SystemTable = st;
 
    /* Transfer control to the Child */
+   firmware_reset_watchdog();
    Status = bs->StartImage(ChildHandle, NULL, NULL);
    if (Status == EFI_INVALID_PARAMETER) {
       bs->UnloadImage(ChildHandle);

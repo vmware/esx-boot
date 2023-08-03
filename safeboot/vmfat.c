@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2021-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -92,7 +92,7 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
     * but we tolerate other MBR partition types that can contain FAT just in
     * case.  For GPT, gpt_to_partinfo translates only the expected GUID
     * partition types to PART_TYPE_FAT16 or PART_TYPE_EFI; others translate to
-    * PART_TYPE_NON_FS and thus are rejected here.
+    * PART_TYPE_NON_FS or ERR_NO_MEDIA and thus are rejected here.
     */
    status = get_volume_info(&disk, volid, &partition);
    if (status != ERR_SUCCESS) {
@@ -111,6 +111,8 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
       break;
 
    case PART_TYPE_EMPTY:
+      return ERR_NO_MEDIA;
+
    case PART_TYPE_EXTENDED:
    case PART_TYPE_WIN_EXTENDED:
    case PART_TYPE_LINUX_EXTENDED:

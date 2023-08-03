@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2022 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -183,11 +183,13 @@ EXTERN bool has_gpxe_download_proto(EFI_HANDLE Volume);
 /*
  * httpfile.c
  */
+#define MAC_UNKNOWN 0xff // unassigned type for macType field
 EXTERN bool is_http_boot(void);
 EXTERN bool has_http(EFI_HANDLE Volume);
 EXTERN int get_http_boot_url(char **buffer);
-EXTERN EFI_STATUS get_http_nic_and_ipv(EFI_HANDLE Volume, EFI_HANDLE *Nic,
-                                       int *ipv);
+EXTERN EFI_STATUS get_http_nic_info(EFI_HANDLE Volume, EFI_HANDLE *Nic,
+                                    int *ipv, EFI_MAC_ADDRESS *mac,
+                                    UINT8 *macType);
 EXTERN EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
                                      EFI_HANDLE *ChildDH);
 EXTERN EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,

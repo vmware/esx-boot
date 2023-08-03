@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2017,2020-2021 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2017,2020-2022 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -35,7 +35,7 @@ SRC += $(IARCH)/trampoline.S
 endif
 
 TARGETTYPE  := app
-INC += .
+INC += . $(BPINC)
 
 LIBS := $(BOOTLIB) $(ENV_LIB)
 
