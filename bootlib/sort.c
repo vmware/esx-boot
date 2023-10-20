@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,7 +9,7 @@
 
 #include <bootlib.h>
 
-/*-- bublle_sort ---------------------------------------------------------------
+/*-- bubble_sort ---------------------------------------------------------------
  *
  *      Classic (non-optimized) bubble sort.
  *      This sorting algorithm is stable (it maintains the relative order of

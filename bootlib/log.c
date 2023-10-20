@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2014,2020-2021,2023 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -65,6 +66,18 @@ typedef struct {
 
 static char message[LOG_MAX_LEN];             /* Message buffer */
 static console_t consoles[CONSOLES_MAX_NR];
+
+#define SYSLOGBUF_OVERFLOW_MSG "syslog buffer overflow\n"
+
+/* syslog buffer to store logs */
+typedef struct {
+   char *buf;
+   uint32_t offset;
+   uint32_t bufferSize;
+   bool expand;
+} syslogbuffer;
+
+static syslogbuffer syslogbuf;
 
 /*-- syslog_get_message_level --------------------------------------------------
  *
@@ -140,6 +153,34 @@ static size_t syslog_vformat(char *msgbuf, size_t buflen, int level,
    return len;
 }
 
+/*-- syslogbuf_expand ---------------------------------------------------------
+ *
+ *      Expand the log buffer capacity.
+ *
+ * Parameters
+ *      None.
+ *----------------------------------------------------------------------------*/
+static int syslogbuf_expand(uint32_t size)
+{
+   char *tmp = syslogbuf.buf;
+
+   if (!syslogbuf.expand) {
+      return ERR_UNSUPPORTED;
+   }
+
+   syslogbuf.buf = sys_realloc(syslogbuf.buf, syslogbuf.bufferSize,
+                     syslogbuf.bufferSize + size);
+   if (syslogbuf.buf == NULL) {
+      syslogbuf.buf = tmp;
+      return ERR_OUT_OF_RESOURCES;
+   }
+
+   memset(syslogbuf.buf + syslogbuf.bufferSize, '\0', size);
+   syslogbuf.bufferSize += size;
+
+   return ERR_SUCCESS;
+}
+
 /*-- Log -----------------------------------------------------------------------
  *
  *      Send a log message to the registered consoles.
@@ -171,6 +212,42 @@ void Log(int level, const char *fmt, ...)
          consoles[i].notify(message);
       }
    }
+
+   /* Copy log into log buffer */
+   if (syslogbuf.buf != NULL) {
+      uint32_t offset = syslogbuf.offset;
+
+      while (size + strlen(SYSLOGBUF_OVERFLOW_MSG) >
+             syslogbuf.bufferSize  - offset) {
+         if (syslogbuf_expand(PAGE_SIZE) != ERR_SUCCESS) {
+            /* nul terminating is not required in overflow message */
+            if (offset + strlen(SYSLOGBUF_OVERFLOW_MSG) <=
+                syslogbuf.bufferSize) {
+               memcpy(syslogbuf.buf + offset, SYSLOGBUF_OVERFLOW_MSG,
+                      strlen(SYSLOGBUF_OVERFLOW_MSG));
+               syslogbuf.expand = false;
+               syslogbuf.offset = syslogbuf.bufferSize - 1;
+            }
+            return;
+         }
+      }
+
+      memcpy(syslogbuf.buf + offset, message, size);
+      syslogbuf.offset += size - 1;
+   }
+}
+
+/*-- log_buffer_info -----------------------------------------------------------
+ *
+ *      Get the log buffer base address and total buffer size allocated.
+ *
+ * Results
+ *      A pointer to the log buffer and buffer size is updated.
+ *----------------------------------------------------------------------------*/
+char *log_buffer_info(uint32_t *bufferSize)
+{
+   *bufferSize = syslogbuf.bufferSize;
+   return syslogbuf.buf;
 }
 
 /*-- log_subscribe -------------------------------------------------------------
@@ -246,5 +323,43 @@ int log_init(bool verbose)
       return status;
    }
 
+   if (syslogbuf.bufferSize == 0) {
+      syslogbuf.buf = sys_malloc(PAGE_SIZE);
+      if (syslogbuf.buf != NULL) {
+         memset(syslogbuf.buf, '\0', PAGE_SIZE);
+         syslogbuf.bufferSize = PAGE_SIZE;
+         syslogbuf.offset = 0;
+      }
+   }
+
    return ERR_SUCCESS;
+}
+
+/*-- syslogbuf_expand_disable -------------------------------------------------
+ *
+ *      Disables syslog buffer expansion, After this new allocations to buffer
+ *      will be stopped.
+ *
+ * Results
+ *      None.
+ *----------------------------------------------------------------------------*/
+void syslogbuf_expand_disable(uint32_t expand_size)
+{
+   if (expand_size != 0) {
+      syslogbuf_expand(expand_size);
+   }
+
+   syslogbuf.expand = false;
+}
+
+/*-- syslogbuf_expand_enable --------------------------------------------------
+ *
+ *      Allocate and initialize syslog buffer.
+ *
+ * Results
+ *      None.
+ *----------------------------------------------------------------------------*/
+void syslogbuf_expand_enable()
+{
+   syslogbuf.expand = true;
 }

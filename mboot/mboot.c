@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -33,6 +33,8 @@
  *                        initialized.  Without this option only LOG_INFO and
  *                        below are sent to the GUI.
  *         -D             Enable additional debug logging; see code for details.
+ *         -L             Final log expansion size can be configured with this
+ *                        option [size in bytes].
  *         -H             Ignore graphical framebuffer and boot ESXi headless.
  *         -Q             Disable workarounds for platform quirks.
  *         -U             Disable UEFI runtime services support.
@@ -71,6 +73,7 @@
 boot_info_t boot;
 
 static char *kopts = NULL;
+static uint32_t expand_size = 0;
 
 /*-- clean ---------------------------------------------------------------------
  *
@@ -80,6 +83,7 @@ static int clean(int status)
 {
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Fatal error: %d (%s)", status, error_str[status]);
+      gui_refresh();
       if (boot.err_timeout >= 0) {
          if (!boot.headless && !gui_exit(boot.err_timeout)) {
             while (1);
@@ -128,6 +132,7 @@ static int mboot_init(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       return status;
    }
+   syslogbuf_expand_enable();
 
    if (argc < 1) {
       Log(LOG_DEBUG, "Command line is empty.");
@@ -136,7 +141,7 @@ static int mboot_init(int argc, char **argv)
    optind = 1;
 
    do {
-      opt = getopt(argc, argv, ":ac:R:p:S:s:t:VeDHQUFN:rb:");
+      opt = getopt(argc, argv, ":ac:R:p:S:s:t:VeDL:HQUN:rb:");
       switch (opt) {
          case -1:
             break;
@@ -189,6 +194,13 @@ static int mboot_init(int argc, char **argv)
             break;
          case 'e':
             boot.err_timeout = 30;
+            break;
+         case 'L':
+            if (!is_number(optarg)) {
+               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
+               return ERR_SYNTAX;
+            }
+            expand_size = atoi(optarg);
             break;
          case 'D':
             boot.debug = true;
@@ -658,6 +670,17 @@ int main(int argc, char **argv)
    Log(LOG_INFO, "Shutting down firmware services...");
 
    log_unsubscribe(firmware_print);
+
+   /* disable syslog buffer and expand the buffer one last time */
+   if (expand_size == 0) {
+      if (boot.debug) {
+         expand_size = SYSLOGBUF_LAST_EXP_SIZE;
+      } else {
+         expand_size = PAGE_SIZE;
+      }
+   }
+   syslogbuf_expand_disable(expand_size);
+
    if (firmware_shutdown(&boot.mmap, &boot.mmap_count,
                          &boot.efi_info)                 != ERR_SUCCESS
     || boot_register()                                   != ERR_SUCCESS

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2017,2022 VMware, Inc. All rights reserved.
+ * Copyright (c) 2008-2011,2013-2014,2017,2022-2023 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -193,7 +194,7 @@ static int gui_string_edit(int x, int y, unsigned int w, char **str)
       status = kbd_waitkey(&key);
       if (status != ERR_SUCCESS) {
          *str = buffer;
-         Log(LOG_WARNING, "Keyboard error\n");
+         Log(LOG_WARNING, "Keyboard error");
          return status;
       }
 
@@ -393,7 +394,7 @@ int gui_edit_kernel_options(void)
                COLOR_BG, COLOR_INPUT, ALIGN_LEFT);
 
       if (kbd_waitkey_timeout(&key, 1) != ERR_SUCCESS) {
-         Log(LOG_WARNING, "Keyboard error\n");
+         Log(LOG_WARNING, "Keyboard error");
       } else if (key.sym == KEYSYM_ASCII && key.ascii == ASCII_ENTER) {
          break;
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'O') {
@@ -406,12 +407,17 @@ int gui_edit_kernel_options(void)
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'R' && shift_r) {
          return ERR_ABORTED;
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'V' && !boot.verbose) {
+         Log(LOG_INFO, "Shift+V pressed: Enabling verbose logging to screen");
          boot.verbose = true;
          fbcon_set_verbosity(boot.verbose);
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'S' && !boot.serial) {
+         Log(LOG_INFO, "Shift+S pressed: Enabling serial log to COM1");
          boot.serial =
             serial_log_init(DEFAULT_SERIAL_COM,
                             DEFAULT_SERIAL_BAUDRATE) == ERR_SUCCESS;
+      } else if (key.sym == KEYSYM_ASCII && key.ascii == 'U' && !boot.no_rts) {
+         Log(LOG_INFO, "Shift+U pressed: Disabling UEFI runtime services");
+         boot.no_rts = true;
       } else if (key.sym != KEYSYM_NONE) {
          n = 6;
       }
@@ -549,7 +555,7 @@ bool gui_exit(int timeout)
                COLOR_BG, COLOR_INPUT, ALIGN_LEFT);
 
       if (kbd_waitkey_timeout(&key, 1) != ERR_SUCCESS) {
-         Log(LOG_WARNING, "Keyboard error\n");
+         Log(LOG_WARNING, "Keyboard error");
       } else if (key.sym == KEYSYM_ASCII && key.ascii == ASCII_ENTER) {
          break;
       } else if (key.sym != KEYSYM_NONE) {

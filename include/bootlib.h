@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2018-2021,2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -208,10 +208,16 @@ EXTERN void Log(int level, const char *fmt, ...)
 #define LOG(level, ...)
 #endif /* DEBUG */
 
+
+#define SYSLOGBUF_LAST_EXP_SIZE (32 * 1024)
+
 EXTERN int log_subscribe(log_callback_t callback, int maxlevel);
 EXTERN void log_unsubscribe(log_callback_t callback);
+EXTERN char *log_buffer_info(uint32_t *bufferSize);
 EXTERN int log_init(bool verbose);
 EXTERN int syslog_get_message_level(const char *msg, int *level);
+EXTERN void syslogbuf_expand_enable(void);
+EXTERN void syslogbuf_expand_disable(uint32_t expand_size);
 
 /*
  * Serial port

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2022-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -122,7 +122,7 @@ int bapply_patch_esxinfo(void *ehdr)
 
    if (imageMatchPatchGroupBaseAddr == 0 ||
       imageMatchPatchGroupLength == 0) {
-      Log(LOG_WARNING, "No Matching Patch Group section found.");
+      Log(LOG_DEBUG, "No Matching Patch Group section found.");
       return ERR_SUCCESS;
    }
 

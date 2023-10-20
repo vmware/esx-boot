@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -58,6 +58,7 @@
 #define ESXBOOTINFO_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */
 #define ESXBOOTINFO_FLAG_VIDEO_MIN        (1 << 20)  /* Video min fields valid */
 #define ESXBOOTINFO_FLAG_TPM_MEASUREMENT  (1 << 21)  /* TPM measurement field valid */
+#define ESXBOOTINFO_FLAG_MEMTYPE_SP       (1 << 22)  /* Can use specific purpose memory */
 
 /*
  * ARM64 supports multiple image types identified by a mode which is
@@ -163,6 +164,7 @@ typedef enum ESXBootInfo_Type {
    ESXBOOTINFO_LOADESX_CHECKS_TYPE,
    ESXBOOTINFO_TPM_TYPE,
    ESXBOOTINFO_RWD_TYPE,
+   ESXBOOTINFO_LOGBUFFER_TYPE,
    NUM_ESXBOOTINFO_TYPE
 } ESXBootInfo_Type;
 
@@ -274,6 +276,14 @@ typedef struct ESXBootInfo_LoadESXChecks {
    uint8_t numLoadESXChecks;
    ESXBootInfo_LoadESXCheck loadESXChecks[0];
 } __attribute__((packed)) ESXBootInfo_LoadESXChecks;
+
+typedef struct ESXBootInfo_LogBuffer {
+   ESXBootInfo_Type type;
+   uint64_t elmtSize;
+
+   uint32_t bufferSize;
+   uint64_t addr;
+} __attribute__((packed)) ESXBootInfo_LogBuffer;
 
 /* TPM Flags */
 #define ESXBOOTINFO_TPM_EVENT_LOG_TRUNCATED     (1 << 0)

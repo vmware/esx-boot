@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017,2022-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -127,6 +127,8 @@ int main(int argc, char **argv)
    UINT32 LoadOptionsSize;
    UINTN i, n;
    int retval;
+   char **tmpArgv;
+   int tmpArgc;
 
    LoadOptions = NULL;
    LoadOptionsSize = 0;
@@ -152,19 +154,39 @@ int main(int argc, char **argv)
    retval = frobos_get_next_boot(bootconfig);
 
    if (retval == EFI_SUCCESS) {
-      argv[argc] = strdup("-c");
-      argv[argc + 1] = strdup(bootconfig);
-      argc += 2;
+      /*
+       * Because argv was allocated to be exactly argc elements long and
+       * additional bootconfig arguments are needed to be added in, a
+       * temporary argv is being created to accomodate for this.
+       */
+      tmpArgc = argc + 3;
+      tmpArgv = sys_malloc(tmpArgc * sizeof *argv);
+      if (tmpArgv == NULL) {
+         return ERR_OUT_OF_RESOURCES;
+      }
+      memcpy(tmpArgv, argv, argc * sizeof *argv);
+      tmpArgv[argc] = strdup("-c");
+      tmpArgv[argc + 1] = strdup(bootconfig);
+      tmpArgv[argc + 2] = NULL;
       /*
        * Get the Load Options, if any, to be passed to the next boot loader.
        * The first argument i.e. argv[0] has the executable name.
        */
-      Status = argv_to_ucs2(argc - 1, argv + 1, &LoadOptions);
+      Status = argv_to_ucs2(tmpArgc - 1, tmpArgv + 1, &LoadOptions);
       if (EFI_ERROR(Status)) {
          return error_efi_to_generic(Status);
       }
 
       LoadOptionsSize = (UINT32)UCS2SIZE(LoadOptions);
+      /*
+       * After getting the Load Options, the temporary argv is no longer needed
+       * so it is now being freed. Only the added bootconfig options are being
+       * freed here since efi_main will free the remainder of argv.
+       */
+      for (i = tmpArgc - 3; (int)i < tmpArgc; i++) {
+         sys_free(tmpArgv[i]);
+      }
+      sys_free(tmpArgv);
    }
 
    for (i = 0; i < n; i++) {

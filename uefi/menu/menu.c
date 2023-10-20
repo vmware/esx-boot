@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2019-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2019-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -76,10 +76,11 @@
  *      Some of the above searching is probably overkill.
  *
  *      The following syntax subset is supported, where n is a numeric
- *      argument, s is a string argument to end of line, and ... is one or more
- *      lines of text.  Note that the EFI keyword does not exist in pxelinux,
- *      but it seems to be safe to put it into menus that are shared with
- *      pxelinux, as pxelinux ignores lines starting with an unknown keyword.
+ *      argument, s is a string argument to end of line, w is a string argument
+ *      up to the next whitespace, and ... is one or more lines of text.  Note
+ *      that the EFI keyword does not exist in pxelinux, but it seems to be
+ *      safe to put it into menus that are shared with pxelinux, as pxelinux
+ *      ignores lines starting with an unknown keyword.
  *
  *      #s                - Comment.
  *      DEFAULT s         - Ignored if any MENU keywords occur in the file.
@@ -101,6 +102,9 @@
  *                            See list of values under the -N option above.
  *      EFI TFTPBLKSIZE n - Set the TFTP blksize option, as with -b.
  *      EFI ERRTIMEOUT n  - Set the error timeout, as with -E.
+ *      EFI ARCH w s      - Evaluate s if the current architecture is w;
+ *                          either arm64, riscv64, x86 (64-bit), or x86_32.
+ *      EFI NOARCH w s    - Evaluate s if the current architecture is not w.
  *      EFI s             - Evaluate s (ignored if pxelinux parses the menu).
  *
  *      LABEL s           - Starts and names a menu item.  The following
@@ -152,6 +156,7 @@
 #include <error.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <compat.h>
 
 #define LOCALBOOT_NONE 0xb0091e
 #define TIMEOUT_INFINITE 30000
@@ -430,6 +435,37 @@ char *parse_str(Menu *menu)
    return ret;
 }
 
+/*-- parse_word ----------------------------------------------------------------
+ *
+ *      Parse a string from the current parse point to the next whitespace (or
+ *      end of line if that comes first).  Move parse point beyond any
+ *      following whitespace on the line.
+ *
+ * Parameters
+ *      IN/OUT menu: current menu.
+ *
+ * Results
+ *      A copy of the string parsed.
+ *----------------------------------------------------------------------------*/
+char *parse_word(Menu *menu)
+{
+   char *start = menu->parse;
+   char *ret;
+
+   while (menu->remaining > 0 && !isspace(*menu->parse)) {
+      menu->remaining--;
+      menu->parse++;
+   }
+
+   ret = malloc(menu->parse - start + 1);
+   memcpy(ret, start, menu->parse - start);
+   ret[menu->parse - start] = '\0';
+
+   skip_white(menu);
+
+   return ret;
+}
+
 /*-- lookup_label --------------------------------------------------------------
  *
  *      Look for an item with the given label.
@@ -594,6 +630,20 @@ bool parse_efi_subcommand(Menu *menu)
    } else if (match_token(menu, "ERRTIMEOUT")) {
       err_timeout = parse_int(menu);
 
+   } else if (match_token(menu, "ARCH")) {
+      if (strcasecmp(parse_word(menu), arch_name) == 0) {
+         return false;
+      } else {
+         skip_line(menu);
+      }
+
+   } else if (match_token(menu, "NOARCH")) {
+      if (strcasecmp(parse_word(menu), arch_name) == 0) {
+         skip_line(menu);
+      } else {
+         return false;
+      }
+
    } else {
       // This "EFI" is just hiding a command from pxelinux
       return false;
@@ -730,7 +780,7 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
     */
    if (!menu->menumode && menu->deflabel != NULL) {
       /*
-       * First try interpreting DEFAULT as a label
+       * First try interpreting DEFAULT's argument as a label
        */
       menu->defitem = lookup_label(menu, menu->deflabel);
 
@@ -1052,7 +1102,15 @@ int do_item(Menu *menu, MenuItem *item)
       return do_menu(item->kernel);
 
    } else if (!item->kernel) {
-      // Could have detected this earlier...
+      /*
+       * The item is invalid: no KERNEL, LOCALBOOT, or CONFIG keyword.
+       * (As we are no longer in the parsing step, calling log_syntax_error()
+       * would not work correctly; it would give the end of file byte offset,
+       * not the offset of this item, which we no longer know.)
+       */
+      Log(LOG_ERR, "Selected item %s (in menu %s) "
+          "has neither KERNEL, LOCALBOOT, nor CONFIG keyword",
+          item->label, menu->filename);
       return ERR_SYNTAX;
    }
 

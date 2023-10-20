@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -215,7 +215,7 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
    EFI_STATUS Status = EFI_SUCCESS;
    char *cmdline_options = NULL, *path, *p;
    char *bn;
-   char **args;
+   char **argv;
    int status;
    bool bnpresent;
    bool run_from_shell;
@@ -285,21 +285,25 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
       }
    }
 
-   args = *argvp;
+   argv = *argvp;
 
    if (*argcp == 0) {
       bnpresent = false;
    } else if (is_url_query) {
       /*
        * When taking arguments from the URL query string, the whole command
-       * line was parsed from bn, so argv[0] must already be the command name.
-       * The arguments still need to copied out of path (which is freed below)
-       * and URL-decoded.
+       * line was parsed from bn, so argv[0] is already the command name.  We
+       * must URL-decode the other arguments.
+       *
+       * Memory management note: At this point all the argv pointers point into
+       * path, which will be freed below.  We explicitly strdup argv[0], while
+       * urldecode handles allocating fresh strings for argv[1] and following.
        */
       int i;
       bnpresent = true;
+      argv[0] = strdup(argv[0]);
       for (i = 1; i < *argcp; i++) {
-         args[i] = urldecode(args[i]);
+         argv[i] = urldecode(argv[i]);
       }
    } else if (run_from_shell) {
       /*
@@ -312,21 +316,21 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
        * path delimiter or nothing.
        */
       int lbn = strlen(bn);
-      int largv0 = strlen(args[0]);
+      int largv0 = strlen(argv[0]);
       bnpresent = lbn > 0 && largv0 >= lbn &&
-         strcasecmp(&args[0][largv0 - lbn], bn) == 0 &&
+         strcasecmp(&argv[0][largv0 - lbn], bn) == 0 &&
          (largv0 == lbn ||
-          args[0][largv0 - lbn - 1] == '/' ||
-          args[0][largv0 - lbn - 1] == '\\');
+          argv[0][largv0 - lbn - 1] == '/' ||
+          argv[0][largv0 - lbn - 1] == '\\');
    }
 
    /* insert bn as argv[0] if not already present */
    if (!bnpresent) {
       char **tmp = sys_malloc((*argcp + 1) * sizeof(char *));
-      memcpy(tmp + 1, args, *argcp * sizeof(char *));
+      memcpy(tmp + 1, argv, *argcp * sizeof(char *));
       tmp[0] = strdup(bn);
-      sys_free(args);
-      args = *argvp = tmp;
+      sys_free(argv);
+      argv = *argvp = tmp;
       (*argcp)++;
 #ifdef DEBUG
       Log(LOG_DEBUG, "inserted argv[0]=%s", bn);
@@ -338,7 +342,7 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
       int i;
       Log(LOG_DEBUG, "Dumping passed parameters\n");
       for (i = 0; i < *argcp; i++) {
-         Log(LOG_DEBUG, "argv[%u] = '%s'\n", i, args[i]);
+         Log(LOG_DEBUG, "argv[%u] = '%s'\n", i, argv[i]);
       }
    }
 #endif /* DEBUG */

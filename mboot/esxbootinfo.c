@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2020-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016,2020-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -305,6 +305,8 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
    boot.tpm_measure = (mbh->flags & ESXBOOTINFO_FLAG_TPM_MEASUREMENT) != 0 &&
                       (mbh->tpm_measure & ESXBOOTINFO_TPM_MEASURE_V1) != 0;
 
+   boot.efi_info.use_memtype_sp = (mbh->flags & ESXBOOTINFO_FLAG_MEMTYPE_SP) != 0;
+
    return ERR_SUCCESS;
 }
 
@@ -600,6 +602,45 @@ static int esxbootinfo_set_runtimewd(void)
    return ERR_SUCCESS;
 }
 
+/*-- esxbootinfo_set_logbuffer -------------------------------------------------
+ *
+ *      Set logbuffer info in the EBI.
+ *
+ * Parameters
+ *      None.
+ *
+ * Results
+ *      None.
+ *
+ *----------------------------------------------------------------------------*/
+void esxbootinfo_set_logbuffer(void)
+{
+   ESXBootInfo_LogBuffer *log = (ESXBootInfo_LogBuffer *)next_elmt;
+   int status;
+   run_addr_t addr = 0;
+   char *buf;
+   uint32_t bufferSize;
+
+   status = eb_check_space(sizeof(ESXBootInfo_LogBuffer));
+   if (status != ERR_SUCCESS) {
+      Log(LOG_DEBUG, "Insufficient space for mboot log buffer");
+      return;
+   }
+
+   buf = log_buffer_info(&bufferSize);
+   status = runtime_addr(buf, &addr);
+   if (status != ERR_SUCCESS) {
+      return;
+   }
+   log->addr = addr;
+   log->bufferSize = bufferSize;
+
+   log->type = ESXBOOTINFO_LOGBUFFER_TYPE;
+   log->elmtSize = sizeof(ESXBootInfo_LogBuffer);
+
+   eb_advance_next_elmt();
+}
+
 
 /*-- esxbootinfo_set_runtime_pointers ------------------------------------------
  *
@@ -672,6 +713,9 @@ int esxbootinfo_set_runtime_pointers(run_addr_t *run_ebi)
          return status;
       }
    }
+
+   // set log buffer info.
+   esxbootinfo_set_logbuffer();
 
    return runtime_addr(eb_info, run_ebi);
 }
@@ -763,6 +807,8 @@ int esxbootinfo_register(void)
    module_t *mod;
    unsigned int i;
    int status;
+   uint32_t bufferSize;
+   char *buf;
 
    Log(LOG_DEBUG, "Registering ESXBootInfo...\n");
 
@@ -827,6 +873,12 @@ int esxbootinfo_register(void)
          Log(LOG_WARNING, "Failed to register VBE structures.\n");
          vbe.modes_list = NULL;
       }
+   }
+
+   buf = log_buffer_info(&bufferSize);
+   status = add_sysinfo_object(buf, bufferSize, ALIGN_PTR);
+   if (status != ERR_SUCCESS) {
+      return status;
    }
 
    return ERR_SUCCESS;
@@ -957,6 +1009,7 @@ int esxbootinfo_init(void)
    if (tpm_event_log.size != 0) {
       size_ebi += sizeof(ESXBootInfo_Tpm) + tpm_event_log.size;
    }
+   size_ebi += sizeof(ESXBootInfo_LogBuffer);
 
 #ifndef __COM32__
    /*

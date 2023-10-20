@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2016,2018,2020-2022 VMware, Inc.
+ * Copyright (c) 2008-2011,2014,2016,2018,2020-2023 VMware, Inc.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -73,7 +73,7 @@ static int safeboot_init(int argc, char **argv)
    if (argc > 1) {
       optind = 1;
       do {
-         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:E:fN:b:");
+         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:E:fN:b:L:");
          switch (opt) {
             case -1:
                break;
@@ -107,6 +107,7 @@ static int safeboot_init(int argc, char **argv)
             case 'E':
             case 'N':
             case 'b':
+            case 'L':
                /*
                 * Other mboot options that take an argument.  Pass
                 * through to mboot after the options that safeboot

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021,2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -243,14 +243,30 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
             type = E820_TYPE_BOOTLOADER;
             break;
          case EfiConventionalMemory:
-            if ((MMap->Attribute & EFI_MEMORY_NV) == 0) {
-               type = E820_TYPE_AVAILABLE;
-            } else {
-               type = E820_TYPE_PMEM;
+
+            switch (MMap->Attribute & (EFI_MEMORY_NV | EFI_MEMORY_SP)) {
+               case 0:
+                  type = E820_TYPE_AVAILABLE;
+                  break;
+               case EFI_MEMORY_NV:
+                  type = E820_TYPE_PMEM;
+                  break;
+               case EFI_MEMORY_SP:
+                  type = (efi_info->use_memtype_sp ? E820_TYPE_SP:
+                          E820_TYPE_AVAILABLE);
+                  break;
+               default:
+                  type = (efi_info->use_memtype_sp ? E820_TYPE_PMEM_SP:
+                          E820_TYPE_PMEM);
             }
             break;
          case EfiPersistentMemory:
-            type = E820_TYPE_PMEM;
+            if ((MMap->Attribute & EFI_MEMORY_SP) != 0) {
+               type = (efi_info->use_memtype_sp ? E820_TYPE_PMEM_SP:
+                       E820_TYPE_PMEM);
+            } else {
+               type = E820_TYPE_PMEM;
+            }
             break;
          case EfiACPIReclaimMemory:
             type = E820_TYPE_ACPI;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020,2022-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -680,7 +680,6 @@ static const char *http_status(EFI_HTTP_STATUS_CODE code)
  *      Try once to load a file into memory or get its length, using HTTP.
  *
  * Parameters
- *      IN     try:       retry number (0 = first try).
  *      IN     Url:       URL to load.
  *      IN     hostname:  hostname from URL.
  *      IN     callback:  routine to be called periodically while the file

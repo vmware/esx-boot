@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2016,2022-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -16,14 +16,22 @@
 
 #if defined(only_riscv64)
 #define arch_is_riscv64 1
+#define arch_name "riscv64"
 #else
 #define arch_is_riscv64 0
 #endif
 
 #if defined(only_arm64)
 #define arch_is_arm64 1
+#define arch_name "arm64"
 #else
 #define arch_is_arm64 0
+#endif
+
+#if defined(only_arm64) || defined(only_em64t) || defined(only_riscv64)
+#define arch_is_64 1
+#else
+#define arch_is_64 0
 #endif
 
 #if defined(only_x86)
@@ -31,14 +39,13 @@
  * only_x86 is set for either 32- or 64-bit x86.
  */
 #define arch_is_x86 1
+#if arch_is_64
+#define arch_name "x86"
+#else
+#define arch_name "x86_32"
+#endif
 #else
 #define arch_is_x86 0
-#endif
-
-#if defined(only_arm64) || defined(only_em64t) || defined(only_riscv64)
-#define arch_is_64 1
-#else
-#define arch_is_64 0
 #endif
 
 /*

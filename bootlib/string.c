@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2020-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2013,2020-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -204,8 +204,10 @@ static int cmdline_split(char *str, int *argc, bool amp)
 /*-- str_to_argv ---------------------------------------------------------------
  *
  *      Convert a string representing a command line to an argv[] like array.
- *      The argv[] array is internally allocated with sys_malloc() and should be
- *      freed with sys_free() when no longer used.
+ *      The argv[] array is internally allocated with sys_malloc() and should
+ *      be freed with sys_free() when no longer used.  The cmdline is modified
+ *      in place and the argv array retains pointers into it, so the cmdline
+ *      must not be freed until the argv array is no longer in use.
  *
  * Parameters
  *      IN  cmdline: the C-string formatted command line
@@ -217,7 +219,7 @@ static int cmdline_split(char *str, int *argc, bool amp)
  *      ERR_SUCCESS, or a generic error status.
  *
  * Side effects
- *      The command line is modified in place.
+ *      The command line is modified in place and pointers into it are retained.
  *----------------------------------------------------------------------------*/
 int str_to_argv(char *cmdline, int *argc, char ***argv, bool amp)
 {

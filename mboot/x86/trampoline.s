@@ -1,5 +1,5 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2020-2022 VMware, Inc. All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2020-2023 VMware, Inc. All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -222,7 +222,7 @@ trampoline:
       xor     eax, eax                    ; EAX = Max Leaf/Vendor String
       cpuid                               ; Check if leaf 0x21 is supported
       cmp     eax, CPUID_INTEL_TDX_CAPS
-      jne     .tdx_enabled_ret
+      jb      .tdx_enabled_ret
       mov     eax, CPUID_INTEL_TDX_CAPS   ; EAX = Intel TDX Capabilities
       xor     ecx, ecx                    ; ECX = Max Leaf/Vendor String
       cpuid                               ; Check if Intel TDX is enabled
