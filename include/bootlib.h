@@ -218,6 +218,7 @@ EXTERN int log_init(bool verbose);
 EXTERN int syslog_get_message_level(const char *msg, int *level);
 EXTERN void syslogbuf_expand_enable(void);
 EXTERN void syslogbuf_expand_disable(uint32_t expand_size);
+EXTERN void log_data(int level, uint8_t *data, size_t length);
 
 /*
  * Serial port

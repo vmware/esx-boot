@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2021,2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -230,14 +230,14 @@ static bool va_is_usable_ram(uintptr_t va, size_t length, bool *in_memory_map)
  *      page table is not copied, and the referencing page table entry
  *      to it is not copied either.
  *
- *      This code assumes 64-bit page tables (not 32-bit). It also assumes
- *      that 4 page table levels are used, and that PML4 has 512 entries
- *      like every other level. On Arm, sanitize_page_tables() is used
- *      to meet these requirements.
+ *      This code assumes 64-bit page tables (not 32-bit). It also assumes that
+ *      4 (x86 or arm64) or 5 (x86 only) page table levels are used, and that
+ *      the top page table level has 512 entries like every other level. On
+ *      Arm, sanitize_page_tables() is used to meet these requirements.
  *
  * Parameters:
  *      IN table:   pointer to the source page table
- *      IN level:   hierarchy level (4 = PML4, 1 = PT)
+ *      IN level:   hierarchy level (1: PT; n > 1: PMLn)
  *      IN vaddr:   first virtual address mapped by this table
  *      IN pa_mask: bits to be masked off PTEs to compute the PA
  *      IN hierarchical_attrs: bits to be OR'ed into every page or
@@ -460,7 +460,7 @@ static int allocate_page_tables(void)
    get_page_table_reg(&pdbr);
    pdbr &= ~0xfffULL;
    page_table_pages = traverse_page_tables_rec(UINT_TO_PTR(pdbr),
-                                               PG_TABLE_MAX_LEVELS, 0,
+                                               pg_table_levels(), 0,
                                                page_table_mask, 0,
                                                NULL, NULL);
 
@@ -501,7 +501,7 @@ static int relocate_page_tables1(void)
    get_page_table_reg(&pdbr);
    pdbr &= ~0xfffULL;
 
-   traverse_page_tables_rec(UINT_TO_PTR(pdbr), PG_TABLE_MAX_LEVELS,
+   traverse_page_tables_rec(UINT_TO_PTR(pdbr), pg_table_levels(),
                             0, mask, 0, (uint64_t *)page_table_base,
                             (uint64_t *)(page_table_base +
                                          page_table_pages * PAGE_SIZE));
@@ -545,7 +545,7 @@ int relocate_page_tables2(void)
    get_page_table_reg(&pdbr);
    pdbr &= ~0xfffULL;
 
-   traverse_page_tables_rec(UINT_TO_PTR(pdbr), PG_TABLE_MAX_LEVELS,
+   traverse_page_tables_rec(UINT_TO_PTR(pdbr), pg_table_levels(),
                             0, mask, 0, (uint64_t *)page_table_base,
                             (uint64_t *)(page_table_base +
                                          page_table_pages * PAGE_SIZE));

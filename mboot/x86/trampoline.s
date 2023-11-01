@@ -174,6 +174,9 @@ trampoline:
       mov      eax, cr0                   ; EAX = CR0
       btr      eax, CR0_PAGING_BIT        ; Clear (disable) paging bit
       mov      cr0, eax                   ; Disable paging and clear EFER.LMA
+      mov      eax, cr4                   ; EAX = CR4
+      btr      eax, CR4_LA57_BIT          ; Clear (disable) 5-level paging bit
+      mov      cr4, eax
 
 %if IS_64_BIT
       mov      esi, edx                   ; Save ESXBootInfo or Multiboot magic

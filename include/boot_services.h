@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2016,2019-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -353,6 +353,15 @@ typedef enum {
 #else
 EXTERN void set_http_criteria(http_criteria_t mode);
 EXTERN void tftp_set_block_size(size_t blksize);
+#endif
+
+/*
+ * Log buffer UEFI protocol interfaces.
+ */
+#ifndef __COM32__
+struct syslogbuffer;
+EXTERN int logbuf_proto_init(struct syslogbuffer *syslogbuf);
+EXTERN int logbuf_proto_get(struct syslogbuffer **syslogbuf);
 #endif
 
 #endif /* !BOOT_SERVICES_H_ */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020,2022-2023 VMware, Inc.  All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -9,6 +9,7 @@
 
 #include "efi_private.h"
 #include "ServiceBinding.h"
+#include "Dhcp.h"
 #include "Dhcp4.h"
 #include "Ip4Config2.h"
 
@@ -16,6 +17,9 @@ static EFI_GUID Dhcp4ServiceBindingProto =
    EFI_DHCP4_SERVICE_BINDING_PROTOCOL_GUID;
 static EFI_GUID Dhcp4Proto = EFI_DHCP4_PROTOCOL_GUID;
 static EFI_GUID Ip4Config2Proto = EFI_IP4_CONFIG2_PROTOCOL_GUID;
+
+static const EFI_IPv4_ADDRESS Zero = { .Addr = {0, 0, 0, 0} };
+#define IsZero(addr) (memcmp(&addr, &Zero, sizeof(Zero)) == 0)
 
 /*
  * Cached information.
@@ -40,9 +44,9 @@ EFI_STATUS has_ipv4_addr(EFI_HANDLE NicHandle)
    EFI_STATUS Status;
    EFI_IP4_CONFIG2_PROTOCOL *Ip4Config2;
    UINTN DataSize;
-   EFI_IPv4_ADDRESS Local;
-   static EFI_IPv4_ADDRESS Zero = { .Addr = {0, 0, 0, 0} };
    EFI_IP4_CONFIG2_INTERFACE_INFO *Info;
+   EFI_IP4_CONFIG2_POLICY Policy;
+   static bool infoLogged = false, policyLogged = false;
 
    Status = get_protocol_interface(NicHandle, &Ip4Config2Proto,
                                    (void**)&Ip4Config2);
@@ -50,6 +54,19 @@ EFI_STATUS has_ipv4_addr(EFI_HANDLE NicHandle)
       Log(LOG_ERR, "Error getting Ip4Config2 protocol: %s",
           error_str[error_efi_to_generic(Status)]);
       return Status;
+   }
+
+   if (!policyLogged) {
+      DataSize = sizeof(Policy);
+      Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypePolicy,
+                                   &DataSize, &Policy);
+      if (EFI_ERROR(Status)) {
+         Log(LOG_ERR, "Error in Ip4Config2->GetData (policy): %s",
+             error_str[error_efi_to_generic(Status)]);
+      } else {
+         Log(LOG_DEBUG, "ip4config2 policy=%u", Policy);
+      }
+      policyLogged = true;
    }
 
    DataSize = 0;
@@ -69,16 +86,37 @@ EFI_STATUS has_ipv4_addr(EFI_HANDLE NicHandle)
       return Status;
    }
 
-   Local = Info->StationAddress;
-   if (memcmp(&Local, &Zero, sizeof(Local)) != 0) {
-      static bool logged = false;
-      if (!logged) {
-         Log(LOG_DEBUG, "Existing local IPv4 address = %u.%u.%u.%u",
-             Local.Addr[0], Local.Addr[1], Local.Addr[2], Local.Addr[3]);
-         logged = true;
+   if (!IsZero(Info->StationAddress)) {
+      if (!infoLogged) {
+         EFI_IP4_ROUTE_TABLE *rtab = Info->RouteTable;
+         UINT32 rtabsize = rtab == NULL ? 0 : Info->RouteTableSize;
+         Log(LOG_DEBUG, "ip4config2 ift=%u msz=%u "
+             "mac=%02x:%02x:%02x:%02x:%02x:%02x "
+             "adr=%u.%u.%u.%u sbn=%u.%u.%u.%u rts=%u",
+             Info->IfType, Info->HwAddressSize,
+             Info->HwAddress.Addr[0], Info->HwAddress.Addr[1],
+             Info->HwAddress.Addr[2], Info->HwAddress.Addr[3],
+             Info->HwAddress.Addr[4],Info->HwAddress.Addr[5],
+             Info->StationAddress.Addr[0], Info->StationAddress.Addr[1],
+             Info->StationAddress.Addr[2], Info->StationAddress.Addr[3],
+             Info->SubnetMask.Addr[0], Info->SubnetMask.Addr[1],
+             Info->SubnetMask.Addr[2], Info->SubnetMask.Addr[3],
+             Info->RouteTableSize);
+
+         for (UINT32 i = 0; i < rtabsize; i++) {
+            Log(LOG_DEBUG, "  route: adr=%u.%u.%u.%u sbn=%u.%u.%u.%u "
+                "gwa=%u.%u.%u.%u",
+                rtab[i].SubnetAddress.Addr[0], rtab[i].SubnetAddress.Addr[1],
+                rtab[i].SubnetAddress.Addr[2], rtab[i].SubnetAddress.Addr[3],
+                rtab[i].SubnetMask.Addr[0], rtab[i].SubnetMask.Addr[1],
+                rtab[i].SubnetMask.Addr[2], rtab[i].SubnetMask.Addr[3],
+                rtab[i].GatewayAddress.Addr[0], rtab[i].GatewayAddress.Addr[1],
+                rtab[i].GatewayAddress.Addr[2], rtab[i].GatewayAddress.Addr[3]);
+         }
+         infoLogged = true;
       }
    } else {
-      Log(LOG_DEBUG, "No existing local IPv4 address");
+      Log(LOG_DEBUG, "No local IPv4 address");
       Status = EFI_NO_MAPPING;
    }
 
@@ -110,17 +148,34 @@ void dhcp4_cleanup(void)
  *      Kick off DHCPv4 and wait for it to complete.
  *
  * Parameters
- *      IN  NicHandle: Handle for NIC to use.
+ *      IN  NicHandle:     Handle for NIC to use.
+ *      IN  preferredAddr: Preferred IPv4 address; 0.0.0.0 if no preference.
  *
  * Results
  *      EFI_SUCCESS or an error.
  *----------------------------------------------------------------------------*/
-EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
+EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle, EFI_IPv4_ADDRESS preferredAddr)
 {
    EFI_STATUS Status;
    EFI_DHCP4_CONFIG_DATA Dhcp4CfgData;
    EFI_DHCP4_MODE_DATA Dhcp4ModeData;
    EFI_DHCP4_STATE prevState = (EFI_DHCP4_STATE) -1;
+
+   /*
+    * DHCP options; see RFC 2132.  EFI_DHCP4_PACKET_OPTION contains a logically
+    * variable length Data array, so it's awkward to initialize if declared as
+    * the proper type.  Work around that by declaring it as UINT8[].
+    */
+   static /* EFI_DHCP4_PACKET_OPTION */ UINT8 prq[] = {
+      DHCP4_TAG_PARA_LIST, // OpCode
+      3,                   // Length
+      DHCP4_TAG_NETMASK,   // Data
+      DHCP4_TAG_ROUTER,
+      DHCP4_TAG_DNS_SERVER
+   };
+   static EFI_DHCP4_PACKET_OPTION *options[] = {
+      (EFI_DHCP4_PACKET_OPTION *)prq
+   };
 
    if (Dhcp4NicHandle != NULL && NicHandle != Dhcp4NicHandle) {
       Log(LOG_DEBUG, "New NicHandle; calling dhcp4_cleanup");
@@ -175,6 +230,9 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
       case Dhcp4Stopped:
          Log(LOG_DEBUG, "Doing Dhcp4->Configure");
          memset(&Dhcp4CfgData, 0, sizeof(Dhcp4CfgData));
+         Dhcp4CfgData.OptionList = options;
+         Dhcp4CfgData.OptionCount = ARRAYSIZE(options);
+         Dhcp4CfgData.ClientAddress = preferredAddr;
          Status = Dhcp4->Configure(Dhcp4, &Dhcp4CfgData);
          if (EFI_ERROR(Status)) {
             Log(LOG_ERR, "Error in Dhcp4->Configure: %s",
@@ -228,19 +286,43 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
              Dhcp4ModeData.SubnetMask.Addr[2],
              Dhcp4ModeData.SubnetMask.Addr[3],
              Dhcp4ModeData.LeaseTime);
+
+#if DEBUG || DHCPv4_DEBUG
+         if (Dhcp4ModeData.ReplyPacket) {
+            EFI_DHCP4_PACKET *p = Dhcp4ModeData.ReplyPacket;
+            EFI_DHCP4_HEADER *h = &p->Dhcp4.Header;
+            Log(LOG_DEBUG, "DHCP reply siz=%u len=%u opc=%u hwt=%u hwl=%u "
+                "hps=%u xid=%u sec=%u res=%u cla=%u.%u.%u.%u yra=%u.%u.%u.%u "
+                "sva=%u.%u.%u.%u raa=%u.%u.%u.%u "
+                "mac=%02x:%02x:%02x:%02x:%02x:%02x "
+                "svn=\"%s\" bfn=\"%s\" mgc=%08x",
+                p->Size, p->Length, h->OpCode, h->HwType, h->HwAddrLen,
+                h->Hops, h->Xid, h->Seconds, h->Reserved,
+                h->ClientAddr.Addr[0], h->ClientAddr.Addr[1],
+                h->ClientAddr.Addr[2], h->ClientAddr.Addr[3],
+                h->YourAddr.Addr[0], h->YourAddr.Addr[1],
+                h->YourAddr.Addr[2], h->YourAddr.Addr[3],
+                h->ServerAddr.Addr[0], h->ServerAddr.Addr[1],
+                h->ServerAddr.Addr[2], h->ServerAddr.Addr[3],
+                h->GatewayAddr.Addr[0], h->GatewayAddr.Addr[1],
+                h->GatewayAddr.Addr[2], h->GatewayAddr.Addr[3],
+                h->ClientHwAddr[0], h->ClientHwAddr[1],
+                h->ClientHwAddr[2], h->ClientHwAddr[3],
+                h->ClientHwAddr[4], h->ClientHwAddr[5],
+                h->ServerName, h->BootFileName, p->Dhcp4.Magik);
+            log_data(LOG_DEBUG, p->Dhcp4.Option,
+                     p->Length - sizeof(EFI_DHCP4_HEADER) - sizeof(UINT32));
+         }
+#endif
          Dhcp4NicHandle = NicHandle;
 
          Status = has_ipv4_addr(NicHandle);
          if (Status != EFI_SUCCESS) {
             /*
-             * XXX This is actually happening, but moments later the
-             * IP address is used by HTTP and working!  It seems some
-             * magic in the network stack finds the DHCP object and
-             * pulls the address out of it on demand.  Possibly we
-             * should explicitly copy in the IP address here just in
-             * case.  We don't get the DNS server address in
-             * Dhcp4ModeData, however, so that still would have to
-             * come in by similar magic, as it does now.
+             * XXX This is actually happening, but moments later the IP address
+             * is used by HTTP and working!  It seems some magic in the network
+             * stack propagates the address in the background or pulls it out
+             * of the DHCP object on demand.
              */
             Log(LOG_DEBUG, "Dhcp4Bound but IP address not set (yet): %s",
                 error_str[error_efi_to_generic(Status)]);
@@ -259,11 +341,12 @@ EFI_STATUS run_dhcpv4(EFI_HANDLE NicHandle)
  *
  * Parameters
  *      IN  NicHandle: Handle for NIC to use.
+ *      IN  preferredAddr: Preferred IPv4 address; 0.0.0.0 if no preference.
  *
  * Results
  *      EFI_SUCCESS or an error.
  *----------------------------------------------------------------------------*/
-EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle)
+EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle, EFI_IPv4_ADDRESS preferredAddr)
 {
    EFI_STATUS Status;
 
@@ -271,5 +354,5 @@ EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle)
    if (Status != EFI_NO_MAPPING) {
       return Status;
    }
-   return run_dhcpv4(NicHandle);
+   return run_dhcpv4(NicHandle, preferredAddr);
 }

@@ -132,7 +132,6 @@ static int mboot_init(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       return status;
    }
-   syslogbuf_expand_enable();
 
    if (argc < 1) {
       Log(LOG_DEBUG, "Command line is empty.");

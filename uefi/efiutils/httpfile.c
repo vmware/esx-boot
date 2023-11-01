@@ -109,52 +109,55 @@ http_file_load_try(const CHAR16 *Url, const char *hostname,
 
 /*-- get_http_nic_info --------------------------------------------------------
  *
- *      Get the NIC handle, IP version, and MAC address implied by the given
- *      handle's devpath.
+ *      Get the NIC handle, MAC address, IP version, IP parameters, and DNS
+ *      server address specified by the given handle's devpath.  Any OUT
+ *      parameter can be NULL if the output is not needed.
  *
  * Parameters
- *      IN  volumeIn:   EFI handle
+ *      IN  volume:     EFI handle
  *      OUT nicOut:     EFI handle
- *      OUT ipvOut:     4 or 6.
- *      OUT macOut:     MAC address if found in path
- *      OUT macTypeOut: MAC address interface type, MAC_UNKNOWN if not found
+ *      OUT macOut:     MAC address and type
+ *      OUT ipvOut:     4 or 6
+ *      OUT ip4Out:     IPv4 parameters
+ *      OUT ip6Out:     IPv6 parameters
+ *      OUT dnsOut:     DNS server address
  *
  * Results
  *      EFI_SUCCESS, or an EFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS get_http_nic_info(EFI_HANDLE volumeIn,
-                             EFI_HANDLE *nicOut, int *ipvOut,
-                             EFI_MAC_ADDRESS *macOut, UINT8 *macTypeOut)
+EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
+                             MAC_ADDR_DEVICE_PATH *macOut,
+                             int *ipvOut, IPv4_DEVICE_PATH *ip4Out,
+                             IPv6_DEVICE_PATH *ip6Out, DNS_DEVICE_PATH *dnsOut)
 {
-   static EFI_HANDLE volume = NULL;
-   static EFI_HANDLE nic = NULL;
-   static int ipv = 0;
-   static EFI_MAC_ADDRESS mac;
-   static UINT8 macType = MAC_UNKNOWN;
-   static EFI_STATUS Status;
-   EFI_DEVICE_PATH *DevPath, *node, *tmp;
-   EFI_DEVICE_PATH *NewDevPath = NULL;
+   static struct {
+      EFI_HANDLE volume;
+      EFI_HANDLE nic;
+      int ipv;
+      IPv4_DEVICE_PATH ip4;
+      IPv6_DEVICE_PATH ip6;
+      DNS_DEVICE_PATH dns;
+      MAC_ADDR_DEVICE_PATH mac;
+      EFI_STATUS Status;
+   } cache;
+   EFI_DEVICE_PATH *DevPath = NULL, *node, *tmp;
 
    /* Cache */
-   if (volume != NULL && volume == volumeIn) {
+   if (cache.volume != NULL && cache.volume == volume) {
       goto done;
    }
-   volume = volumeIn;
+   memset(&cache, 0, sizeof(cache));
+   cache.mac.IfType = MAC_UNKNOWN;
 
-   Status = devpath_get(volume, &DevPath);
-   if (EFI_ERROR(Status)) {
+   cache.volume = volume;
+
+   cache.Status = devpath_get(cache.volume, &DevPath);
+   if (EFI_ERROR(cache.Status)) {
       Log(LOG_ERR, "Error getting volume devpath: %s",
-          error_str[error_efi_to_generic(Status)]);
+          error_str[error_efi_to_generic(cache.Status)]);
       goto done;
    }
    log_devpath(LOG_DEBUG, "volume", DevPath);
-
-   Status = devpath_duplicate(DevPath, &NewDevPath);
-   if (EFI_ERROR(Status)) {
-      Log(LOG_ERR, "Error duplicating volume devpath: %s",
-          error_str[error_efi_to_generic(Status)]);
-      goto done;
-   }
 
    /*
     * A typical HTTP boot volume handle's devpath looks like this:
@@ -169,60 +172,49 @@ EFI_STATUS get_http_nic_info(EFI_HANDLE volumeIn,
     * IP version, then uses bs->LocateDevicePath to find the handle on
     * the path that has HttpServiceBindingProto.  In the non-VLAN
     * case, that's the MAC node; in the VLAN case, it's the Vlan node.
-    *
-    * (Historical note: PR 3020233 occurred because get_bootif_option
-    * was assuming nicOut would have the SimpleNetworkProtocol
-    * installed, which it could use to get the MAC address.  But that
-    * isn't true in the VLAN case.  The bug was fixed by instead
-    * getting the MAC address here while scanning the devpath.)
     */
-   FOREACH_DEVPATH_NODE(NewDevPath, node) {
+   FOREACH_DEVPATH_NODE(DevPath, node) {
       if (node->Type == MESSAGING_DEVICE_PATH) {
          if (node->SubType == MSG_MAC_ADDR_DP) {
-            MAC_ADDR_DEVICE_PATH *ma = (MAC_ADDR_DEVICE_PATH *)node;
-            macType = ma->IfType;
-            mac = ma->MacAddress;
-         } else if (node->SubType == MSG_IPv4_DP ||
-                    node->SubType == MSG_IPv6_DP) {
-            ipv = (node->SubType == MSG_IPv4_DP) ? 4 : 6;
-            SetDevPathEndNode(node);
-            break;
+            cache.mac = *(MAC_ADDR_DEVICE_PATH *)node;
+         } else if (node->SubType == MSG_IPv4_DP) {
+            cache.ipv = 4;
+            cache.ip4 = *(IPv4_DEVICE_PATH *)node;
+         } else if (node->SubType == MSG_IPv6_DP) {
+            cache.ipv = 6;
+            cache.ip6 = *(IPv6_DEVICE_PATH *)node;
+         } else if (node->SubType == MSG_DNS_DP) {
+            cache.dns = *(DNS_DEVICE_PATH *)node;
          }
       }
    }
 
-   tmp = NewDevPath;
-   Status = bs->LocateDevicePath(&HttpServiceBindingProto, &tmp, &nic);
-   if (!EFI_ERROR(Status)) {
-      log_devpath(LOG_DEBUG, "HTTP NIC in volume devpath", NewDevPath);
-   } else {
+   tmp = DevPath;
+   cache.Status =
+      bs->LocateDevicePath(&HttpServiceBindingProto, &tmp, &cache.nic);
+   if (EFI_ERROR(cache.Status)) {
       Log(LOG_DEBUG, "No HTTP NIC in volume devpath: %s",
-          error_str[error_efi_to_generic(Status)]);
+          error_str[error_efi_to_generic(cache.Status)]);
    }
 
-   if (ipv != 0) {
-      Log(LOG_DEBUG, "IP version in volume devpath: %u", ipv);
-   } else {
+   if (cache.ipv == 0) {
       Log(LOG_DEBUG, "No IP version in volume devpath");
-      Status = EFI_NOT_FOUND;
+      cache.Status = EFI_NOT_FOUND;
    }
 
-   if (macType != MAC_UNKNOWN) {
-      Log(LOG_DEBUG, "MAC address in volume devpath: "
-          "%02x-%02x-%02x-%02x-%02x-%02x-%02x",
-          macType, mac.Addr[0], mac.Addr[1], mac.Addr[2],
-          mac.Addr[3], mac.Addr[5], mac.Addr[6]);
-   } else {
+   if (cache.mac.IfType == MAC_UNKNOWN) {
       Log(LOG_DEBUG, "No MAC address in volume devpath");
+      // try to muddle through without it
    }
 
  done:
-   sys_free(NewDevPath);
-   if (nicOut) *nicOut = nic;
-   if (ipvOut) *ipvOut = ipv;
-   if (macOut) *macOut = mac;
-   if (macTypeOut) *macTypeOut = macType;
-   return Status;
+   if (nicOut) *nicOut = cache.nic;
+   if (ipvOut) *ipvOut = cache.ipv;
+   if (ip4Out) *ip4Out = cache.ip4;
+   if (ip6Out) *ip6Out = cache.ip6;
+   if (dnsOut) *dnsOut = cache.dns;
+   if (macOut) *macOut = cache.mac;
+   return cache.Status;
 }
 
 /*-- hide_pxe ------------------------------------------------------------------
@@ -282,14 +274,14 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
                               EFI_HANDLE *ChildDH)
 {
    /*
-    * This library relies on the device path of the Image->DeviceHandle that
-    * its parent (initially the UEFI boot manager) passed into it, in order to
-    * determine what URL it was loaded from and what IP version was used.  In
-    * order to pass similar information to a child that may be using the same
-    * library, this routine creates a handle with a similarly formatted device
-    * path.  Just passing on the same handle the current app received would not
-    * generally work, as the URL is different.  (In the future the IP
-    * version could be different too, but that is not currently supported.)
+    * This library (specifically get_http_nic_info) relies on the device path
+    * of the Image->DeviceHandle that its parent (initially the UEFI boot
+    * manager) passed into it, in order to determine what URL it was loaded
+    * from, what IP version was used, etc.  In order to pass similar
+    * information to a child that may be using the same library, this routine
+    * creates a handle with a similarly formatted device path, by replacing the
+    * Uri node at the end of the parent device path with a Uri node for the URL
+    * the child is being loaded from.
     */
    EFI_STATUS Status;
    EFI_DEVICE_PATH *VolumePath;
@@ -323,6 +315,7 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
    node = (EFI_DEVICE_PATH *)(p + s1 + s2);
    SetDevPathEndNode(node);
    ChildPath = (EFI_DEVICE_PATH *)p;
+   log_devpath(LOG_DEBUG, "make_http_child_dh", ChildPath);
 
    *ChildDH = NULL;
    Status = bs->InstallProtocolInterface(ChildDH, &DevicePathProto,
@@ -451,6 +444,7 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
    EFI_HTTP_CONFIG_DATA HttpConfigData;
    EFI_HTTPv4_ACCESS_POINT IPv4Node;
    EFI_HTTPv6_ACCESS_POINT IPv6Node;
+   IPv4_DEVICE_PATH ip4;
 
    if (HttpVolume == Volume) {
       // Return cached info
@@ -461,9 +455,9 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
    }
 
    /*
-    * Find which NIC and IP version to use.
+    * Parse the volume devpath to find out which NIC to use, etc.
     */
-   Status = get_http_nic_info(Volume, &NicHandle, &ipv, NULL, NULL);
+   Status = get_http_nic_info(Volume, &NicHandle, NULL, &ipv, &ip4, NULL, NULL);
    if (EFI_ERROR(Status)) {
       /*
        * Fail silently in this case, and cache the error.  It can occur when
@@ -472,6 +466,27 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
        */
       HttpVolume = Volume;
       goto out;
+   }
+
+   /*
+    * If this is IPv4 and our NIC doesn't have an IP address, get one.
+    *
+    * This seems to be needed; otherwise Http->Request typically fails with
+    * EFI_NO_MAPPING (which is not documented as a possibility for it, by the
+    * way).  From study of a packet trace on the original machine used to
+    * develop this code, it appears that without this, the Http->Request does
+    * automatically cause DHCP to be started, but Http fails to wait for the
+    * DHCP transaction to finish before trying to connect to the HTTP server.
+    *
+    * It doesn't seem to be necessary to do this for the IPv6 case.
+    */
+   if (ipv == 4) {
+      Status = get_ipv4_addr(NicHandle, ip4.LocalIpAddress);
+      if (EFI_ERROR(Status)) {
+         Log(LOG_ERR, "Error acquiring IPv4 address: %s",
+             error_str[error_efi_to_generic(Status)]);
+         goto out;
+      }
    }
 
    /*
@@ -583,7 +598,8 @@ bool plain_http_allowed(EFI_HANDLE Volume)
                                   NULL, NULL, &BufSize);
       VolCached = Volume;
       allowed = Status != EFI_ACCESS_DENIED;
-      Log(LOG_DEBUG, "UEFI firmware on this system %sallows plain http:// URLs",
+      Log(LOG_DEBUG,
+          "...UEFI firmware on this system %sallows plain http:// URLs",
           allowed ? "" : "dis");
    }
    return allowed;
@@ -922,8 +938,6 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
    char *hostname = NULL;
    CHAR16 *Url = NULL;
    unsigned try;
-   EFI_HANDLE NicHandle;
-   int ipv;
 
    Status = get_url_hostname(filepath, &hostname);
    if (EFI_ERROR(Status)) {
@@ -948,28 +962,6 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
 
    ascii_to_ucs2(filepath, &Url);
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
-
-   Status = get_http_nic_info(Volume, &NicHandle, &ipv, NULL, NULL);
-   if (EFI_ERROR(Status)) {
-      goto out;
-   }
-   if (ipv == 4) {
-      /*
-       * Ensure we have an IP address.  This seems to be needed;
-       * otherwise Http->Request typically fails with EFI_NO_MAPPING
-       * (which is not documented as a possibility for it, by the
-       * way).  From study of a packet trace, it appears that the
-       * Http->Request does automatically cause DHCP to be started,
-       * but it forgets to wait for the DHCP transaction to finish
-       * before trying to connect to the HTTP server.
-       */
-      Status = get_ipv4_addr(NicHandle);
-      if (EFI_ERROR(Status)) {
-         Log(LOG_ERR, "Error getting IPv4 address: %s",
-             error_str[error_efi_to_generic(Status)]);
-         goto out;
-      }
-   }
 
    for (try = 0; try <= MAX_RETRIES; try++) {
       Status = http_init(Volume);

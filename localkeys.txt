@@ -1,0 +1,44 @@
+In the open source release of esx-boot, several RSA keys are shipped
+in the directory "localkeys".
+
+------------------------
+Secure boot signing keys
+------------------------
+
+test_sb2017 - Private key that the esx-boot package uses to sign its
+components for Secure Boot, for test purposes only.  This key is not
+secret, and UEFI firmware should not be configured to trust it other
+than temporarily when testing.  It is provided to illustrate how
+signing the bootloader works.  If you want to build your own
+bootloader, sign it, and trust the signing key, you could create your
+own key, keep the private side secret, and use it instead of
+test_sb2017.
+
+--------------------------------------
+VIB and early boot module signing keys
+--------------------------------------
+
+test_esx67 - Private key that can be used to sign ESXi VIBs and early
+boot modules, for test purposes only.  This key is not secret.  When
+checking the signatures of early boot modules, esx-boot's "mboot-test"
+build trusts this key, but the "mboot-official" build does not trust it.
+
+vmware_esx67 - This is a "phony" version of VMware's official private
+key that is used to sign ESXi VIBs and early boot modules.  The
+modulus and public exponent are valid, so it can be used as a public
+key, but the private key components are not valid and so the key
+cannot be used for signing.  When checking the signatures of early
+boot modules, esx-boot's "mboot-official" build trusts this key.
+
+------------
+Expired keys
+------------
+
+elfsign_test - Similar to test_esx67, but this key expired in 2020 and
+thus is no longer usable for signing.  When checking the signatures of
+early boot modules, esx-boot's "mboot-official" build does not trust
+this key, but the "mboot-test" build does trust it.
+
+vmware_esx40 - Similar to vmware_esx67, but this key expired in 2017.
+When checking the signatures of early boot modules, esx-boot's
+"mboot-official" build trusts this key.

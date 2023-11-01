@@ -1,5 +1,6 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2021-2022 VMware, Inc.  All rights reserved.
+;; Copyright (c) 2008-2012,2015-2016,2021-2023 VMware, Inc.
+;; All rights reserved.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -72,6 +73,7 @@
 ;; Paging control
 ;;
 %define CR0_PAGING_BIT     31                   ; Paging enabled if set
+%define CR4_LA57_BIT       12                   ; 5-level paging enabled if set
 
 ;;
 ;; Segment selectors

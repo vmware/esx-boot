@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015,2019-2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2015,2019-2023 VMware, Inc.  All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -192,14 +192,16 @@ STDINC     := $(TOPDIR)/libc/include $(TOPDIR)/include $(TOPDIR)/include/$(IARCH
 ZLIB_INC   := $(TOPDIR)/zlib
 LIBFAT_INC := $(TOPDIR)/libfat
 EDK2INC    := $(TOPDIR)/uefi/edk2
-UEFIINC    := $(TOPDIR)/uefi                        \
-              $(EDK2INC)/MdePkg/Include             \
-              $(EDK2INC)/MdePkg/Include/$(UEFIARCH) \
-              $(EDK2INC)/MdePkg/Include/Protocol    \
+UEFIINC    := $(TOPDIR)/uefi                              \
+              $(EDK2INC)/MdePkg/Include                   \
+              $(EDK2INC)/MdePkg/Include/$(UEFIARCH)       \
+              $(EDK2INC)/MdePkg/Include/Protocol          \
+              $(EDK2INC)/MdePkg/Include/IndustryStandard  \
               $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 FDTINC     := $(TOPDIR)/libfdt
 BPINC      := $(TOPDIR)/libbp
+UEFIPROTO  := $(TOPDIR)/uefi/efiutils/protocol
 
 ifneq ($(filter arm64 riscv64,$(ARCH)),)
 ENV_LIB += $(FDTLIB)

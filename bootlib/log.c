@@ -54,6 +54,7 @@
 #include <syslog.h>
 #include <boot_services.h>
 #include <bootlib.h>
+#include <logbuf.h>
 
 #define CONSOLES_MAX_NR       2     /* Framebuffer, serial */
 #define LOG_MAX_LEN           1024  /* A single message cannot exceed 1kb */
@@ -70,14 +71,14 @@ static console_t consoles[CONSOLES_MAX_NR];
 #define SYSLOGBUF_OVERFLOW_MSG "syslog buffer overflow\n"
 
 /* syslog buffer to store logs */
-typedef struct {
+typedef struct syslogbuffer {
    char *buf;
    uint32_t offset;
    uint32_t bufferSize;
    bool expand;
 } syslogbuffer;
 
-static syslogbuffer syslogbuf;
+static syslogbuffer *syslogbuf;
 
 /*-- syslog_get_message_level --------------------------------------------------
  *
@@ -162,21 +163,21 @@ static size_t syslog_vformat(char *msgbuf, size_t buflen, int level,
  *----------------------------------------------------------------------------*/
 static int syslogbuf_expand(uint32_t size)
 {
-   char *tmp = syslogbuf.buf;
+   char *tmp = syslogbuf->buf;
 
-   if (!syslogbuf.expand) {
+   if (syslogbuf == NULL || !syslogbuf->expand) {
       return ERR_UNSUPPORTED;
    }
 
-   syslogbuf.buf = sys_realloc(syslogbuf.buf, syslogbuf.bufferSize,
-                     syslogbuf.bufferSize + size);
-   if (syslogbuf.buf == NULL) {
-      syslogbuf.buf = tmp;
+   syslogbuf->buf = sys_realloc(syslogbuf->buf, syslogbuf->bufferSize,
+                     syslogbuf->bufferSize + size);
+   if (syslogbuf->buf == NULL) {
+      syslogbuf->buf = tmp;
       return ERR_OUT_OF_RESOURCES;
    }
 
-   memset(syslogbuf.buf + syslogbuf.bufferSize, '\0', size);
-   syslogbuf.bufferSize += size;
+   memset(syslogbuf->buf + syslogbuf->bufferSize, '\0', size);
+   syslogbuf->bufferSize += size;
 
    return ERR_SUCCESS;
 }
@@ -214,26 +215,26 @@ void Log(int level, const char *fmt, ...)
    }
 
    /* Copy log into log buffer */
-   if (syslogbuf.buf != NULL) {
-      uint32_t offset = syslogbuf.offset;
+   if (syslogbuf != NULL && syslogbuf->buf != NULL) {
+      uint32_t offset = syslogbuf->offset;
 
       while (size + strlen(SYSLOGBUF_OVERFLOW_MSG) >
-             syslogbuf.bufferSize  - offset) {
+             syslogbuf->bufferSize  - offset) {
          if (syslogbuf_expand(PAGE_SIZE) != ERR_SUCCESS) {
             /* nul terminating is not required in overflow message */
             if (offset + strlen(SYSLOGBUF_OVERFLOW_MSG) <=
-                syslogbuf.bufferSize) {
-               memcpy(syslogbuf.buf + offset, SYSLOGBUF_OVERFLOW_MSG,
+                syslogbuf->bufferSize) {
+               memcpy(syslogbuf->buf + offset, SYSLOGBUF_OVERFLOW_MSG,
                       strlen(SYSLOGBUF_OVERFLOW_MSG));
-               syslogbuf.expand = false;
-               syslogbuf.offset = syslogbuf.bufferSize - 1;
+               syslogbuf->expand = false;
+               syslogbuf->offset = syslogbuf->bufferSize - 1;
             }
             return;
          }
       }
 
-      memcpy(syslogbuf.buf + offset, message, size);
-      syslogbuf.offset += size - 1;
+      memcpy(syslogbuf->buf + offset, message, size);
+      syslogbuf->offset += size - 1;
    }
 }
 
@@ -246,8 +247,12 @@ void Log(int level, const char *fmt, ...)
  *----------------------------------------------------------------------------*/
 char *log_buffer_info(uint32_t *bufferSize)
 {
-   *bufferSize = syslogbuf.bufferSize;
-   return syslogbuf.buf;
+   if (syslogbuf != NULL) {
+      *bufferSize = syslogbuf->bufferSize;
+      return syslogbuf->buf;
+   }
+
+   return NULL;
 }
 
 /*-- log_subscribe -------------------------------------------------------------
@@ -323,12 +328,33 @@ int log_init(bool verbose)
       return status;
    }
 
-   if (syslogbuf.bufferSize == 0) {
-      syslogbuf.buf = sys_malloc(PAGE_SIZE);
-      if (syslogbuf.buf != NULL) {
-         memset(syslogbuf.buf, '\0', PAGE_SIZE);
-         syslogbuf.bufferSize = PAGE_SIZE;
-         syslogbuf.offset = 0;
+#ifndef __COM32__
+   /*
+    * If a log buffer was already allocated by another bootloader app,
+    * find it via the UEFI log buffer protocol.
+    */
+   if (syslogbuf == NULL) {
+      status = logbuf_proto_get(&syslogbuf);
+      if (status == ERR_SUCCESS) {
+         Log(LOG_DEBUG, "Using existing log buffer protocol");
+      }
+   }
+#endif
+   /*
+    * Allocate the log buffer if not already allocated
+    */
+   if (syslogbuf == NULL) {
+      syslogbuf = sys_malloc(sizeof *syslogbuf);
+      syslogbuf->buf = sys_malloc(PAGE_SIZE);
+      if (syslogbuf->buf != NULL) {
+         memset(syslogbuf->buf, '\0', PAGE_SIZE);
+         syslogbuf->bufferSize = PAGE_SIZE;
+         syslogbuf->offset = 0;
+         syslogbuf->expand = true;
+#ifndef __COM32__
+         Log(LOG_DEBUG, "Installing log buffer protocol");
+         logbuf_proto_init(syslogbuf);
+#endif
       }
    }
 
@@ -345,21 +371,31 @@ int log_init(bool verbose)
  *----------------------------------------------------------------------------*/
 void syslogbuf_expand_disable(uint32_t expand_size)
 {
-   if (expand_size != 0) {
+   if (syslogbuf != NULL && expand_size != 0) {
       syslogbuf_expand(expand_size);
    }
 
-   syslogbuf.expand = false;
+   syslogbuf->expand = false;
 }
 
-/*-- syslogbuf_expand_enable --------------------------------------------------
+/*-- log_data ------------------------------------------------------------------
  *
- *      Allocate and initialize syslog buffer.
+ *      Log data bytes in hex, 32 bytes per line.
  *
- * Results
- *      None.
+ * Parameters
+ *      IN level:    Log level
+ *      IN data:     Data to log
+ *      IN length:   Length of data
  *----------------------------------------------------------------------------*/
-void syslogbuf_expand_enable()
+void log_data(int level, uint8_t *data, size_t length)
 {
-   syslogbuf.expand = true;
+   size_t i, j;
+   char buf[65];
+
+   for (i = 0; i < length; ) {
+      for (j = 0; j < 32 && i < length; j++, i++) {
+         snprintf(&buf[j * 2], 3, "%02x", data[i]);
+      }
+      Log(level, buf);
+   }
 }

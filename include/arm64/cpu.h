@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2021-2023 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -100,7 +101,6 @@ static INLINE bool el_is_hyp(void)
  */
 #define PAGE_SIZE ((uint64_t)0x1000)
 #define PG_TABLE_MAX_ENTRIES 512
-#define PG_TABLE_MAX_LEVELS 4
 
 #define PG_LEVEL_SHIFT       9
 #define PG_MPN_SHIFT         12
@@ -324,6 +324,11 @@ static INLINE bool is_paging_enabled(void)
    uintptr_t sctlr = get_sctlr();
 
    return sctlr & SCTLR_MMU;
+}
+
+static INLINE int pg_table_levels(void)
+{
+   return 4;
 }
 
 static INLINE void paging_disable(void)

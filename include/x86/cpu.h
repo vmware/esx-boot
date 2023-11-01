@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016,2019-2020,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2011,2015-2016,2019-2020,2022-2023 VMware, Inc.
+ * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -231,6 +232,14 @@ static INLINE void get_cr0(uintptr_t *cr0)
                         : "=r" (*cr0));
 }
 
+#define CR4_ATTR_LA57 (1 << 12)
+
+static INLINE void get_cr4(uintptr_t *cr4)
+{
+   __asm__ __volatile__("mov %%cr4, %0"
+                        : "=r" (*cr4));
+}
+
 /*
  * Paging
  */
@@ -372,6 +381,19 @@ static INLINE bool is_paging_enabled(void)
 
    get_cr0(&cr0);
    return ((cr0 & CR0_ATTR_PG) != 0);
+}
+
+/*-- pg_table_levels -----------------------------------------------------------
+ *
+ *      Return the number of page table levels.  Assumes paging is
+ *      enabled and the CPU is in 64-bit mode.
+ *----------------------------------------------------------------------------*/
+static INLINE int pg_table_levels(void)
+{
+   uintptr_t cr4;
+
+   get_cr4(&cr4);
+   return (cr4 & CR4_ATTR_LA57) == 0 ? 4 : 5;
 }
 
 /*-- cpu_code_update -----------------------------------------------------------

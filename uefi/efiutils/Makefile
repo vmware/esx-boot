@@ -1,5 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2015-2016,2019-2021 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2013,2015-2016,2019-2021,2023 VMware, Inc.
+# All rights reserved.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -31,6 +32,7 @@ SRC         := acpi_table.c \
                init.c       \
                keyboard.c   \
                loadfile.c   \
+               logbuf.c     \
                memory.c     \
                net.c        \
                protocol.c   \
@@ -61,7 +63,7 @@ SRC         := acpi_table.c \
 
 BASENAME    := $(FIRMWARE)$(ARCH)
 TARGETTYPE  := lib
-INC         := $(UEFIINC) ./
+INC         := $(UEFIINC) ./ $(UEFIPROTO)
 
 include rules.mk
 
