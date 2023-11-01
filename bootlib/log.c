@@ -396,6 +396,6 @@ void log_data(int level, uint8_t *data, size_t length)
       for (j = 0; j < 32 && i < length; j++, i++) {
          snprintf(&buf[j * 2], 3, "%02x", data[i]);
       }
-      Log(level, buf);
+      Log(level, "%s", buf);
    }
 }
