@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2018 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -86,11 +87,18 @@ typedef struct {
    smbios_string_id product_name;
    smbios_string_id version;
    smbios_string_id serial_number;
-   uint8_t guid[16];
+   uint8_t uuid[16];
    uint8_t wake_up_type;
    smbios_string_id sku;
    smbios_string_id family;
 } smbios_type1;
+#pragma pack()
+
+#pragma pack(1)
+typedef struct {
+   smbios_header header;
+   uint8_t count;
+} smbios_type11;
 #pragma pack()
 
 typedef union {
@@ -98,6 +106,13 @@ typedef union {
    smbios_header *header;
    smbios_type0 *type0;
    smbios_type1 *type1;
+   smbios_type11 *type11;
 } smbios_entry;
+
+typedef struct {
+   size_t length;
+   char** names;
+   key_value_t* entries;
+} oem_strings_t;
 
 #endif /* !SM_BIOS_H_ */

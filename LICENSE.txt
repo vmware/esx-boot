@@ -1,8 +1,9 @@
 esx-boot
 
-Copyright 2017 VMware, Inc.  All rights reserved				
+Copyright 2008-2024 Broadcom. All Rights Reserved.
+The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 
-The GNU GENERAL PUBLIC LICENSE Version 2 license (the “License”) set forth below applies to all parts of the esx-boot project.  You may not use this file except in compliance with the License. 
+The GNU GENERAL PUBLIC LICENSE Version 2 license (the "License") set forth below applies to all parts of the esx-boot project.  You may not use this file except in compliance with the License.
 
 GNU GENERAL PUBLIC LICENSE
 Version 2, June 1991

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -74,7 +75,7 @@ int get_boot_dir(char **buffer)
       return status;
    }
    dirpath = strdup(dirname(path));
-   sys_free(path);
+   free(path);
    if (dirpath == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }

@@ -1,5 +1,7 @@
 #*******************************************************************************
-# Copyright (c) 2008-2015,2019-2023 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc.
+# and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -71,9 +73,9 @@ ifeq ($(FIRMWARE),bios)
    RELOCS     := $(TOOLS_DIR)/relocs
 else
    ifeq ($(ARCH),riscv64)
-      ELF2EFI    := $(TOOLS_DIR)/elf2efi-riscv64
+      ELF2EFI    := $(TOOLS_DIR)/elf2efi64
    else ifeq ($(ARCH),arm64)
-      ELF2EFI    := $(TOOLS_DIR)/elf2efi-arm64
+      ELF2EFI    := $(TOOLS_DIR)/elf2efi64
    else ifeq ($(ARCH),em64t)
       ELF2EFI    := $(TOOLS_DIR)/elf2efi64
    else ifeq ($(ARCH),ia32)
@@ -171,7 +173,6 @@ CFLAGS     += -g
 BUILD_DIR  := $(TOPDIR)/build/$(BUILDENV)
 
 LIB_DIR    := $(BUILD_DIR)/lib
-LIBBP      := $(LIB_DIR)/bp/libbp.a
 LIBC       := $(LIB_DIR)/c/libc.a
 LIBFAT     := $(LIB_DIR)/fat/libfat.a
 LIBCRC     := $(LIB_DIR)/crc/libcrc.a
@@ -185,7 +186,7 @@ CRYPTOLIB  := $(LIB_DIR)/mbedtls/libmbedtls.a
 FDTLIB     := $(LIB_DIR)/fdt/libfdt.a
 
 ENV_LIB    := $(FIRMLIB) $(LIBFAT) $(LIBC) $(LIBCRC) $(LIBMD5) $(LIBUART) \
-              $(ZLIB) $(LIBGCC) $(LIBBP)
+              $(ZLIB) $(LIBGCC)
 
 LIBMD5_INC := $(TOPDIR)/libmd5
 STDINC     := $(TOPDIR)/libc/include $(TOPDIR)/include $(TOPDIR)/include/$(IARCH) $(LIBMD5_INC)
@@ -200,7 +201,6 @@ UEFIINC    := $(TOPDIR)/uefi                              \
               $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
 FDTINC     := $(TOPDIR)/libfdt
-BPINC      := $(TOPDIR)/libbp
 UEFIPROTO  := $(TOPDIR)/uefi/efiutils/protocol
 
 ifneq ($(filter arm64 riscv64,$(ARCH)),)

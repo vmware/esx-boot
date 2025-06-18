@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2018,2020-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -166,5 +167,10 @@ void rts_generic_post(efi_info_t *efi_info,
                      EFI_MEMORY_DESCRIPTOR *vmap,
                      uint64_t virtualMapSize);
 uint64_t get_l1e_flags(uint64_t *l4pt, uint64_t lpn);
+
+/*
+ * urlresolve.c
+ */
+char *url_resolve_relative(const char *rel_url, const char *base_url);
 
 #endif /* !EFI_PRIVATE_H_ */

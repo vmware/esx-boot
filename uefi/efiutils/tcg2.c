@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -353,7 +354,7 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
       return EFI_NOT_STARTED;
    }
 
-   tcg2Event = sys_malloc(tcg2EventSize);
+   tcg2Event = malloc(tcg2EventSize);
    if (tcg2Event == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -368,7 +369,7 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
    Status = tcg2->HashLogExtendEvent(tcg2, 0,
                                      (EFI_PHYSICAL_ADDRESS)(UINTN)data,
                                      dataSize, tcg2Event);
-   sys_free(tcg2Event);
+   free(tcg2Event);
 
    /*
     * Ignore log full errors. This error condition will be detected by

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2015 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 

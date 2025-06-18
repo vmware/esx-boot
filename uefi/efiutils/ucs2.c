@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -109,7 +110,7 @@ EFI_STATUS ucs2_to_ascii(const CHAR16 *Src, char **dest, bool strict)
    EFI_ASSERT_PARAM(dest != NULL);
 
    if (*dest == NULL) {
-      str = sys_malloc(ucs2_strlen(Src) + 1);
+      str = malloc(ucs2_strlen(Src) + 1);
       if (str == NULL) {
          return EFI_OUT_OF_RESOURCES;
       }
@@ -121,7 +122,7 @@ EFI_STATUS ucs2_to_ascii(const CHAR16 *Src, char **dest, bool strict)
    do {
       if (strict && ((*Src) & 0xff00) != 0) {
          if (*dest == NULL) {
-            sys_free(str);
+            free(str);
          }
          return EFI_INVALID_PARAMETER;
       }
@@ -196,7 +197,7 @@ EFI_STATUS ucs2_alloc(size_t length, CHAR16 **Str)
 {
    CHAR16 *p;
 
-   p = sys_malloc((length + 1) * sizeof (CHAR16));
+   p = malloc((length + 1) * sizeof (CHAR16));
    if (p == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2017,2022-2023 VMware, Inc.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -146,7 +147,7 @@ void gui_refresh(void)
 /*-- gui_string_edit -----------------------------------------------------------
  *
  *      Allow user to edit a string in a text field. The buffer containing the
- *      string must have been allocated with sys_malloc() and must be exactly
+ *      string must have been allocated with malloc() and must be exactly
  *      (strlen(str) + 1) large. The string is reallocated if needed.
  *
  *      The input string is modified in place and is not freed on errors or when
@@ -314,13 +315,13 @@ static int edit_kernel_options(void)
    status = gui_string_edit(x, y, w, &options);
    fb_draw_rect(fb, x, y, w, font_height(1), COLOR_BG);
    if (status != ERR_SUCCESS) {
-      sys_free(options);
+      free(options);
       return status;
    }
 
-   sys_free(boot.modules[0].options);
+   free(boot.modules[0].options);
    if (options[0] == '\0') {
-      sys_free(options);
+      free(options);
       boot.modules[0].options = NULL;
    } else {
       boot.modules[0].options = options;
@@ -341,12 +342,17 @@ static int edit_kernel_options(void)
  *
  *      <SHIFT+R> Enters the recovery mode (only if a recovery command was
  *                passed on mboot's command line with the '-R COMMAND' option).
- *      
+ *
  *      <SHIFT+V> Turns on verbose logging as with the -V command line option,
  *                if not already on.
  *
  *      <SHIFT+S> Turns on verbose logging to serial as with the -S1 command
  *                line option, if not already on.
+ *
+ *      <SHIFT+T> Turns on verbose logging to serial as with the -S2 command
+ *                line option, if not already on.
+ *
+ *      <SHIFT+U> Disables UEFI runtime services.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
@@ -413,8 +419,11 @@ int gui_edit_kernel_options(void)
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'S' && !boot.serial) {
          Log(LOG_INFO, "Shift+S pressed: Enabling serial log to COM1");
          boot.serial =
-            serial_log_init(DEFAULT_SERIAL_COM,
-                            DEFAULT_SERIAL_BAUDRATE) == ERR_SUCCESS;
+            serial_log_init(1, DEFAULT_SERIAL_BAUDRATE) == ERR_SUCCESS;
+      } else if (key.sym == KEYSYM_ASCII && key.ascii == 'T' && !boot.serial) {
+         Log(LOG_INFO, "Shift+T pressed: Enabling serial log to COM2");
+         boot.serial =
+            serial_log_init(2, DEFAULT_SERIAL_BAUDRATE) == ERR_SUCCESS;
       } else if (key.sym == KEYSYM_ASCII && key.ascii == 'U' && !boot.no_rts) {
          Log(LOG_INFO, "Shift+U pressed: Disabling UEFI runtime services");
          boot.no_rts = true;

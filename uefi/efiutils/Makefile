@@ -1,6 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2015-2016,2019-2021,2023 VMware, Inc.
-# All rights reserved.
+# Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -15,7 +15,6 @@ SRC         := acpi_table.c \
                console.c    \
                devpath.c    \
                devpathl.c   \
-               dhcpv4.c     \
                disk.c       \
                efi_main.c   \
                efi_secure.c \
@@ -56,6 +55,7 @@ SRC         := acpi_table.c \
                ucs2.c       \
                ucs2a.c      \
                uga.c        \
+               urlresolve.c \
                vbe.c        \
                volume.c     \
                $(IARCH)/console_arch.c \

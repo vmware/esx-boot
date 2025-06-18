@@ -1,5 +1,7 @@
 #*******************************************************************************
-# Copyright (c) 2008-2017,2020-2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc.
+# and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -26,6 +28,7 @@ SRC         := acpi.c	             \
                $(IARCH)/system_arch.c\
                trampoline.c          \
                signinfo.json         \
+					cxl.c                 \
 
 ifeq ($(IARCH),x86)
 SRC += $(IARCH)/trampoline.s
@@ -35,7 +38,7 @@ SRC += $(IARCH)/trampoline.S
 endif
 
 TARGETTYPE  := app
-INC += . $(BPINC)
+INC += .
 
 LIBS := $(BOOTLIB) $(ENV_LIB)
 

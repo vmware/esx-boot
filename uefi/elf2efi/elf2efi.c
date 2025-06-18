@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015,2019-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2022 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -32,7 +33,11 @@
 #include <errno.h>
 #include <assert.h>
 #include <getopt.h>
-#include <bfd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <elf.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
@@ -46,16 +51,86 @@
 #include <Uefi.h>
 #include <IndustryStandard/PeImage.h>
 
-/* binutils 2.34 have new section API */
-#ifndef bfd_get_section_flags
-#  define bfd_get_section_flags(bfd, asec) bfd_section_flags(asec)
-#  define bfd_get_section_vma(bfd, asec) bfd_section_vma(asec)
-#  define bfd_section_size(bfd, asec) bfd_section_size(asec)
+#ifdef EFI_TARGET32
+
+#define EFI_IMAGE_NT_HEADERS		EFI_IMAGE_NT_HEADERS32
+#define EFI_IMAGE_NT_OPTIONAL_HDR_MAGIC	EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC
+#define EFI_IMAGE_FILE_MACHINE		EFI_IMAGE_FILE_32BIT_MACHINE
+#define ELFCLASS   ELFCLASS32
+#define Elf_Ehdr   Elf32_Ehdr
+#define Elf_Shdr   Elf32_Shdr
+#define Elf_Sym    Elf32_Sym
+#define Elf_Addr   Elf32_Addr
+#define Elf_Half   Elf32_Half
+#define Elf_Rel    Elf32_Rel
+#define Elf_Rela   Elf32_Rela
+#define ELF_R_TYPE ELF32_R_TYPE
+#define ELF_R_SYM  ELF32_R_SYM
+
+#define PRIxELFADDR	"x"
+
+#elif defined(EFI_TARGET64)
+
+#define EFI_IMAGE_NT_HEADERS		EFI_IMAGE_NT_HEADERS64
+#define EFI_IMAGE_NT_OPTIONAL_HDR_MAGIC	EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC
+#define EFI_IMAGE_FILE_MACHINE		0
+#define ELFCLASS   ELFCLASS64
+#define Elf_Ehdr   Elf64_Ehdr
+#define Elf_Shdr   Elf64_Shdr
+#define Elf_Sym    Elf64_Sym
+#define Elf_Addr   Elf64_Addr
+#define Elf_Half   Elf64_Half
+#define Elf_Rel    Elf64_Rel
+#define Elf_Rela   Elf64_Rela
+#define ELF_R_TYPE ELF64_R_TYPE
+#define ELF_R_SYM  ELF64_R_SYM
+
+#define PRIxELFADDR	"lx"
+
 #endif
 
 #define eprintf(...) fprintf ( stderr, __VA_ARGS__ )
 
+#define ELF_MREL( mach, type ) ( (mach) | ( (type) << 16 ) )
+
+/* Allow for building with older versions of elf.h */
+#ifndef EM_AARCH64
+#define EM_AARCH64 183
+#define R_AARCH64_NONE 0
+#define R_AARCH64_ABS64 257
+#define R_AARCH64_ABS32 258
+#define R_AARCH64_CALL26 283
+#define R_AARCH64_JUMP26 282
+#define R_AARCH64_ADR_PREL_LO21 274
+#define R_AARCH64_ADR_PREL_PG_HI21 275
+#define R_AARCH64_ADD_ABS_LO12_NC 277
+#define R_AARCH64_LDST8_ABS_LO12_NC 278
+#define R_AARCH64_LDST16_ABS_LO12_NC 284
+#define R_AARCH64_LDST32_ABS_LO12_NC 285
+#define R_AARCH64_LDST64_ABS_LO12_NC 286
+#endif /* EM_AARCH64 */
+#ifndef R_ARM_CALL
+#define R_ARM_CALL 28
+#endif
+#ifndef R_ARM_THM_JUMP24
+#define R_ARM_THM_JUMP24 30
+#endif
+
+/* Seems to be missing from elf.h */
+#ifndef R_AARCH64_NULL
+#define R_AARCH64_NULL 256
+#endif
+
 #define EFI_FILE_ALIGN 0x20
+
+struct elf_file {
+	void *data;
+	size_t len;
+	const Elf_Ehdr *ehdr;
+	const Elf_Shdr *symtab;
+	Elf_Half symtab_shnum;
+	Elf_Half strtab_shnum;
+};
 
 struct pe_section {
 	struct pe_section *next;
@@ -82,11 +157,7 @@ struct pe_relocs {
 struct pe_header {
 	EFI_IMAGE_DOS_HEADER dos;
 	uint8_t padding[128];
-#if defined(MDE_CPU_IA32)
-	EFI_IMAGE_NT_HEADERS32 nt;
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
-	EFI_IMAGE_NT_HEADERS64 nt;
-#endif
+	EFI_IMAGE_NT_HEADERS nt;
 };
 
 static struct pe_header efi_pe_header = {
@@ -97,30 +168,15 @@ static struct pe_header efi_pe_header = {
 	.nt = {
 		.Signature = EFI_IMAGE_NT_SIGNATURE,
 		.FileHeader = {
-#if defined(MDE_CPU_IA32)
-			.Machine = EFI_IMAGE_MACHINE_IA32,
-#elif defined(MDE_CPU_X64)
-			.Machine = EFI_IMAGE_MACHINE_X64,
-#elif defined(MDE_CPU_AARCH64)
-			.Machine = EFI_IMAGE_MACHINE_AARCH64,
-#elif defined(MDE_CPU_RISCV64)
-			.Machine = EFI_IMAGE_MACHINE_RISCV64,
-#endif
 			.TimeDateStamp = 0x10d1a884,
 			.SizeOfOptionalHeader =
 				sizeof ( efi_pe_header.nt.OptionalHeader ),
 			.Characteristics = ( EFI_IMAGE_FILE_DLL |
-#if defined(MDE_CPU_IA32)
-					     EFI_IMAGE_FILE_32BIT_MACHINE |
-#endif
+					     EFI_IMAGE_FILE_MACHINE |
 					     EFI_IMAGE_FILE_EXECUTABLE_IMAGE ),
 		},
 		.OptionalHeader = {
-#if defined(MDE_CPU_IA32)
-			.Magic = EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC,
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
-			.Magic = EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC,
-#endif
+			.Magic = EFI_IMAGE_NT_OPTIONAL_HDR_MAGIC,
 			.SectionAlignment = EFI_FILE_ALIGN,
 			.FileAlignment = EFI_FILE_ALIGN,
 			.SizeOfImage = sizeof ( efi_pe_header ),
@@ -183,7 +239,7 @@ static void generate_pe_reloc ( struct pe_relocs **pe_reltab,
 	unsigned long start_rva;
 	uint16_t reloc;
 	struct pe_relocs *pe_rel;
-        struct pe_relocs **next_pe_rel = pe_reltab;
+	struct pe_relocs **next_pe_rel = pe_reltab;
 	uint16_t *relocs;
 
 	/* Construct */
@@ -257,110 +313,183 @@ static size_t output_pe_reltab ( struct pe_relocs *pe_reltab,
 }
 
 /**
- * Open input BFD file
+ * Read input ELF file
  *
- * @v filename		File name
- * @ret ibfd		BFD file
+ * @v name		File name
+ * @v elf		ELF file
  */
-static bfd * open_input_bfd ( const char *filename ) {
-	bfd *bfd;
+static void read_elf_file ( const char *name, struct elf_file *elf ) {
+	static const unsigned char ident[] = {
+		ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3, ELFCLASS, ELFDATA2LSB
+	};
+	struct stat stat;
+	const Elf_Ehdr *ehdr;
+	const Elf_Shdr *shdr;
+	void *data;
+	size_t offset;
+	unsigned int i;
+	int fd;
 
-	/* Open the file */
-	bfd = bfd_openr ( filename, NULL );
-	if ( ! bfd ) {
-		eprintf ( "Cannot open %s: ", filename );
-		bfd_perror ( NULL );
+	/* Open file */
+	fd = open ( name, O_RDONLY );
+	if ( fd < 0 ) {
+		eprintf ( "Could not open %s: %s\n", name, strerror ( errno ) );
 		exit ( 1 );
 	}
 
-	/* The call to bfd_check_format() must be present, otherwise
-	 * we get a segfault from later BFD calls.
-	 */
-	if ( ! bfd_check_format ( bfd, bfd_object ) ) {
-		eprintf ( "%s is not an object file: ", filename );
-		bfd_perror ( NULL );
+	/* Get file size */
+	if ( fstat ( fd, &stat ) < 0 ) {
+		eprintf ( "Could not get size of %s: %s\n",
+			  name, strerror ( errno ) );
 		exit ( 1 );
 	}
+	elf->len = stat.st_size;
 
-	return bfd;
+	/* Map file */
+	data = mmap ( NULL, elf->len, PROT_READ, MAP_SHARED, fd, 0 );
+	if ( data == MAP_FAILED ) {
+		eprintf ( "Could not map %s: %s\n", name, strerror ( errno ) );
+		exit ( 1 );
+	}
+	elf->data = data;
+
+	/* Close file */
+	close ( fd );
+
+	/* Check header */
+	ehdr = elf->data;
+	if ( ( elf->len < sizeof ( *ehdr ) ) ||
+	     ( memcmp ( ident, ehdr->e_ident, sizeof ( ident ) ) != 0 ) ) {
+		eprintf ( "Invalid ELF header in %s\n", name );
+		exit ( 1 );
+	}
+	elf->ehdr = ehdr;
+	elf->symtab = NULL;
+	elf->symtab_shnum = -1;
+	elf->strtab_shnum = -1;
+
+	/* Check section headers */
+	for ( i = 0 ; i < ehdr->e_shnum ; i++ ) {
+		offset = ( ehdr->e_shoff + ( i * ehdr->e_shentsize ) );
+		if ( elf->len < ( offset + sizeof ( *shdr ) ) ) {
+			eprintf ( "ELF section header outside file in %s\n",
+				  name );
+			exit ( 1 );
+		}
+		shdr = ( data + offset );
+		if ( ( shdr->sh_type != SHT_NOBITS ) &&
+		     ( ( elf->len < shdr->sh_offset ) ||
+		       ( ( ( elf->len - shdr->sh_offset ) < shdr->sh_size ) ))){
+			eprintf ( "ELF section %d outside file in %s\n",
+				  i, name );
+			exit ( 1 );
+		}
+		if ( shdr->sh_link >= ehdr->e_shnum ) {
+			eprintf ( "ELF section %d link section %d out of "
+				  "range\n", i, shdr->sh_link );
+			exit ( 1 );
+		}
+		if ( shdr->sh_type == SHT_SYMTAB ) {
+			elf->symtab = shdr;
+			elf->symtab_shnum = i;
+			elf->strtab_shnum = shdr->sh_link;
+		}
+	}
 }
 
 /**
- * Read symbol table
+ * Get ELF string
  *
- * @v bfd		BFD file
+ * @v elf		ELF file
+ * @v section		String table section number
+ * @v offset		String table offset
+ * @ret string		ELF string
  */
-static asymbol ** read_symtab ( bfd *bfd ) {
-	long symtab_size;
-	asymbol **symtab;
-	long symcount;
+static const char * elf_string ( struct elf_file *elf, unsigned int section,
+				 size_t offset ) {
+	const Elf_Ehdr *ehdr = elf->ehdr;
+	const Elf_Shdr *shdr;
+	char *string;
+	char *last;
 
-	/* Get symbol table size */
-	symtab_size = bfd_get_symtab_upper_bound ( bfd );
-	if ( symtab_size < 0 ) {
-		bfd_perror ( "Could not get symbol table upper bound" );
+	/* Locate section header */
+	if ( section >= ehdr->e_shnum ) {
+		eprintf ( "Invalid ELF string section %d\n", section );
+		exit ( 1 );
+	}
+	shdr = ( elf->data + ehdr->e_shoff + ( section * ehdr->e_shentsize ) );
+
+	/* Sanity check section */
+	if ( shdr->sh_type != SHT_STRTAB ) {
+		eprintf ( "ELF section %d (type %d) is not a string table\n",
+			  section, shdr->sh_type );
+		exit ( 1 );
+	}
+	last = ( elf->data + shdr->sh_offset + shdr->sh_size - 1 );
+	if ( *last != '\0' ) {
+		eprintf ( "ELF section %d is not NUL-terminated\n", section );
 		exit ( 1 );
 	}
 
-	/* Allocate and read symbol table */
-	symtab = xmalloc ( symtab_size );
-	symcount = bfd_canonicalize_symtab ( bfd, symtab );
-	if ( symcount < 0 ) {
-		bfd_perror ( "Cannot read symbol table" );
+	/* Locate string */
+	if ( offset >= shdr->sh_size ) {
+		eprintf ( "Invalid ELF string offset %zd in section %d\n",
+			  offset, section );
 		exit ( 1 );
 	}
+	string = ( elf->data + shdr->sh_offset + offset );
 
-	return symtab;
+	return string;
 }
 
 /**
- * Read relocation table
+ * Set machine architecture
  *
- * @v bfd		BFD file
- * @v symtab		Symbol table
- * @v section		Section
- * @v symtab		Symbol table
- * @ret reltab		Relocation table
+ * @v elf		ELF file
+ * @v pe_header		PE file header
  */
-static arelent ** read_reltab ( bfd *bfd, asymbol **symtab,
-				asection *section ) {
-	long reltab_size;
-	arelent **reltab;
-	long numrels;
+static void set_machine ( struct elf_file *elf, struct pe_header *pe_header ) {
+	const Elf_Ehdr *ehdr = elf->ehdr;
+	uint16_t machine;
 
-	/* Get relocation table size */
-	reltab_size = bfd_get_reloc_upper_bound ( bfd, section );
-	if ( reltab_size < 0 ) {
-		bfd_perror ( "Could not get relocation table upper bound" );
+	/* Identify machine architecture */
+	switch ( ehdr->e_machine ) {
+	case EM_386:
+		machine = EFI_IMAGE_MACHINE_IA32;
+		break;
+	case EM_X86_64:
+		machine = EFI_IMAGE_MACHINE_X64;
+		break;
+	case EM_ARM:
+		machine = EFI_IMAGE_MACHINE_ARMTHUMB_MIXED;
+		break;
+	case EM_AARCH64:
+		machine = EFI_IMAGE_MACHINE_AARCH64;
+		break;
+	default:
+		eprintf ( "Unknown ELF architecture %d\n", ehdr->e_machine );
 		exit ( 1 );
 	}
 
-	/* Allocate and read relocation table */
-	reltab = xmalloc ( reltab_size );
-	numrels = bfd_canonicalize_reloc ( bfd, section, reltab, symtab );
-	if ( numrels < 0 ) {
-		bfd_perror ( "Cannot read relocation table" );
-		exit ( 1 );
-	}
-
-	return reltab;
+	/* Set machine architecture */
+	pe_header->nt.FileHeader.Machine = machine;
 }
 
 /**
  * Process section
  *
- * @v bfd		BFD file
+ * @v elf		ELF file
+ * @v shdr		ELF section header
  * @v pe_header		PE file header
- * @v section		Section
  * @ret new		New PE section
  */
-static struct pe_section * process_section ( bfd *bfd,
-					     struct pe_header *pe_header,
-					     asection *section ) {
+static struct pe_section * process_section ( struct elf_file *elf,
+					     const Elf_Shdr *shdr,
+					     struct pe_header *pe_header ) {
 	struct pe_section *new;
+	const char *name;
 	size_t section_memsz;
 	size_t section_filesz;
-	unsigned long flags = bfd_get_section_flags ( bfd, section );
 	unsigned long code_start;
 	unsigned long code_end;
 	unsigned long data_start;
@@ -371,15 +500,16 @@ static struct pe_section * process_section ( bfd *bfd,
 	unsigned long *applicable_start = NULL;
 	unsigned long *applicable_end = NULL;
 
+	/* Get section name */
+	name = elf_string ( elf, elf->ehdr->e_shstrndx, shdr->sh_name );
+
 	/* Extract current RVA limits from file header */
 	code_start = pe_header->nt.OptionalHeader.BaseOfCode;
 	code_end = ( code_start + pe_header->nt.OptionalHeader.SizeOfCode );
-#if defined(MDE_CPU_IA32)
+#if defined(EFI_TARGET32)
 	data_start = pe_header->nt.OptionalHeader.BaseOfData;
-#elif defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_RISCV64)
+#elif defined(EFI_TARGET64)
 	data_start = code_end;
-#else
-#error Unsupported processor type
 #endif
 	data_mid = ( data_start +
 		     pe_header->nt.OptionalHeader.SizeOfInitializedData );
@@ -387,38 +517,21 @@ static struct pe_section * process_section ( bfd *bfd,
 		     pe_header->nt.OptionalHeader.SizeOfUninitializedData );
 
 	/* Allocate PE section */
-	section_memsz = bfd_section_size ( bfd, section );
-	section_filesz = ( ( flags & SEC_LOAD ) ?
+	section_memsz = shdr->sh_size;
+	section_filesz = ( ( shdr->sh_type == SHT_PROGBITS ) ?
 			   efi_file_align ( section_memsz ) : 0 );
 	new = xmalloc ( sizeof ( *new ) + section_filesz );
 	memset ( new, 0, sizeof ( *new ) + section_filesz );
 
 	/* Fill in section header details */
-	strncpy ( ( char * ) new->hdr.Name, section->name,
-		  sizeof ( new->hdr.Name ) );
+	strncpy ( ( char * ) new->hdr.Name, name, sizeof ( new->hdr.Name ) );
 	new->hdr.Misc.VirtualSize = section_memsz;
-	new->hdr.VirtualAddress = bfd_get_section_vma ( bfd, section );
+	new->hdr.VirtualAddress = shdr->sh_addr;
 	new->hdr.SizeOfRawData = section_filesz;
 
 	/* Fill in section characteristics and update RVA limits */
-	if ( flags & SEC_CODE ) {
-		/* .text-type section */
-		new->hdr.Characteristics =
-			( EFI_IMAGE_SCN_CNT_CODE |
-			  EFI_IMAGE_SCN_MEM_NOT_PAGED |
-			  EFI_IMAGE_SCN_MEM_EXECUTE |
-			  EFI_IMAGE_SCN_MEM_READ );
-		applicable_start = &code_start;
-		applicable_end = &code_end;
-	} else if ( flags & SEC_READONLY ) {
-		/* .rodata-type section */
-		new->hdr.Characteristics =
-			( EFI_IMAGE_SCN_CNT_INITIALIZED_DATA |
-			  EFI_IMAGE_SCN_MEM_NOT_PAGED |
-			  EFI_IMAGE_SCN_MEM_READ );
-		applicable_start = &data_start;
-		applicable_end = &data_mid;
-	} else if ( flags & SEC_DATA ) {
+	if ( ( shdr->sh_type == SHT_PROGBITS ) &&
+		    ( shdr->sh_flags & SHF_WRITE ) ) {
 		/* .data-type section */
 		new->hdr.Characteristics =
 			( EFI_IMAGE_SCN_CNT_INITIALIZED_DATA |
@@ -427,7 +540,25 @@ static struct pe_section * process_section ( bfd *bfd,
 			  EFI_IMAGE_SCN_MEM_WRITE );
 		applicable_start = &data_start;
 		applicable_end = &data_mid;
-	} else if ( ! ( flags & SEC_LOAD ) ) {
+	} else if ( ( shdr->sh_type == SHT_PROGBITS ) &&
+	     ( shdr->sh_flags & SHF_EXECINSTR ) ) {
+		/* .text-type section */
+		new->hdr.Characteristics =
+			( EFI_IMAGE_SCN_CNT_CODE |
+			  EFI_IMAGE_SCN_MEM_NOT_PAGED |
+			  EFI_IMAGE_SCN_MEM_EXECUTE |
+			  EFI_IMAGE_SCN_MEM_READ );
+		applicable_start = &code_start;
+		applicable_end = &code_end;
+	} else if ( shdr->sh_type == SHT_PROGBITS ) {
+		/* .rodata-type section */
+		new->hdr.Characteristics =
+			( EFI_IMAGE_SCN_CNT_INITIALIZED_DATA |
+			  EFI_IMAGE_SCN_MEM_NOT_PAGED |
+			  EFI_IMAGE_SCN_MEM_READ );
+		applicable_start = &data_start;
+		applicable_end = &data_mid;
+	} else if ( shdr->sh_type == SHT_NOBITS ) {
 		/* .bss-type section */
 		new->hdr.Characteristics =
 			( EFI_IMAGE_SCN_CNT_UNINITIALIZED_DATA |
@@ -436,16 +567,16 @@ static struct pe_section * process_section ( bfd *bfd,
 			  EFI_IMAGE_SCN_MEM_WRITE );
 		applicable_start = &data_mid;
 		applicable_end = &data_end;
+	} else {
+		eprintf ( "Unrecognised characteristics for section %s\n",
+			  name );
+		exit ( 1 );
 	}
 
 	/* Copy in section contents */
-	if ( flags & SEC_LOAD ) {
-		if ( ! bfd_get_section_contents ( bfd, section, new->contents,
-						  0, section_memsz ) ) {
-			eprintf ( "Cannot read section %s: ", section->name );
-			bfd_perror ( NULL );
-			exit ( 1 );
-		}
+	if ( shdr->sh_type == SHT_PROGBITS ) {
+		memcpy ( new->contents, ( elf->data + shdr->sh_offset ),
+			 shdr->sh_size );
 	}
 
 	/* Update RVA limits */
@@ -465,7 +596,7 @@ static struct pe_section * process_section ( bfd *bfd,
 	/* Write RVA limits back to file header */
 	pe_header->nt.OptionalHeader.BaseOfCode = code_start;
 	pe_header->nt.OptionalHeader.SizeOfCode = ( code_end - code_start );
-#if defined(MDE_CPU_IA32)
+#if defined(EFI_TARGET32)
 	pe_header->nt.OptionalHeader.BaseOfData = data_start;
 #endif
 	pe_header->nt.OptionalHeader.SizeOfInitializedData =
@@ -485,100 +616,120 @@ static struct pe_section * process_section ( bfd *bfd,
 /**
  * Process relocation record
  *
- * @v bfd		BFD file
- * @v section		Section
- * @v rel		Relocation entry
+ * @v elf		ELF file
+ * @v shdr		ELF section header
+ * @v syms		Symbol table
+ * @v nsyms		Number of symbol table entries
+ * @v rel		Relocation record
  * @v pe_reltab		PE relocation table to fill in
  */
-static void process_reloc ( bfd *bfd, asection *section, arelent *rel,
-			    struct pe_relocs **pe_reltab ) {
-	reloc_howto_type *howto = rel->howto;
-	asymbol *sym = *(rel->sym_ptr_ptr);
-	unsigned long offset = ( bfd_get_section_vma ( bfd, section ) +
-				 rel->address );
+static void process_reloc ( struct elf_file *elf, const Elf_Shdr *shdr,
+			    const Elf_Sym *syms, unsigned int nsyms,
+			    const Elf_Rel *rel, struct pe_relocs **pe_reltab ) {
+	unsigned int type = ELF_R_TYPE ( rel->r_info );
+	unsigned int sym = ELF_R_SYM ( rel->r_info );
+	unsigned int mrel = ELF_MREL ( elf->ehdr->e_machine, type );
+	size_t offset = ( shdr->sh_addr + rel->r_offset );
 
-	if ( bfd_is_abs_section ( sym->section ) ) {
+	/* Look up symbol and process relocation */
+	if ( sym >= nsyms ) {
+		eprintf ( "Symbol out of range\n" );
+		exit ( 1 );
+	}
+	if ( syms[sym].st_shndx == SHN_ABS ) {
 		/* Reject absolute symbols; there is nothing at a fixed address
 		 * under EFI.
 		 */
-		eprintf ( "Absolute symbol %s\n", sym->name );
+		eprintf ( "Absolute symbol #%d\n", sym );
 		fatalCount++;
-	} else if ( ( strcmp ( howto->name, "R_X86_64_64" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_AARCH64_ABS64" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_RISCV_64" ) == 0 ) ) {
-		/* Generate an 8-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_64 );
-	} else if ( ( strcmp ( howto->name, "R_386_32" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_X86_64_32" ) == 0 ) ) {
-		/* Generate a 4-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_32 );
-	} else if ( strcmp ( howto->name, "R_386_16" ) == 0 ) {
-		/* Generate a 2-byte PE relocation */
-		generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_16 );
-	} else if ( ( strcmp ( howto->name, "R_386_PC32" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_X86_64_PC32" ) == 0 ) ) {
-		/* Skip PC-relative relocations; all relative offsets
-		 * remain unaltered when the object is loaded.
-		 */
-        } else if ( strcmp ( howto->name, "R_X86_64_PLT32" ) == 0 ) {
-                /* GNU ld seems to leave R_X86_64_PLT32 as the
-                 * relocation type even when it has resolved a symbol
-                 * fully at link time and is *not* in fact jumping
-                 * through a PLT entry.  So skip these relocations
-                 * too, assuming that our linker script has checked
-                 * that there isn't really a PLT.
-                 */
-		if (verbose >= 2) {
-                        eprintf ( "Warning: relocation type %s for %s\n",
-                                  howto->name, sym->name );
-                }
-	} else if ( ( strcmp ( howto->name, "R_AARCH64_CALL26" ) == 0 ) ||
-		    ( strcmp ( howto->name, "R_AARCH64_JUMP26" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_ADR_PREL_LO21" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_ADR_PREL_PG_HI21" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_ADD_ABS_LO12_NC" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_LDST8_ABS_LO12_NC" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_LDST16_ABS_LO12_NC" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_LDST32_ABS_LO12_NC" ) == 0 ) ||
-		    ( strcmp ( howto->name,
-                               "R_AARCH64_LDST64_ABS_LO12_NC" ) == 0 ) ) {
-		/*
-		 * Skip PC-relative relocations; all relative offsets remain
-		 * unaltered when the object is loaded.
-		 */
-	} else if ( ( strcmp (howto->name, "R_RISCV_ADD64" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SUB64" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_ADD32" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SUB32" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_BRANCH" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_JAL" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_GPREL_I" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_GPREL_S" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_CALL" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_RVC_BRANCH" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_RVC_JUMP" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_RELAX" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SUB6" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SET6" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SET8" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SET16" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_SET32" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_PCREL_HI20" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_PCREL_LO12_I" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_PCREL_LO12_S" ) == 0 ) ||
-		    ( strcmp (howto->name, "R_RISCV_NONE" ) == 0 ) ) {
-		/*
-		 * Nothing to do for these.
-		 */
 	} else {
-		eprintf ( "Unrecognised relocation type %s\n", howto->name );
-                fatalCount++;
+		switch ( mrel ) {
+		case ELF_MREL ( EM_386, R_386_NONE ) :
+		case ELF_MREL ( EM_ARM, R_ARM_NONE ) :
+		case ELF_MREL ( EM_X86_64, R_X86_64_NONE ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_NONE ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_NULL ) :
+			/* Ignore dummy relocations used by REQUIRE_SYMBOL() */
+			break;
+		case ELF_MREL ( EM_386, R_386_32 ) :
+		case ELF_MREL ( EM_ARM, R_ARM_ABS32 ) :
+			/* Generate a 4-byte PE relocation */
+			generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_32 );
+			break;
+		case ELF_MREL ( EM_X86_64, R_X86_64_64 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_ABS64 ) :
+			/* Generate an 8-byte PE relocation */
+			generate_pe_reloc ( pe_reltab, offset, PE_BASE_REL_64 );
+			break;
+		case ELF_MREL ( EM_X86_64, R_X86_64_PLT32 ) :
+			/* GNU ld seems to leave R_X86_64_PLT32 as the
+			 * relocation type even when it has resolved a symbol
+			 * fully at link time and is *not* in fact jumping
+			 * through a PLT entry.  So skip these relocations
+			 * too, assuming that our linker script has checked
+			 * that there isn't really a PLT.
+			 */
+			if (verbose >= 2) {
+				eprintf ( "Warning: relocation type %s for symbol %d\n",
+					  "R_X86_64_PLT32", sym );
+			}
+			break;
+		case ELF_MREL ( EM_386, R_386_PC32 ) :
+		case ELF_MREL ( EM_ARM, R_ARM_CALL ) :
+		case ELF_MREL ( EM_ARM, R_ARM_THM_PC22 ) :
+		case ELF_MREL ( EM_ARM, R_ARM_THM_JUMP24 ) :
+		case ELF_MREL ( EM_X86_64, R_X86_64_PC32 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_CALL26 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_JUMP26 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_ADR_PREL_LO21 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_ADR_PREL_PG_HI21 ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_ADD_ABS_LO12_NC ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_LDST8_ABS_LO12_NC ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_LDST16_ABS_LO12_NC ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_LDST32_ABS_LO12_NC ) :
+		case ELF_MREL ( EM_AARCH64, R_AARCH64_LDST64_ABS_LO12_NC ) :
+			/* Skip PC-relative relocations; all relative
+			 * offsets remain unaltered when the object is
+			 * loaded.
+			 */
+			break;
+		default:
+			eprintf ( "Unrecognised relocation type %d for machine %d\n",
+				  type, elf->ehdr->e_machine );
+	                fatalCount++;
+		}
+	}
+}
+
+/**
+ * Process relocation records
+ *
+ * @v elf		ELF file
+ * @v shdr		ELF section header
+ * @v stride		Relocation record size
+ * @v pe_reltab		PE relocation table to fill in
+ */
+static void process_relocs ( struct elf_file *elf, const Elf_Shdr *shdr,
+			     size_t stride, struct pe_relocs **pe_reltab ) {
+	const Elf_Shdr *symtab;
+	const Elf_Sym *syms;
+	const Elf_Rel *rel;
+	unsigned int nsyms;
+	unsigned int nrels;
+	unsigned int i;
+
+	/* Identify symbol table */
+	symtab = ( elf->data + elf->ehdr->e_shoff +
+		   ( shdr->sh_link * elf->ehdr->e_shentsize ) );
+	syms = ( elf->data + symtab->sh_offset );
+	nsyms = ( symtab->sh_size / sizeof ( syms[0] ) );
+
+	/* Process each relocation */
+	rel = ( elf->data + shdr->sh_offset );
+	nrels = ( shdr->sh_size / stride );
+	for ( i = 0 ; i < nrels ; i++ ) {
+		process_reloc ( elf, shdr, syms, nsyms, rel, pe_reltab );
+		rel = ( ( ( const void * ) rel ) + stride );
 	}
 }
 
@@ -689,17 +840,29 @@ create_debug_section ( struct pe_header *pe_header, const char *filename ) {
 /**
  * Search symbol table for given name; exit with error if not found.
  */
-static asymbol *find_symbol(const char *symname, asymbol **symtab)
+static const Elf_Sym *find_symbol(const char *symname, struct elf_file *elf)
 {
-        unsigned int i;
+	const Elf_Shdr *symtab;
+	const Elf_Sym *syms;
+	unsigned int nsyms;
+	unsigned int i;
 
-        for (i = 0; symtab[i] != NULL; i++) {
-                if (strcmp(symtab[i]->name, symname) == 0) {
-                        return symtab[i];
-                }
-        }
-        eprintf("Symbol %s not found\n", symname);
-        exit(1);
+	symtab = ( elf->data + elf->ehdr->e_shoff +
+		   ( elf->symtab_shnum * elf->ehdr->e_shentsize ) );
+	syms = ( elf->data + symtab->sh_offset );
+	nsyms = ( symtab->sh_size / sizeof ( syms[0] ) );
+
+	for (i = 0; i < nsyms; i++) {
+		const Elf_Sym *sym = &syms[i];
+		const char *name;
+
+		name = elf_string ( elf, elf->strtab_shnum, sym->st_name );
+		if (strcmp(name, symname) == 0) {
+			return sym;
+		}
+	}
+	eprintf("Symbol %s not found\n", symname);
+	exit(1);
 }
 
 /**
@@ -720,20 +883,48 @@ static struct pe_section *find_section(const char *secname,
         exit(1);
 }
 
+/**
+ * Return the section header for an ELF symbol's section.
+ */
+
+static const Elf_Shdr *symbol_section(const Elf_Sym *sym, struct elf_file *elf)
+{
+	const Elf_Shdr *shdr;
+	size_t offset;
+
+	offset = ( elf->ehdr->e_shoff + ( sym->st_shndx * elf->ehdr->e_shentsize ) );
+	shdr = ( elf->data + offset );
+
+	return shdr;
+}
+
+/**
+ * Return the section name for a ELF section.
+ */
+static const char *section_name(const Elf_Shdr *shdr, struct elf_file *elf)
+{
+	return elf_string ( elf, elf->ehdr->e_shstrndx, shdr->sh_name );
+}
 
 /**
  * Write an extra copy of the .reloc section into space preallocated at symbol
  * "_reloc_copy", of given max_size.
  */
-static void copy_pe_reloc(unsigned long max_size, asymbol **symtab,
-                          struct pe_section *pe_sections)
+
+#define RELOC_COPY	"_reloc_copy"
+
+static void copy_pe_reloc(unsigned long max_size,
+                          struct pe_section *pe_sections,
+                          struct elf_file *elf)
 {
         struct pe_section *reloc, *dest;
-        asymbol *sym;
+	const Elf_Sym *sym;
+	const Elf_Shdr *shdr;
 
-        reloc = find_section(".reloc", pe_sections);
-        sym = find_symbol("_reloc_copy", symtab);
-        dest = find_section(sym->section->name, pe_sections);
+	reloc = find_section(".reloc", pe_sections);
+	sym = find_symbol(RELOC_COPY, elf);
+	shdr = symbol_section(sym, elf);
+	dest = find_section(section_name(shdr, elf), pe_sections);
 
         if (reloc->hdr.Misc.VirtualSize > max_size) {
                 eprintf("Reloc section size %u too large; max is %lu bytes\n",
@@ -742,15 +933,16 @@ static void copy_pe_reloc(unsigned long max_size, asymbol **symtab,
         }
 
         if (verbose) {
-                eprintf("Copying %.*s to %s at 0x%"PRIx64" from start of %s\n",
+                eprintf("Copying %.*s to %s at 0x%"PRIxELFADDR" from start of %s\n",
                         (int)sizeof(dest->hdr.Name), dest->hdr.Name,
-                        sym->name, sym->value,
-                        sym->section->name);
+                        RELOC_COPY, sym->st_value - shdr->sh_offset, section_name(shdr, elf));
         }
-
-        memcpy(dest->contents + sym->value,
+        memcpy(dest->contents + sym->st_value - shdr->sh_offset,
                reloc->contents, reloc->hdr.Misc.VirtualSize);
 }
+
+#define HMAC_KEY	"_hmac_key"
+#define HASH_SYM	"_expected_hash"
 
 /**
  * Compute an HMAC-SHA2-512 hash of the .text, .rodata, and .data sections,
@@ -758,9 +950,10 @@ static void copy_pe_reloc(unsigned long max_size, asymbol **symtab,
  * which is assumed to be at the end of a section.  Write the hash into the
  * preallocated space.
  */
-static void insert_pe_hash(asymbol **symtab, struct pe_section *pe_sections)
+static void insert_pe_hash(struct pe_section *pe_sections, struct elf_file *elf)
 {
-        asymbol *key_sym, *hash_sym;
+	const Elf_Sym *key_sym, *hash_sym;
+	const Elf_Shdr *key_shdr, *hash_shdr;
         struct pe_section *key_sec, *hash_sec;
         const char *sec_name[] = { ".text", ".rodata", ".data", NULL };
         unsigned i;
@@ -770,20 +963,22 @@ static void insert_pe_hash(asymbol **symtab, struct pe_section *pe_sections)
         int rc;
         size_t siglen;
 
-        key_sym = find_symbol("_hmac_key", symtab);
-        key_sec = find_section(key_sym->section->name, pe_sections);
-        hash_sym = find_symbol("_expected_hash", symtab);
-        hash_sec = find_section(hash_sym->section->name, pe_sections);
+	key_sym = find_symbol(HMAC_KEY, elf);
+	key_shdr = symbol_section(key_sym, elf);
+	key_sec = find_section(section_name(key_shdr, elf), pe_sections);
+	hash_sym = find_symbol(HASH_SYM, elf);
+	hash_shdr = symbol_section(hash_sym, elf);
+	hash_sec = find_section(section_name(hash_shdr, elf), pe_sections);
 
         if (verbose) {
-                eprintf("Copying key from %s at 0x%"PRIx64" from start of %s\n",
-                        key_sym->name, key_sym->value,
-                        key_sym->section->name);
+                eprintf("Copying key from %s at 0x%"PRIxELFADDR" from start of %s\n",
+                        HMAC_KEY, key_sym->st_value - key_shdr->sh_offset,
+			section_name(key_shdr, elf));
         }
-
         pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
-                                            key_sec->contents + key_sym->value,
+                                            key_sec->contents + key_sym->st_value - key_shdr->sh_offset,
                                             HASH_SIZE);
+
         if (pkey == NULL) {
                 eprintf("EVP_PKEY_new_raw_private_key error 0x%lx\n",
                         ERR_get_error());
@@ -808,7 +1003,7 @@ static void insert_pe_hash(asymbol **symtab, struct pe_section *pe_sections)
 
                 sec = find_section(sec_name[i], pe_sections);
                 if (sec == hash_sec) {
-                        len = hash_sym->value;
+                        len = hash_sym->st_value - hash_shdr->sh_offset;
                 } else {
                         len = sec->hdr.Misc.VirtualSize;
                 }
@@ -832,12 +1027,12 @@ static void insert_pe_hash(asymbol **symtab, struct pe_section *pe_sections)
         EVP_MD_CTX_free(ctx);
 
         if (verbose) {
-                eprintf("Copying hash to %s at 0x%"PRIx64" from start of %s\n",
-                        hash_sym->name, hash_sym->value,
-                        hash_sym->section->name);
+                eprintf("Copying hash to %s at 0x%"PRIxELFADDR" from start of %s\n",
+                        HASH_SYM, hash_sym->st_value - hash_shdr->sh_offset,
+                        section_name(hash_shdr, elf));
         }
 
-        memcpy(hash_sec->contents + hash_sym->value, hash, HASH_SIZE);
+        memcpy(hash_sec->contents + hash_sym->st_value - hash_shdr->sh_offset, hash, HASH_SIZE);
 }
 
 /**
@@ -909,46 +1104,61 @@ static void write_pe_file ( struct pe_header *pe_header,
 static void elf2pe ( const char *elf_name, const char *pe_name,
 		     struct options *opts ) {
 	char pe_name_tmp[ strlen ( pe_name ) + 1 ];
-	bfd *bfd;
-	asymbol **symtab;
-	asection *section;
-	arelent **reltab;
-	arelent **rel;
 	struct pe_relocs *pe_reltab = NULL;
 	struct pe_section *pe_sections = NULL;
 	struct pe_section **next_pe_section = &pe_sections;
 	struct pe_header pe_header;
+	struct elf_file elf;
+	const Elf_Shdr *shdr;
+	const Elf_Shdr *sections;
+	size_t offset;
+	unsigned int i;
 	FILE *pe;
 
 	/* Create a modifiable copy of the PE name */
 	memcpy ( pe_name_tmp, pe_name, sizeof ( pe_name_tmp ) );
 
-	/* Open the file */
-	bfd = open_input_bfd ( elf_name );
-	symtab = read_symtab ( bfd );
+	/* Read ELF file */
+	read_elf_file ( elf_name, &elf );
 
 	/* Initialise the PE header */
 	memcpy ( &pe_header, &efi_pe_header, sizeof ( pe_header ) );
-	pe_header.nt.OptionalHeader.AddressOfEntryPoint =
-		bfd_get_start_address ( bfd );
+	set_machine ( &elf, &pe_header );
+	pe_header.nt.OptionalHeader.AddressOfEntryPoint = elf.ehdr->e_entry;
 	pe_header.nt.OptionalHeader.Subsystem = opts->subsystem;
 
-	/* For each input section, build an output section and create
-	 * the appropriate relocation records
-	 */
-	for ( section = bfd->sections ; section ; section = section->next ) {
-		/* Discard non-allocatable sections */
-		if ( ! ( bfd_get_section_flags ( bfd, section ) & SEC_ALLOC ) )
-			continue;
-		/* Create output section */
-		*(next_pe_section) = process_section ( bfd, &pe_header,
-						       section );
-		next_pe_section = &(*next_pe_section)->next;
-		/* Add relocations from this section */
-		reltab = read_reltab ( bfd, symtab, section );
-		for ( rel = reltab ; *rel ; rel++ )
-			process_reloc ( bfd, section, *rel, &pe_reltab );
-		free ( reltab );
+	sections = ( elf.data + elf.ehdr->e_shoff );
+	/* Process input sections */
+	for ( i = 0 ; i < elf.ehdr->e_shnum ; i++ ) {
+		offset = ( elf.ehdr->e_shoff + ( i * elf.ehdr->e_shentsize ) );
+		shdr = ( elf.data + offset );
+
+		/* Process section */
+		if ( shdr->sh_flags & SHF_ALLOC ) {
+
+			/* Create output section */
+			*(next_pe_section) = process_section ( &elf, shdr,
+							       &pe_header );
+			next_pe_section = &(*next_pe_section)->next;
+
+		} else if ( shdr->sh_type == SHT_REL ) {
+			if ( ! ( sections[shdr->sh_info].sh_flags & SHF_ALLOC ) ) {
+				continue;
+			}
+
+			/* Process .rel relocations */
+			process_relocs ( &elf, shdr, sizeof ( Elf_Rel ),
+					 &pe_reltab );
+
+		} else if ( shdr->sh_type == SHT_RELA ) {
+			if ( ! ( sections[shdr->sh_info].sh_flags & SHF_ALLOC ) ) {
+				continue;
+			}
+
+			/* Process .rela relocations */
+			process_relocs ( &elf, shdr, sizeof ( Elf_Rela ),
+					 &pe_reltab );
+		}
 	}
 
 	/* Create the .reloc section */
@@ -973,11 +1183,11 @@ static void elf2pe ( const char *elf_name, const char *pe_name,
         }
 
         if (reloc_copy_size != 0) {
-                copy_pe_reloc(reloc_copy_size, symtab, pe_sections);
+                copy_pe_reloc(reloc_copy_size, pe_sections, &elf);
         }
 
         if (insert_hash) {
-                insert_pe_hash(symtab, pe_sections);
+                insert_pe_hash(pe_sections, &elf);
         }
 
 	/* Write out PE file */
@@ -990,8 +1200,8 @@ static void elf2pe ( const char *elf_name, const char *pe_name,
 	write_pe_file ( &pe_header, pe_sections, pe );
 	fclose ( pe );
 
-	/* Close BFD file */
-	bfd_close ( bfd );
+	/* Unmap ELF file */
+	munmap ( elf.data, elf.len );
 }
 
 /**
@@ -1069,9 +1279,6 @@ int main ( int argc, char **argv ) {
 	unsigned int infile_index;
 	const char *infile;
 	const char *outfile;
-
-	/* Initialise libbfd */
-	bfd_init();
 
 	/* Parse command-line arguments */
 	infile_index = parse_options ( argc, argv, &opts );

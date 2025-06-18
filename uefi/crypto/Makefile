@@ -1,5 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2015,2020-2021 VMware, Inc.  All rights reserved.
+# Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -24,7 +25,7 @@ endif
 CDEF        += $(CRYPTOTEST)
 
 # Hint: Adjust RELOC_COPY_SIZE upward if elf2efi fails
-RELOC_COPY_SIZE := 2500
+RELOC_COPY_SIZE := 3000
 CFLAGS          += -DRELOC_COPY_SIZE=$(RELOC_COPY_SIZE)
 ELF2EFIFLAGS    := --copy-reloc $(RELOC_COPY_SIZE) --insert-hash
 

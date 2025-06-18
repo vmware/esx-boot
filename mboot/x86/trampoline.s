@@ -1,5 +1,6 @@
 ;;******************************************************************************
-;; Copyright (c) 2008-2012,2015-2016,2020-2023 VMware, Inc. All rights reserved.
+;; Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+;; The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 ;; SPDX-License-Identifier: GPL-2.0
 ;;******************************************************************************
 
@@ -115,7 +116,7 @@ trampoline:
 .get_current_rip:
       mov     r9d, .disable_paging - .get_current_rip
       mov     r10d, .reload_segments - .get_current_rip
-      call    .tdx_enabled                ; Check if TDX is enabled
+      call    .in_tdx_guest               ; Check if running in a TDX guest
       test    r8d, r8d
       cmovnz  r9d, r10d                   ; Skip clearing CR0.PG and EFER.LME
       add     DWORD [rsp], r9d            ; FarPtr.offset = R9
@@ -191,7 +192,12 @@ trampoline:
 .reload_segments:
 ;;
 ;; Here we are in protected mode, paging disabled.
-;; On Intel TDX, we are still in compatibility mode.
+;;
+;; (Exception: If we are running in an Intel TDX guest, we skipped the
+;; "disable_paging" block above, so we are still in compatibility mode with
+;; paging enabled.  This case occurs only when booting certain Frobos tests;
+;; ESX is never booted in a TDX guest.  See the checkin message of CLN 1508413
+;; for additional details.)
 ;;
       mov      ax, BOOT_DS                ; For reloading data segments
       mov      ds, ax                     ; DS = BOOT_DS
@@ -214,9 +220,9 @@ trampoline:
 %if IS_64_BIT
 [BITS 64]
 ;;
-;; Returns 1 in R8 if Intel TDX is enabled and 0 otherwise.
+;; Returns 1 in R8 if running in an Intel TDX guest; 0 otherwise.
 ;;
-.tdx_enabled:
+.in_tdx_guest:
       push    rax                         ; Save registers clobbered by CPUID
       push    rbx
       push    rcx
@@ -228,7 +234,7 @@ trampoline:
       jb      .tdx_enabled_ret
       mov     eax, CPUID_INTEL_TDX_CAPS   ; EAX = Intel TDX Capabilities
       xor     ecx, ecx                    ; ECX = Max Leaf/Vendor String
-      cpuid                               ; Check if Intel TDX is enabled
+      cpuid                               ; Check if in an Intel TDX guest
       cmp     ebx, INTEL_TDX_VENDOR_ID_EBX
       jne     .tdx_enabled_ret
       cmp     ecx, INTEL_TDX_VENDOR_ID_ECX

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2016,2019-2020,2022 VMware, Inc. All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -280,7 +281,7 @@ static int fat_file_load(int volid, const char *filename,
 
    count = ceil(size, disk.bytes_per_sector);
 
-   data = sys_malloc(count * disk.bytes_per_sector);
+   data = malloc(count * disk.bytes_per_sector);
    if (data == NULL) {
       libfat_close(fs);
       return ERR_OUT_OF_RESOURCES;
@@ -309,7 +310,7 @@ static int fat_file_load(int volid, const char *filename,
    libfat_close(fs);
 
    if (status != ERR_SUCCESS) {
-      sys_free(data);
+      free(data);
    } else {
       *buffer = data;
       *bufsize = size;
@@ -494,9 +495,9 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
       return status;
    }
 
-   sectorbuf = sys_malloc(disk.bytes_per_sector);
+   sectorbuf = malloc(disk.bytes_per_sector);
    if (sectorbuf == NULL) {
-      Log(LOG_DEBUG, "file_overwrite: sys_malloc failed");
+      Log(LOG_DEBUG, "file_overwrite: malloc failed");
       libfat_close(fs);
       return ERR_OUT_OF_RESOURCES;
    }
@@ -516,7 +517,7 @@ int file_overwrite(int volid, const char *filepath, void *buffer, size_t buflen)
 
    libfat_close(fs);
 
-   sys_free(sectorbuf);
+   free(sectorbuf);
    firmware_reset_watchdog();
    return status;
 }

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -81,7 +82,7 @@ static EFI_STATUS EFIAPI gpxe_download_data(VOID *Context, VOID *Buffer,
    if (context->callback != NULL) {
       error = context->callback(BufferLength);
       if (error != 0) {
-         sys_free(context->buffer);
+         free(context->buffer);
          efi_set_watchdog_timer(WATCHDOG_DISABLE);
          return error_generic_to_efi(error);
       }
@@ -167,13 +168,13 @@ EFI_STATUS gpxe_file_load(EFI_HANDLE Volume, const char *filepath,
       efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
 
       if (EFI_ERROR(Status)) {
-         sys_free(context.buffer);
+         free(context.buffer);
          return Status;
       }
    }
 
    if (EFI_ERROR(context.status)) {
-      sys_free(context.buffer);
+      free(context.buffer);
       return context.status;
    }
 

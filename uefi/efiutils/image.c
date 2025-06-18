@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -92,7 +93,7 @@ EFI_STATUS image_load(EFI_HANDLE Volume, const CHAR16 *FilePath, VOID *OptBuf,
 
    Status = bs->LoadImage(EFI_CHAIN_LOADED, ImageHandle, DevPath, NULL, 0,
                           &ChildHandle);
-   sys_free(DevPath);
+   free(DevPath);
    if (EFI_ERROR(Status)) {
       return Status;
    }

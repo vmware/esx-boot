@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015,2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -67,11 +69,6 @@ typedef struct {
 #define E820_TYPE_RTS_CODE          100
 #define E820_TYPE_RTS_DATA          101
 #define E820_TYPE_RTS_MMIO          102
-
-/* Memory that has EFI_MEMORY_SP attribute in memory map */
-#define E820_TYPE_SP                103
-/* Memory that has EFI_MEMORY_SP and EFI_MEMORY_NV attributes in memory map */
-#define E820_TYPE_PMEM_SP           104
 
 /*
  * Additional memory types (for bootloader internal usage).

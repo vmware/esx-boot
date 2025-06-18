@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -275,7 +276,7 @@ int gzip_extract(const void *ibuffer, size_t isize,
     */
    isize -= (header_len + 8 - 1);
 
-   output = sys_malloc(size);
+   output = malloc(size);
 
    if (output == NULL) {
       Log(LOG_ERR, "Out of resources for decompressing data(%zu)\n", size);
@@ -284,7 +285,7 @@ int gzip_extract(const void *ibuffer, size_t isize,
 
    status = gunzip_buffer(ibuffer, isize, output, &size);
    if (status != ERR_SUCCESS) {
-      sys_free(output);
+      free(output);
       Log(LOG_ERR, "Error %d (%s) while decompressing data\n",
           status, error_str[status]);
       Log(LOG_ERR, "  input(%zu), output(%zu)\n", isize, size);
@@ -296,7 +297,7 @@ int gzip_extract(const void *ibuffer, size_t isize,
    if (received_crc != calculated_crc) {
       *obuffer = NULL;
       *osize = 0;
-      sys_free(output);
+      free(output);
       Log(LOG_ERR, "CRC error during decompression. Received CRC (0x%x) != "
                    "calculated CRC (0x%x)\n",received_crc, calculated_crc);
       return ERR_CRC_ERROR;
@@ -304,8 +305,10 @@ int gzip_extract(const void *ibuffer, size_t isize,
 
    *obuffer = output;
    *osize = size;
+#ifdef DEBUG
    Log(LOG_DEBUG, "recdCRC 0x%x, calcCRC 0x%x, tSize %zu, eSize %zu\n",
        received_crc, calculated_crc, isize, size);
+#endif
    return ERR_SUCCESS;
 }
 

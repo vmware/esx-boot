@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -124,21 +125,21 @@ static int read_testlist(void)
       newline = memchr(p, '\n', buflen);
       len = (newline != NULL) ? (size_t)(newline - p) : buflen;
       if (len > 0) {
-         line = sys_malloc(len + 1);
+         line = malloc(len + 1);
          if (line == NULL) {
-            sys_free(buffer);
+            free(buffer);
             return ERR_OUT_OF_RESOURCES;
          }
          memcpy(line, p, len);
          line[len] = '\0';
          if (num_test == 0) {
             num_test = atoi(line);
-            test_list = (char **)sys_malloc(num_test * sizeof (char *));
+            test_list = (char **)malloc(num_test * sizeof (char *));
          } else {
             test_list[i] = strdup(line);
             i++;
          }
-         sys_free(line);
+         free(line);
          if (newline != NULL) {
            len++;
          }

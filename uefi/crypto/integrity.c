@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -15,8 +16,6 @@
 #include <IndustryStandard/PeImage.h>
 
 #include "crypto.h"
-
-extern uint8_t _text, _etext, _rodata, _data, _edata, __executable_start;
 
 #define HEADERS_SIZE 0x1000 // Must match uefi.lds
 
@@ -34,7 +33,7 @@ extern uint8_t _text, _etext, _rodata, _data, _edata, __executable_start;
  * a nonzero value to ensure it is not placed in the bss.  Filled in during the
  * build process by elf2efi.
  */
-const uint16_t _reloc_copy[RELOC_COPY_SIZE / sizeof(uint16_t)] =
+uint16_t _reloc_copy[RELOC_COPY_SIZE / sizeof(uint16_t)] =
    { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0, /*...*/ };
 
 /*
@@ -44,7 +43,7 @@ const uint16_t _reloc_copy[RELOC_COPY_SIZE / sizeof(uint16_t)] =
  * The linker script uefi.ld inserts this section at the end of the EFI .rodata
  * section, to make it easier to skip it in the hash computation.
  */
-const uint8_t _expected_hash[HASH_SIZE]
+uint8_t _expected_hash[HASH_SIZE]
    __attribute__ ((section (".integrity"))) = { 0xff, 0, /*...*/ };
 
 /*
@@ -186,7 +185,7 @@ void hash_image(uint8_t hash[HASH_SIZE])
    const mbedtls_md_info_t *md_info;
    int errcode;
    uint8_t *nr = NULL;
-   intptr_t slide = &__executable_start - (uint8_t *)HEADERS_SIZE;
+   intptr_t slide = __executable_start - (uint8_t *)HEADERS_SIZE;
 
    mbedtls_md_init(&md_ctx);
    md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA512);
@@ -205,13 +204,13 @@ void hash_image(uint8_t hash[HASH_SIZE])
    }
 
    // Hash .text
-   hash_section(&md_ctx, &nr, &_text, &_etext, slide);
+   hash_section(&md_ctx, &nr, _text, _etext, slide);
 
    // Hash .rodata except for _expected_hash
-   hash_section(&md_ctx, &nr, &_rodata, _expected_hash, slide);
+   hash_section(&md_ctx, &nr, _rodata, _expected_hash, slide);
 
    // Hash .data
-   hash_section(&md_ctx, &nr, &_data, &_edata, slide);
+   hash_section(&md_ctx, &nr, _data, _edata, slide);
 
 #if FORCE_INTEGRITY_FAIL
    // Miscompute the hash to provoke an integrity test failure

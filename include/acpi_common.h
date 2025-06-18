@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -43,6 +45,51 @@ typedef struct {
    uint32_t creator_id;
    uint32_t creator_revision;
 } acpi_sdt;
+#pragma pack()
+
+/*
+ * CXL related definitions
+ */
+#define ACPI_CEDT_STRUCT_TYPE_CHBS 0x0
+#define ACPI_CEDT_STRUCT_TYPE_CFMWS 0x1
+
+#pragma pack(push, 1)
+typedef struct acpi_cedt_struct_header {
+   uint8_t type;       // 00h: CHBS, 01h: CFMWS
+   uint8_t _reserved;
+   uint16_t length;   // length of this structure
+} acpi_cedt_struct_header;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct acpi_cedt_chbs_struct {
+   acpi_cedt_struct_header header;   // ACPI header
+   uint32_t uid;              // associated host bridge unique ID
+   uint32_t _dont_care[6];
+} acpi_cedt_chbs_struct;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct acpi_cedt_cfmws_struct {
+   acpi_cedt_struct_header header;  // ACPI header
+   uint32_t _reserved1;             // reserved
+   uint64_t baseHPA;                // base host physical address of the window
+   uint64_t windowSize;
+   uint8_t interleaveWays;
+   uint8_t  interleave_arithematic;  // method used for HPA mapping
+   uint16_t reserved2;              // reserved
+   uint32_t granularity;            // interleave granularity
+   uint16_t restrictions;           // HPA use restrictions
+   uint16_t qtgID;                  // QoS Throttling Group ID
+   uint32_t targetList[];             // target list, should match with CHBS IDs
+} acpi_cedt_cfmws_struct;
+#pragma pack(pop)
+
+#pragma pack(1)
+typedef struct acpi_cedt_table {
+   acpi_sdt header;
+   uint8_t structs[];
+} acpi_cedt_table;
 #pragma pack()
 
 #endif /* !ACPI_COMMON_H_ */

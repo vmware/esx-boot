@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2021-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -56,7 +57,7 @@ static int install_acpitab(unsigned int n)
    status = acpi_install_table(addr, size, &boot.acpitab[n].key);
    boot.acpitab[n].is_installed = status == ERR_SUCCESS;
 
-   sys_free(addr);
+   free(addr);
 
    return status;
 }

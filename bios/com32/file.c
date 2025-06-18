@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -378,7 +379,7 @@ static int file_load_unbounded(uint16_t *fd, size_t blk_size, bool is_gpxe,
    return ERR_SUCCESS;
 
  error:
-   sys_free(buf);
+   free(buf);
    return status;
 }
 
@@ -406,7 +407,7 @@ static int file_load_bounded(uint16_t *fd, size_t blk_size, bool is_gpxe,
    int status;
    char *buf;
 
-   buf = sys_malloc(BYTES_TO_BLOCKS(filesize, blk_size) * blk_size);
+   buf = malloc(BYTES_TO_BLOCKS(filesize, blk_size) * blk_size);
    if (buf == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -460,7 +461,7 @@ static int file_load_bounded(uint16_t *fd, size_t blk_size, bool is_gpxe,
    }
 
    if (status != ERR_SUCCESS) {
-      sys_free(buf);
+      free(buf);
       return status;
    }
 

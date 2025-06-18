@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -86,7 +87,7 @@ static EFI_STATUS vbe_list_mode_numbers(resolution_t *res, unsigned int count)
    vbe_mode_id_t efi_mode_id;
    unsigned int i, j;
 
-   vbe_modes = sys_malloc((count + 1) * sizeof (vbe_mode_id_t));
+   vbe_modes = malloc((count + 1) * sizeof (vbe_mode_id_t));
    if (vbe_modes == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -431,12 +432,12 @@ int vbe_get_current_mode(vbe_mode_id_t *id)
 void efi_clean_vbe(void)
 {
    if (vbe_modes != NULL) {
-      sys_free(vbe_modes);
+      free(vbe_modes);
       vbe_modes = NULL;
    }
 
    if (resolutions != NULL) {
-      sys_free(resolutions);
+      free(resolutions);
       resolutions = NULL;
    }
 

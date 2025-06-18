@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -52,7 +53,7 @@ int main(int argc, char **argv)
          return -1;
       }
       com32_run_command(str);
-      sys_free(str);
+      free(str);
    }
 
    return -1;

@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2020-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -15,7 +17,6 @@
 #include <e820.h>
 #include <boot_services.h>
 #include <cpu.h>
-#include <bapply.h>
 
 #include "mboot.h"
 
@@ -41,7 +42,6 @@ static size_t size_ebi;
 static ESXBootInfo_Elmt *next_elmt; /* Next ESXBootInfo element to use */
 static char **cmdlines;
 static vbe_info_t vbe;              /* VBE information */
-
 
 /*-- esxbootinfo_scan ----------------------------------------------------------
  *
@@ -304,8 +304,6 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
 
    boot.tpm_measure = (mbh->flags & ESXBOOTINFO_FLAG_TPM_MEASUREMENT) != 0 &&
                       (mbh->tpm_measure & ESXBOOTINFO_TPM_MEASURE_V1) != 0;
-
-   boot.efi_info.use_memtype_sp = (mbh->flags & ESXBOOTINFO_FLAG_MEMTYPE_SP) != 0;
 
    return ERR_SUCCESS;
 }
@@ -818,10 +816,6 @@ int esxbootinfo_register(void)
       return status;
    }
 
-#if defined(only_arm64)
-   status = bapply_patch_esxinfo((void *)boot.modules[0].addr);
-#endif
-
    /*
     * Ensure the EBI and all subsequent system objects start on a page boundary.
     */
@@ -876,7 +870,7 @@ int esxbootinfo_register(void)
    }
 
    buf = log_buffer_info(&bufferSize);
-   status = add_sysinfo_object(buf, bufferSize, ALIGN_PTR);
+   status = add_sysinfo_object(buf, bufferSize, ALIGN_PAGE);
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -1018,14 +1012,14 @@ int esxbootinfo_init(void)
    size_ebi += sizeof(ESXBootInfo_Efi);
 #endif
 
-   eb_info = sys_malloc(size_ebi);
+   eb_info = malloc(size_ebi);
    if (eb_info == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
-   cmdlines = sys_malloc(boot.modules_nr * sizeof (char *));
+   cmdlines = malloc(boot.modules_nr * sizeof (char *));
    if (cmdlines == NULL) {
-      sys_free(eb_info);
+      free(eb_info);
       return ERR_OUT_OF_RESOURCES;
    }
 
@@ -1050,8 +1044,8 @@ int esxbootinfo_init(void)
       }
 
       if (retval == -1) {
-         sys_free(cmdlines);
-         sys_free(eb_info);
+         free(cmdlines);
+         free(eb_info);
          return ERR_OUT_OF_RESOURCES;
       }
    }

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -68,7 +69,7 @@ bool is_http_boot(void)
 
          /* Save a copy of the URL for get_http_boot_url */
          len = DevPathNodeLength(node) - sizeof(*node);
-         url = sys_malloc(len + 1);
+         url = malloc(len + 1);
          memcpy(url, &((URI_DEVICE_PATH *)node)->Uri, len);
          url[len] = '\0';
          httpBootUrl = url;

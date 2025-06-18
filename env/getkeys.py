@@ -1,7 +1,8 @@
 #! /usr/bin/python
 
 #*******************************************************************************
-# Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2020-2022 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -203,7 +204,8 @@ def main(inputFile, output):
     args = dict(cmd=sys.argv[0], year=time.strftime('%Y'))
     output.write('''\
 /*******************************************************************************
- * Copyright (c) %(year)s VMware, Inc.  All rights reserved.
+ * Copyright (c) %(year)s Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 

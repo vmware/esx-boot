@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -90,7 +91,7 @@ static int mbr_get_logical_info(disk_t *disk, mbr_part_t *extended, int part_id,
    uint32_t next_ebr_lba;
    int partnum, status;
 
-   ebr = sys_malloc(disk->bytes_per_sector);
+   ebr = malloc(disk->bytes_per_sector);
    if (ebr == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -129,7 +130,7 @@ static int mbr_get_logical_info(disk_t *disk, mbr_part_t *extended, int part_id,
       next_ebr_lba = part->start_lba;
    } while (next_ebr_lba > 0);
 
-   sys_free(ebr);
+   free(ebr);
 
    return status;
 }
@@ -208,7 +209,7 @@ int mbr_get_max_part(disk_t *disk, char *mbr, int *max)
          /*
           * Found extended partition. Count the logical partitions in it.
           */
-         ebr = sys_malloc(disk->bytes_per_sector);
+         ebr = malloc(disk->bytes_per_sector);
          if (ebr == NULL) {
             return ERR_OUT_OF_RESOURCES;
          }
@@ -240,7 +241,7 @@ int mbr_get_max_part(disk_t *disk, char *mbr, int *max)
             next_ebr_lba = part->start_lba;
          } while (next_ebr_lba > 0);
 
-         sys_free(ebr);
+         free(ebr);
          break;
       }
    }

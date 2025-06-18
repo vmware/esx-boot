@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2020-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -31,7 +32,7 @@ int str_alloc(size_t length, char **str)
 {
    char *s;
 
-   s = sys_malloc(length + 1);
+   s = malloc(length + 1);
    if (s == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -204,8 +205,8 @@ static int cmdline_split(char *str, int *argc, bool amp)
 /*-- str_to_argv ---------------------------------------------------------------
  *
  *      Convert a string representing a command line to an argv[] like array.
- *      The argv[] array is internally allocated with sys_malloc() and should
- *      be freed with sys_free() when no longer used.  The cmdline is modified
+ *      The argv[] array is internally allocated with malloc() and should
+ *      be freed with free() when no longer used.  The cmdline is modified
  *      in place and the argv array retains pointers into it, so the cmdline
  *      must not be freed until the argv array is no longer in use.
  *
@@ -232,7 +233,7 @@ int str_to_argv(char *cmdline, int *argc, char ***argv, bool amp)
    }
 
    if (n > 0) {
-      args = sys_malloc(n * sizeof (char *));
+      args = malloc(n * sizeof (char *));
       if (args == NULL) {
          return ERR_OUT_OF_RESOURCES;
       }
@@ -255,7 +256,7 @@ int str_to_argv(char *cmdline, int *argc, char ***argv, bool amp)
 /*-- argv_to_str ---------------------------------------------------------------
  *
  *      Convert an argv-like array to a single string. The string is allocated
- *      via sys_malloc().
+ *      via malloc().
  *
  * Parameters
  *      IN  argc: number of arguments on the command line
@@ -403,7 +404,7 @@ int make_path(const char *default_root_dir, const char *filepath, char **buffer)
 
    status = file_sanitize_path(path);
    if (status != ERR_SUCCESS) {
-      sys_free(path);
+      free(path);
       return status;
    }
 

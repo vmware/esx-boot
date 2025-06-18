@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -42,7 +43,7 @@ typedef struct {
 /*
  * Ideally, we would have the allocation table scalable dynamically. However,
  * boot services have been already shut down at the time we are dealing with
- * the allocator (so we don't have sys_malloc() anymore).
+ * the allocator (so we don't have malloc() anymore).
  */
 static addr_range_t allocs[MAX_ALLOCS_NR];   /* The table of allocations */
 static int alloc_count = 0;                  /* Number of allocations */

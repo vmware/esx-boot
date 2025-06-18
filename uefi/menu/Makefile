@@ -1,5 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2015 VMware, Inc.  All rights reserved.
+# Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -15,6 +16,9 @@ SRC         := menu.c
 BASENAME    := menu
 TARGETTYPE  := app
 INC         := $(UEFIINC)
+INC         += $(CRYPTOINC)
 LIBS        := $(ENV_LIB) $(BOOTLIB)
+
+ELF2EFIFLAGS    := --insert-hash
 
 include rules.mk

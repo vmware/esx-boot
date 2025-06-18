@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -168,9 +169,9 @@ int parse_config_file(int volid, const char *filename, option_t *options)
       len = (newline != NULL) ? (size_t)(newline - p) : size;
 
       if (len > 0) {
-         line = sys_malloc(len + 1);
+         line = malloc(len + 1);
          if (line == NULL) {
-            sys_free(buffer);
+            free(buffer);
             return ERR_OUT_OF_RESOURCES;
          }
 
@@ -178,7 +179,7 @@ int parse_config_file(int volid, const char *filename, option_t *options)
          line[len] = '\0';
 
          status = parse_option(line, options);
-         sys_free(line);
+         free(line);
          if (status != 0) {
             break;
          }
@@ -191,6 +192,6 @@ int parse_config_file(int volid, const char *filename, option_t *options)
       p += len;
    }
 
-   sys_free(buffer);
+   free(buffer);
    return status;
 }

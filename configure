@@ -1,11 +1,13 @@
 #!/bin/sh
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020,2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
 copyright='#*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020,2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 '
@@ -24,14 +26,6 @@ $(error Please setup your toolchain in env/toolchain.mk)
 
 HOST_CC         := <Path to host gcc>
 HOST_CFLAGS     :=
-#
-# Known to work with libbfd 2.17.50. libbfd
-# used should be aware of all architecture types
-# used in build.
-#
-HOST_LIBBFDINC  := <Path to host bfd.h>
-HOST_LIBBFD     := <Path to host libbfd.a>
-HOST_LIBERTY    := <Path to host libiberty.a>
 HOST_LIBCRYPTO  := <Path to host libcrypto.so>
 
 #=============================================================

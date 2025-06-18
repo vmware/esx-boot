@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -86,7 +87,7 @@ static EFI_STATUS simple_file_open(EFI_HANDLE Volume, const char *filepath,
 
    Status = vol->Open(vol, &fd, FilePath, mode, 0);
    vol->Close(vol);
-   sys_free(FilePath);
+   free(FilePath);
 
    if (EFI_ERROR(Status)) {
       return Status;
@@ -124,11 +125,11 @@ static EFI_STATUS simple_file_get_info(EFI_FILE_HANDLE File, EFI_GUID *InfoType,
 
    do {
       if (buffer != NULL) {
-         sys_free(buffer);
+         free(buffer);
       }
 
       if (buflen > 0) {
-         buffer = sys_malloc(buflen);
+         buffer = malloc(buflen);
          if (buffer == NULL) {
             return EFI_OUT_OF_RESOURCES;
          }
@@ -147,7 +148,7 @@ static EFI_STATUS simple_file_get_info(EFI_FILE_HANDLE File, EFI_GUID *InfoType,
    } while (Status == EFI_BUFFER_TOO_SMALL);
 
    if (buffer != NULL) {
-      sys_free(buffer);
+      free(buffer);
    }
 
    return Status;
@@ -184,7 +185,7 @@ EFI_STATUS simple_file_get_size(EFI_HANDLE Volume, const char *filepath,
    }
 
    *FileSize = (UINTN)FileInfo->FileSize;
-   sys_free(FileInfo);
+   free(FileInfo);
 
    return EFI_SUCCESS;
 }
@@ -230,7 +231,7 @@ EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
 
    size = (UINTN)FileInfo->FileSize;
    total_size = size;
-   DataStart = sys_malloc(size);
+   DataStart = malloc(size);
    if (DataStart == NULL) {
       File->Close(File);
       return EFI_OUT_OF_RESOURCES;
@@ -265,7 +266,7 @@ EFI_STATUS simple_file_load(EFI_HANDLE Volume, const char *filepath,
    File->Close(File);
 
    if (EFI_ERROR(Status)) {
-      sys_free(DataStart);
+      free(DataStart);
    } else {
       *Buffer = DataStart;
       *BufSize = total_size;

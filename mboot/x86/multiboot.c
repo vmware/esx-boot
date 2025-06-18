@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015-2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -786,7 +787,7 @@ int multiboot_init(void)
    size_t size;
    int retval;
 
-   cmdlines = sys_malloc(boot.modules_nr * sizeof (char *));
+   cmdlines = malloc(boot.modules_nr * sizeof (char *));
    if (cmdlines == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -801,7 +802,7 @@ int multiboot_init(void)
       }
 
       if (retval == -1) {
-         sys_free(cmdlines);
+         free(cmdlines);
          return ERR_OUT_OF_RESOURCES;
       }
    }
@@ -809,7 +810,7 @@ int multiboot_init(void)
    size = (boot.modules_nr - 1) * sizeof (MultiBoot_Module);
 
    if (size > 0) {
-      mb_mods = sys_malloc(size);
+      mb_mods = malloc(size);
       if (mb_mods == NULL) {
          Log(LOG_ERR, "Not enough memory for the Multiboot module info.\n");
          return ERR_OUT_OF_RESOURCES;

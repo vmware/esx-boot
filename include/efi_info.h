@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018,2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -20,7 +22,6 @@
 typedef struct {
    bool valid;                /* EFI info is valid? */
    bool secure_boot;          /* True if booting in Secure Boot mode */
-   bool use_memtype_sp;       /* Can use specific memory */
    uint64_t systab;           /* EFI system table pointer */
    uint32_t systab_size;      /* System table size */
    void *mmap;                /* EFI_MEMORY_DESCRIPTOR structures */

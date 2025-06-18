@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -151,14 +152,6 @@ EXTERN EFI_STATUS get_boot_volume(EFI_HANDLE *Volume);
 EXTERN EFI_STATUS get_boot_device(EFI_HANDLE *device);
 
 /*
- * memory.c
- */
-EXTERN VOID *efi_malloc(UINTN size);
-EXTERN VOID *efi_calloc(UINTN nmemb, UINTN size);
-EXTERN VOID *efi_realloc(VOID *ptr, UINTN oldsize, UINTN newsize);
-EXTERN VOID efi_free(VOID *ptr);
-
-/*
  * simplefile.c
  */
 EXTERN EFI_STATUS simple_file_get_size(EFI_HANDLE Volume,
@@ -188,10 +181,9 @@ EXTERN bool is_http_boot(void);
 EXTERN bool has_http(EFI_HANDLE Volume);
 EXTERN int get_http_boot_url(char **buffer);
 EXTERN EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
-                                    MAC_ADDR_DEVICE_PATH *macOut,
-                                    int *ipvOut, IPv4_DEVICE_PATH *ip4Out,
-                                    IPv6_DEVICE_PATH *ip6Out,
-                                    DNS_DEVICE_PATH *dnsOut);
+                                    MAC_ADDR_DEVICE_PATH *macOut, int *ipvOut,
+                                    IPv4_DEVICE_PATH *ip4Out,
+                                    IPv6_DEVICE_PATH *ip6Out);
 EXTERN EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
                                      EFI_HANDLE *ChildDH);
 EXTERN EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
@@ -200,12 +192,6 @@ EXTERN EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
 EXTERN EFI_STATUS http_file_get_size(EFI_HANDLE Volume, const char *filepath,
                                      UINTN *FileSize);
 EXTERN void http_cleanup(void);
-
-/*
- * dhcpv4.c
- */
-EXTERN EFI_STATUS get_ipv4_addr(EFI_HANDLE NicHandle,
-                                EFI_IPv4_ADDRESS preferredAddr);
 
 /*
  * loadfile.c

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -278,7 +279,7 @@ int fb_load_font(const void *data, size_t datalen, unsigned int width,
    }
 
    if (size != (bytes_per_scanline * height * 256)) {
-      sys_free(glyphs);
+      free(glyphs);
       return ERR_INVALID_PARAMETER;
    }
 

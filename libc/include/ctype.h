@@ -1,10 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * ctype.h -- Character classification
+ *
+ * Warning: This implementation assumes characters are ISO-8859-1, and it
+ * doesn't handle EOF, which isn't defined in this package.  For safety, it
+ * does handle negative signed characters that have been sign-extended, by
+ * masking down to 8 bit width.  The masking is done to avoid having to hunt
+ * down and fix other old code in this package that may be sloppy.
  */
 
 #ifndef _CTYPE_H
@@ -27,47 +34,47 @@ EXTERN const unsigned char libc_ctype[256];
 
 static INLINE int isspace(int c)
 {
-   return libc_ctype[c] & C_SPACE;
+   return libc_ctype[c & 0xff] & C_SPACE;
 }
 
 static INLINE int isdigit(int c)
 {
-   return libc_ctype[c] & C_DIGIT;
+   return libc_ctype[c & 0xff] & C_DIGIT;
 }
 
 static INLINE int isxdigit(int c)
 {
-   return libc_ctype[c] & C_XDIGIT;
+   return libc_ctype[c & 0xff] & C_XDIGIT;
 }
 
 static INLINE int isupper(int c)
 {
-   return libc_ctype[c] & C_UPPER;
+   return libc_ctype[c & 0xff] & C_UPPER;
 }
 
 static INLINE int islower(int c)
 {
-   return libc_ctype[c] & C_LOWER;
+   return libc_ctype[c & 0xff] & C_LOWER;
 }
 
 static INLINE int isalpha(int c)
 {
-   return libc_ctype[c] & C_ALPHA;
+   return libc_ctype[c & 0xff] & C_ALPHA;
 }
 
 static INLINE int ispunct(int c)
 {
-   return libc_ctype[c] & C_PUNCT;
+   return libc_ctype[c & 0xff] & C_PUNCT;
 }
 
 static INLINE int isalnum(int c)
 {
-   return libc_ctype[c] & C_ALNUM;
+   return libc_ctype[c & 0xff] & C_ALNUM;
 }
 
 static INLINE int isgraph(int c)
 {
-   return libc_ctype[c] & C_GRAPH;
+   return libc_ctype[c & 0xff] & C_GRAPH;
 }
 
 static INLINE int isprint(int c)

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -41,7 +42,7 @@ EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const char *filepath,
    }
 
    Status = file_devpath(Volume, FilePath, &DevicePath);
-   sys_free(FilePath);
+   free(FilePath);
    if (EFI_ERROR(Status)) {
       return Status;
    }
@@ -50,7 +51,7 @@ EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const char *filepath,
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
    Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &BufferSize, NULL);
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
-   sys_free(DevicePath);
+   free(DevicePath);
    if (EFI_ERROR(Status) && Status != EFI_BUFFER_TOO_SMALL) {
       return Status;
    }
@@ -100,7 +101,7 @@ EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
    }
 
    Status = file_devpath(Volume, FilePath, &DevicePath);
-   sys_free(FilePath);
+   free(FilePath);
    if (EFI_ERROR(Status)) {
       return Status;
    }
@@ -110,22 +111,22 @@ EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
    Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &Size, NULL);
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
    if (EFI_ERROR(Status)) {
-      sys_free(DevicePath);
+      free(DevicePath);
       return Status;
    }
 
-   Data = sys_malloc((size_t)Size);
+   Data = malloc((size_t)Size);
    if (Data == NULL) {
-      sys_free(DevicePath);
+      free(DevicePath);
       return EFI_OUT_OF_RESOURCES;
    }
 
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
    Status = LoadFile->LoadFile(LoadFile, DevicePath, FALSE, &Size, Data);
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
-   sys_free(DevicePath);
+   free(DevicePath);
    if (EFI_ERROR(Status)) {
-      sys_free(Data);
+      free(Data);
       return Status;
    }
 
@@ -136,7 +137,7 @@ EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
    if (callback != NULL) {
       error = callback(Size);
       if (error != 0) {
-         sys_free(Data);
+         free(Data);
          return error_generic_to_efi(error);
       }
    }

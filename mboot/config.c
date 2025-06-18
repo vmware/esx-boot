@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2014,2016,2019-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -45,9 +46,6 @@
  *    1: disable workarounds for platform quirks (-Q option). Default: 0.
  * norts=<0|1>
  *    1: disable support for UEFI Runtime Services (-U option). Default: 0.
- * nativehttp=<0|1|2|3>
- *    Use native UEFI HTTP (-N option). 0: never, 1: if HTTP booted (default),
- *    2: if plain http:// URLs are allowed, 3: always.
  * crypto=<FILEPATH>
  *    Crypto module filename.
  * runtimewd=<0|1>
@@ -68,26 +66,44 @@
  *    SECONDS, or immediately if in headless mode; if SECONDS < 0, hang.
  *    Default: -1 if skip=0, 5 if skip=1.
  */
+
+/* Type  Name               Default value */
+#define MBOOT_OPTIONS             \
+   STR(  kernel,            NULL) \
+   STR(  kernelopt,         NULL) \
+   STR(  modules,           NULL) \
+   STR(  title,             NULL) \
+   STR(  prefix,            NULL) \
+   INT(  nobootif,          0)    \
+   INT(  timeout,           5)    \
+   INT(  noquirks,          0)    \
+   INT(  norts,             0)    \
+   STR(  crypto,            NULL) \
+   INT(  runtimewd,         0)    \
+   INT(  tftpblksize,       0)    \
+   STR(  acpitables,        NULL) \
+   INT(  runtimewdtimeout,  0)    \
+   INT(  skip,              0)    \
+   INT(  errtimeout,        -1)   \
+
+#define STR(name, defval) \
+   { #name, "=", { .str = defval }, OPT_STRING, { .str = NULL } },
+#define INT(name, defval) \
+   { #name, "=", { .integer = defval }, OPT_INTEGER, { .integer = 0 } },
 static option_t mboot_options[] = {
-   {"kernel", "=", {NULL}, OPT_STRING, {0}},
-   {"kernelopt", "=", {NULL}, OPT_STRING, {0}},
-   {"modules", "=", {NULL}, OPT_STRING, {0}},
-   {"title", "=", {NULL}, OPT_STRING, {0}},
-   {"prefix", "=", {NULL}, OPT_STRING, {0}},
-   {"nobootif", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"timeout", "=", {.integer = 5}, OPT_INTEGER, {0}},
-   {"noquirks", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"norts", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"nativehttp", "=", {.integer = -1}, OPT_INTEGER, {0}},
-   {"crypto", "=", {NULL}, OPT_STRING, {0}},
-   {"runtimewd", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"tftpblksize", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"acpitables", "=", {NULL}, OPT_STRING, {0}},
-   {"runtimewdtimeout", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"skip", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"errtimeout", "=", {.integer = -1}, OPT_INTEGER, {0}},
-   {NULL, NULL, {NULL}, OPT_INVAL, {0}}
+   MBOOT_OPTIONS
+   { NULL, NULL, { NULL }, OPT_INVAL, { NULL } }
 };
+#undef STR
+#undef INT
+
+#define STR(name, defval) opt_ ## name,
+#define INT(name, defval) opt_ ## name,
+enum mboot_optname {
+   MBOOT_OPTIONS
+};
+#undef STR
+#undef INT
 
 /*-- append_kernel_options -----------------------------------------------------
  *
@@ -248,7 +264,7 @@ static int parse_filelist(char *list, const char *prefix_dir, void *context,
          options = strdup(p);
          *delim = c;
          if (options == NULL) {
-            sys_free(filename);
+            free(filename);
             status = ERR_OUT_OF_RESOURCES;
             break;
          }
@@ -303,8 +319,8 @@ static void parse_modules_clearitem(void *context, unsigned int index)
 {
    module_t *modules = context;
 
-   sys_free(modules[index].filename);
-   sys_free(modules[index].options);
+   free(modules[index].filename);
+   free(modules[index].options);
    modules[index].filename = NULL;
    modules[index].options = NULL;
 }
@@ -347,7 +363,7 @@ static void parse_acpitab_setitem(void *context, unsigned int index,
    acpitab_t *acpitab = context;
 
    acpitab[index].filename = filename;
-   sys_free(options);
+   free(options);
 }
 
 /*-- parse_acpitab_clearitem ---------------------------------------------------
@@ -365,7 +381,7 @@ static void parse_acpitab_clearitem(void *context, unsigned int index)
 {
    acpitab_t *acpitab = context;
 
-   sys_free(acpitab[index].filename);
+   free(acpitab[index].filename);
    acpitab[index].filename = NULL;
 }
 
@@ -437,7 +453,7 @@ static int parse_cmdlines(const char *prefix_dir, const char *kernel,
       ;
    }
 
-   modules = sys_malloc(mod_count * sizeof (module_t));
+   modules = malloc(mod_count * sizeof (module_t));
    if (modules == NULL) {
       status = ERR_OUT_OF_RESOURCES;
       goto error;
@@ -452,7 +468,7 @@ static int parse_cmdlines(const char *prefix_dir, const char *kernel,
    }
 
    if (acpitab_count > 0) {
-      acpitab = sys_malloc(acpitab_count * sizeof (acpitab_t));
+      acpitab = malloc(acpitab_count * sizeof (acpitab_t));
       if (acpitab == NULL) {
          status = ERR_OUT_OF_RESOURCES;
          goto error;
@@ -475,10 +491,10 @@ static int parse_cmdlines(const char *prefix_dir, const char *kernel,
    return ERR_SUCCESS;
 
  error:
-   sys_free(kname);
-   sys_free(kopts);
-   sys_free(modules);
-   sys_free(acpitab);
+   free(kname);
+   free(kopts);
+   free(modules);
+   free(acpitab);
 
    return status;
 }
@@ -564,27 +580,27 @@ static int locate_config_file(const char *filename, char **path)
             Log(LOG_DEBUG, "MAC address not found");
          } else {
             if (asprintf(&relpath, "%s/%s", mac, DEFAULT_CFGFILE) == -1) {
-               sys_free(bootdir);
+               free(bootdir);
                return ERR_OUT_OF_RESOURCES;
             }
 
             status = make_path(bootdir, relpath, &cfgpath);
-            sys_free(relpath);
+            free(relpath);
             if (status != ERR_SUCCESS) {
-               sys_free(bootdir);
+               free(bootdir);
                return status;
             }
 
             status = firmware_file_read(cfgpath, NULL, &buf, &buflen);
             if (status == ERR_SUCCESS) {
-               sys_free(buf);
-               sys_free(bootdir);
+               free(buf);
+               free(bootdir);
                *path = cfgpath;
                return status;
             } else {
                Log(LOG_DEBUG, "Could not read config from %s: %s",
                    cfgpath, error_str[status]);
-               sys_free(cfgpath);
+               free(cfgpath);
             }
          }
       }
@@ -593,7 +609,7 @@ static int locate_config_file(const char *filename, char **path)
    }
 
    status = make_path(bootdir, filename, &cfgfile);
-   sys_free(bootdir);
+   free(bootdir);
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -609,11 +625,11 @@ static int locate_config_file(const char *filename, char **path)
        */
       status = firmware_file_read(cfgfile, NULL, &buf, &buflen);
       if (status == ERR_SUCCESS) {
-         sys_free(buf);
+         free(buf);
       } else {
          Log(LOG_DEBUG, "Could not read config from %s: %s",
              cfgfile, error_str[status]);
-         sys_free(cfgfile);
+         free(cfgfile);
          status = make_path("/", filename, &cfgfile);
          if (status != ERR_SUCCESS) {
             return status;
@@ -655,35 +671,32 @@ int parse_config(const char *filename)
    status = parse_config_file(boot.volid, path, mboot_options);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Configuration error while parsing %s", path);
-      sys_free(path);
+      free(path);
       return status;
    }
 
-   kernel   = mboot_options[0].value.str;    /* Kernel name */
-   kopts    = mboot_options[1].value.str;    /* Kernel options */
-   mod_list = mboot_options[2].value.str;    /* List of modules */
-   title    = mboot_options[3].value.str;    /* Title string */
-   prefix   = mboot_options[4].value.str;    /* Path prefix */
-   if (mboot_options[5].value.integer > 0) { /* no bootif */
+   kernel   = mboot_options[opt_kernel].value.str;
+   kopts    = mboot_options[opt_kernelopt].value.str;
+   mod_list = mboot_options[opt_modules].value.str;
+   title    = mboot_options[opt_title].value.str;
+   prefix   = mboot_options[opt_prefix].value.str;
+   if (mboot_options[opt_nobootif].value.integer > 0) {
       boot.bootif = false;
    }
-   boot.timeout = mboot_options[6].value.integer;
-   boot.no_quirks |= mboot_options[7].value.integer;
-   boot.no_rts |= mboot_options[8].value.integer;
-   if (mboot_options[9].value.integer >= 0) {
-      set_http_criteria(mboot_options[9].value.integer);
+   boot.timeout = mboot_options[opt_timeout].value.integer;
+   boot.no_quirks |= mboot_options[opt_noquirks].value.integer;
+   boot.no_rts |= mboot_options[opt_norts].value.integer;
+   boot.crypto = mboot_options[opt_crypto].value.str;
+   boot.runtimewd = mboot_options[opt_runtimewd].value.integer;
+   if (mboot_options[opt_tftpblksize].value.integer != 0) {
+      tftp_set_block_size(mboot_options[opt_tftpblksize].value.integer);
    }
-   boot.crypto = mboot_options[10].value.str;
-   boot.runtimewd = mboot_options[11].value.integer;
-   if (mboot_options[12].value.integer != 0) {
-      tftp_set_block_size(mboot_options[12].value.integer);
-   }
-   acpitab_list = mboot_options[13].value.str;  /* ACPI table list */
-   boot.runtimewd_timeout = mboot_options[14].value.integer;
-   skip = mboot_options[15].value.integer;
-   if (mboot_options[16].value.integer !=
-       mboot_options[16].default_value.integer) {
-      boot.err_timeout = mboot_options[16].value.integer;
+   acpitab_list = mboot_options[opt_acpitables].value.str;
+   boot.runtimewd_timeout = mboot_options[opt_runtimewdtimeout].value.integer;
+   skip = mboot_options[opt_skip].value.integer;
+   if (mboot_options[opt_errtimeout].value.integer !=
+       mboot_options[opt_errtimeout].default_value.integer) {
+      boot.err_timeout = mboot_options[opt_errtimeout].value.integer;
    }
 
    if (skip && boot.err_timeout == -1) {
@@ -721,13 +734,13 @@ int parse_config(const char *filename)
 
  error:
    if (boot.prefix != path) {
-      sys_free(path);   // Only free if prefix wasn't derived from path.
+      free(path);   // Only free if prefix wasn't derived from path.
    }
-   sys_free(mboot_options[0].value.str);   /* Kernel name */
-   sys_free(mboot_options[1].value.str);   /* Kernel options */
-   sys_free(mboot_options[2].value.str);   /* List of modules */
-   sys_free(mboot_options[3].value.str);   /* Title string */
-   sys_free(mboot_options[13].value.str);  /* ACPI table list */
+   free(kernel);
+   free(kopts);
+   free(mod_list);
+   free(title);
+   free(acpitab_list);
 
    if (status == ERR_SUCCESS) {
       status = get_load_size_hint();
@@ -749,19 +762,19 @@ void config_clear(void)
 {
    while (boot.modules_nr > 0) {
       boot.modules_nr--;
-      sys_free(boot.modules[boot.modules_nr].filename);
-      sys_free(boot.modules[boot.modules_nr].options);
+      free(boot.modules[boot.modules_nr].filename);
+      free(boot.modules[boot.modules_nr].options);
    }
 
-   sys_free(boot.modules);
+   free(boot.modules);
    boot.modules = NULL;
 
    while (boot.acpitab_nr > 0) {
       boot.acpitab_nr--;
-      sys_free(boot.acpitab[boot.acpitab_nr].filename);
+      free(boot.acpitab[boot.acpitab_nr].filename);
    }
 
-   sys_free(boot.acpitab);
+   free(boot.acpitab);
    boot.acpitab = NULL;
 
    boot.load_size = 0;

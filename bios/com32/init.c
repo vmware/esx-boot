@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015-2017,2019-2022 VMware, Inc.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -206,7 +207,7 @@ int chainload_parent(const char *cmdline)
    }
 
    status = firmware_file_exec(bin, options);
-   sys_free(bin);
+   free(bin);
 
    return status;
 }
@@ -286,7 +287,7 @@ static int com32_create_argv(int *argc, char ***argv)
 
    status = str_to_argv(cmdline, argc, argv, false);
    if (status != ERR_SUCCESS) {
-      sys_free(cmdline);
+      free(cmdline);
       return status;
    }
 
@@ -312,8 +313,8 @@ static int com32_create_argv(int *argc, char ***argv)
  *----------------------------------------------------------------------------*/
 static void com32_destroy_argv(char **argv)
 {
-   sys_free(argv[0]);
-   sys_free(argv);
+   free(argv[0]);
+   free(argv);
 }
 
 /*-- com32_main ----------------------------------------------------------------

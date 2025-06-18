@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017,2021,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -238,6 +240,12 @@ void config_clear(void);
  * fdt.c
  */
 int fdt_blacklist_memory(void *fdt);
+
+/*
+ * cxl.c
+ */
+int parse_acpi_cedt(void);
+int blacklist_cxl_memory(void);
 
 /*
  * multiboot.c

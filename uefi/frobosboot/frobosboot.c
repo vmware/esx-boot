@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2015-2017,2022-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -112,7 +113,7 @@ static EFI_STATUS connect_all_controllers(void)
       bs->ConnectController(handles[i], NULL, NULL, TRUE);
    }
 
-   sys_free(handles);
+   free(handles);
 
    return ERR_SUCCESS;
 }
@@ -160,7 +161,7 @@ int main(int argc, char **argv)
        * temporary argv is being created to accomodate for this.
        */
       tmpArgc = argc + 3;
-      tmpArgv = sys_malloc(tmpArgc * sizeof *argv);
+      tmpArgv = malloc(tmpArgc * sizeof *argv);
       if (tmpArgv == NULL) {
          return ERR_OUT_OF_RESOURCES;
       }
@@ -184,9 +185,9 @@ int main(int argc, char **argv)
        * freed here since efi_main will free the remainder of argv.
        */
       for (i = tmpArgc - 3; (int)i < tmpArgc; i++) {
-         sys_free(tmpArgv[i]);
+         free(tmpArgv[i]);
       }
-      sys_free(tmpArgv);
+      free(tmpArgv);
    }
 
    for (i = 0; i < n; i++) {
@@ -200,7 +201,7 @@ int main(int argc, char **argv)
 
    if (argc > 1) {
       bs->FreePool(FilePath);
-      efi_free(LoadOptions);
+      free(LoadOptions);
    }
    bs->FreePool(handles);
 

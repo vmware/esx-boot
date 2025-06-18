@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -16,9 +18,11 @@
 #include <disk.h>
 #include <io.h>
 
-EXTERN char __executable_start[];  /* Beginning of the binary image */
-EXTERN char _end[];                /* End of the binary image */
-EXTERN char _etext[];              /* End of the .text segment */
+EXTERN uint8_t __executable_start[];  /* Beginning of the binary image */
+EXTERN uint8_t _end[];                /* End of the binary image */
+EXTERN uint8_t _etext[];              /* End of the .text segment */
+
+EXTERN uint8_t _text[], _rodata[], _data[], _edata[];
 
 /*
  * Firmware
@@ -57,6 +61,7 @@ EXTERN void log_memory_map(efi_info_t *efi_info);
 EXTERN void free_memory_map(e820_range_t *mmap, efi_info_t *efi_info);
 EXTERN int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks);
 EXTERN void firmware_reset_watchdog(void);
+EXTERN int blacklist_specific_purpose_memory(efi_info_t *efi_info);
 
 /*
  * System information
@@ -70,9 +75,7 @@ EXTERN int get_tcg2_final_events(void **final_events_start);
 /*
  * Memory allocation
  */
-EXTERN void *sys_malloc(size_t size);
 EXTERN void *sys_realloc(void *ptr, size_t oldsize, size_t newsize);
-EXTERN void sys_free(void *ptr);
 
 /*
  * Network
@@ -340,18 +343,9 @@ EXTERN int secure_boot_check(bool crypto_module);
 EXTERN void check_efi_quirks(efi_info_t *efi_info);
 EXTERN int relocate_page_tables2(void);
 
-typedef enum {
-   http_never = 0,
-   http_if_http_booted = 1,
-   http_if_plain_http_allowed = 2,
-   http_always = 3,
-} http_criteria_t;
-
 #ifdef __COM32__
-#   define set_http_criteria(mode)
 #   define tftp_set_block_size(size)
 #else
-EXTERN void set_http_criteria(http_criteria_t mode);
 EXTERN void tftp_set_block_size(size_t blksize);
 #endif
 

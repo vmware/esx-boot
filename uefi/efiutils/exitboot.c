@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021,2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -580,6 +581,7 @@ int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
 {
    EFI_STATUS Status;
    int error;
+   EFI_TPL old_tpl;
 
    EFI_ASSERT(st != NULL);
    EFI_ASSERT(bs != NULL);
@@ -600,6 +602,21 @@ int exit_boot_services(size_t desc_extra_mem, e820_range_t **mmap,
       return error;
    }
 #endif /* defined(only_em64t) || defined(only_arm64) */
+
+   /*
+    * UEFI Specification v2.10 (7.1. "Event, Timer, and Task Priority Services")
+    * indicates in Table 7.2 "TPL Usage" that ExitBootServices() must be called
+    * with a TPL_APPLICATION (lowest) priority level.
+    *
+    * However using iPXE has been observed to incorrectly return to mboot code
+    * at TPL_CALLBACK priority level.
+    */
+   old_tpl = bs->RaiseTPL(TPL_NOTIFY);
+   if (old_tpl != TPL_APPLICATION) {
+      Log(LOG_WARNING, "Found incorrect TPL %zu to call ExitBootServices().",
+          old_tpl);
+   }
+   bs->RestoreTPL(TPL_APPLICATION);
 
    /*
     * UEFI Specification v2.3 (6.4. "Image Services", ExitBootServices()) says:

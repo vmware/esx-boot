@@ -1,6 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2015,2019-2020,2022-2023 VMware, Inc.
- * All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -84,8 +84,7 @@ int get_bootif_option(const char **bootif)
 
    mac.IfType = MAC_UNKNOWN;
    if (is_http_boot()) {
-      Status = get_http_nic_info(BootVolume, &Nic, &mac,
-                                 NULL, NULL, NULL, NULL);
+      Status = get_http_nic_info(BootVolume, &Nic, &mac, NULL, NULL, NULL);
       if (EFI_ERROR(Status)) {
          return error_efi_to_generic(Status);
       }

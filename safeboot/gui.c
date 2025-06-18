@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -149,7 +150,7 @@ int gui_resume_default_boot(void)
       }
       fb_print(fb, msg, x, y, font_width(strlen(msg)),
                COLOR_BG, COLOR_INPUT, ALIGN_LEFT);
-      sys_free(msg);
+      free(msg);
 
       if (kbd_waitkey_timeout(&key, 1) != ERR_SUCCESS) {
          Log(LOG_WARNING, "Keyboard error\n");

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2014,2016,2019-2021 VMware, Inc.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -71,7 +72,7 @@ int get_boot_file(char **buffer)
          /* during PXE Boot, MEDIA FilePath is empty, and in order to get the
           * boot file, we need to query the PXE BASE CODE PROTOCOL
           */
-         sys_free(Path);
+         free(Path);
          Path = NULL;
          Status = get_pxe_boot_file(Pxe, &Path);
          if (EFI_ERROR(Status)) {
@@ -145,7 +146,7 @@ int get_boot_dir(char **buffer)
    }
 
    dirpath = strdup(dirname(path));
-   efi_free(path);
+   free(path);
    if (dirpath == NULL) {
       return error_efi_to_generic(EFI_OUT_OF_RESOURCES);
    }
@@ -254,6 +255,6 @@ EFI_STATUS get_boot_device(EFI_HANDLE *Device)
 
    Status = devpath_handle(DevPath, Device);
 
-   sys_free(DevPath);
+   free(DevPath);
    return Status;
 }

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Portions Copyright (c) 2010 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2010-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -44,8 +45,9 @@
 #define _FSW_EFI_BASE_H_
 
 
-#include <string.h>
 #include <efiutils.h>
+#include <stdlib.h>
+#include <string.h>
 
 
 // types, reuse EFI types
@@ -62,8 +64,9 @@ typedef UINT64  fsw_u64;
 
 // allocation functions
 
-#define fsw_alloc(size, ptrptr) (((*(ptrptr) = efi_malloc(size)) == NULL) ? FSW_OUT_OF_MEMORY : FSW_SUCCESS)
-#define fsw_free(ptr) efi_free(ptr)
+#define fsw_alloc(size, ptrptr)                                                \
+   (((*(ptrptr) = malloc(size)) == NULL) ? FSW_OUT_OF_MEMORY : FSW_SUCCESS)
+#define fsw_free(ptr) free(ptr)
 
 // memory functions
 

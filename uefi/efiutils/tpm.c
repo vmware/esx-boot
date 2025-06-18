@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2020-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2020-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -143,7 +144,7 @@ static int tpm_extend_tagged_event(const tpm_event_t *event)
    tEventHeaderSize = sizeof(tEvent->taggedEventID) +
                       sizeof(tEvent->taggedEventDataSize);
    tEventSize = tEventHeaderSize + event->eventDataSize;
-   tEvent = sys_malloc(tEventSize);
+   tEvent = malloc(tEventSize);
    if (tEvent == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -164,7 +165,7 @@ static int tpm_extend_tagged_event(const tpm_event_t *event)
 
    status = tcg2_log_extend_event(event->pcrIndex, event->data, event->dataSize,
                                   EV_EVENT_TAG, (uint8_t *)tEvent, tEventSize);
-   sys_free(tEvent);
+   free(tEvent);
    if (status != EFI_SUCCESS) {
       int error = error_efi_to_generic(status);
       Log(LOG_ERR, "TPM log extend failed for ID %u: %s", event->eventType,
@@ -296,7 +297,7 @@ static int tpm_extend_version(const char *filename,
    if (eventDataSize > UINT32_MAX) {
       return ERR_INVALID_PARAMETER;
    }
-   eventData = sys_malloc(eventDataSize);
+   eventData = malloc(eventDataSize);
    if (eventData == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -323,7 +324,7 @@ static int tpm_extend_version(const char *filename,
 
    error = tpm_extend_tagged_event(&event);
 
-   sys_free(eventData);
+   free(eventData);
    return error;
 }
 
@@ -530,7 +531,7 @@ int tpm_extend_cmdline(const char *filename,
 
    result = tpm_extend_tagged_event(&event);
 
-   sys_free(cmdline);
+   free(cmdline);
 
    return result;
 }

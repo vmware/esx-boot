@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016,2019-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * menu.c --
  *
- *      Interpret a subset of pxelinux simple menus and chain to
- *      another uefi bootloader or app.
+ *      Interpret a menu and chain to another uefi bootloader or app.
  *
  *      Usage: menu.efi [options] [menufile]
  *
@@ -31,18 +31,19 @@
  *                        8: Wait for keypress before displaying menu.
  *                        16: Wait for keypress before reading menu.
  *                        32: Wait for keypress before trying each location.
- *         -N <N>         Set criteria for using native UEFI HTTP to N.
- *                        0: Never use native UEFI HTTP.
- *                        1: Use native UEFI HTTP only if menu.efi itself was
- *                           loaded via native UEFI HTTP.
- *                        2: Use native UEFI HTTP if it allows plain http URLs.
- *                        3: Always use native UEFI HTTP.
  *         -b <BLKSIZE>   For TFTP transfers, set the blksize option to the
- *                        given value, default 1468.  UEFI only.
- *         -E <SECONDS>   If a program that is chained to returns an error,
- *                        wait the given number of seconds for the user to press
- *                        a key before returning the error back to the boot
- *                        manager.  Default: 30.
+ *                        given value, default 1468.
+ *         -E <SECONDS>   Error timeout.  If an error occurs, such as when a
+ *                        program that is chained to fails to start or exits
+ *                        with an error, wait the given number of seconds for
+ *                        the user to press a key before returning the error
+ *                        back to the boot manager.  Default: 30.
+ *         -q <key=value> Add provided data as a query string parameter to be
+ *                        used each time a file is retrieved over HTTP(S).
+ *                        This option may be provided multiple times to add
+ *                        multiple parameters to the query string.
+ *         -C             Collect SMBIOS data and add it to the query string.
+ *                        By default this is disabled.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -56,7 +57,11 @@
  *
  *      where by default <HOMEDIR> is the directory that menu.efi itself was
  *      loaded from, and <MAC> is the MAC address of the NIC it was loaded via.
- *      <HOMEDIR> can be changed by the menu or a command-line option.
+ *      The syntax for <MAC> is "xx-aa-bb-cc-dd-ee-ff", where xx is the
+ *      Hardware Type Number of the boot interface (see RFC 1700, usually 01)
+ *      and the rest is its MAC address, using lowercase hex digits separated
+ *      by hyphens (not colons).  <HOMEDIR> can be changed by the menu or a
+ *      command-line option.
  *
  *      If a menufile argument is provided, some searching is still done.  In
  *      fact, this searching is done for all file loading, including uefi apps
@@ -73,19 +78,24 @@
  *          <HOMEDIR>/menuefi.d/basename(filename)
  *          <HOMEDIR>/pxelinux.cfg/basename(filename)
  *
- *      Some of the above searching is probably overkill.
+ *      Some of the above searching is arguably overkill.
  *
- *      The following syntax subset is supported, where n is a numeric
- *      argument, s is a string argument to end of line, w is a string argument
- *      up to the next whitespace, and ... is one or more lines of text.  Note
- *      that the EFI keyword does not exist in pxelinux, but it seems to be
- *      safe to put it into menus that are shared with pxelinux, as pxelinux
- *      ignores lines starting with an unknown keyword.
+ *      The following syntax is supported, where n, p, or b is a numeric
+ *      argument, s is a string argument terminated by end of line, w is a
+ *      string argument terminated by the next whitespace, and ... is one or
+ *      more lines of text.  This is a subset of syslinux config file syntax
+ *      (https://wiki.syslinux.org/wiki/index.php?title=Config) plus syslinux
+ *      simple menu system syntax
+ *      (https://wiki.syslinux.org/wiki/index.php?title=Menu), with extensions.
+ *      In particular, the EFI keyword does not exist in syslinux.  This allows
+ *      using the same menu with both menu.efi and pxelinux, as pxelinux
+ *      ignores lines starting with an unknown keyword.  Although the keywords
+ *      are shown here in all caps, they are case insensitive.
  *
  *      #s                - Comment.
  *      DEFAULT s         - Ignored if any MENU keywords occur in the file.
- *                            Otherwise gives label of default item
- *                            or default command line to chain to.
+ *                          Otherwise gives the label of the default item
+ *                          or default command line to chain to.
  *      TIMEOUT n         - Automatically boot default item in n/10 seconds.
  *      NOHALT n          - Ignored.
  *      PROMPT n          - Ignored.
@@ -95,29 +105,31 @@
  *      EFI SERIAL p b    - Debug log to serial port p, baud b (both optional).
  *      EFI VERBOSE n     - Show Log(LOG_DEBUG, ...) messages on screen.
  *      EFI HOMEDIR s     - Set the directory for interpreting relative paths.
- *                            If s is omitted, set HOMEDIR to the empty string.
+ *                          If s is omitted, set HOMEDIR to the empty string.
  *      EFI HTTP s        - Evaluate s if HTTP loading is available.
  *      EFI NOHTTP s      - Evaluate s if HTTP loading is not available.
- *      EFI NATIVEHTTP n  - Set the criteria for using native UEFI HTTP to n.
- *                            See list of values under the -N option above.
  *      EFI TFTPBLKSIZE n - Set the TFTP blksize option, as with -b.
  *      EFI ERRTIMEOUT n  - Set the error timeout, as with -E.
  *      EFI ARCH w s      - Evaluate s if the current architecture is w;
  *                          either arm64, riscv64, x86 (64-bit), or x86_32.
  *      EFI NOARCH w s    - Evaluate s if the current architecture is not w.
- *      EFI s             - Evaluate s (ignored if pxelinux parses the menu).
+ *      EFI s             - Evaluate s.  Useful when sharing a menu between
+ *                          legacy BIOS (pxelinux) and UEFI (menu.efi) booting
+ *                          where some differences are needed between the two
+ *                          cases, because pxelinux ignores lines starting
+ *                          with an unknown keyword.
  *
  *      LABEL s           - Starts and names a menu item.  The following
- *                            keywords are recognized only within items.
+ *                          keywords are recognized only within items.
  *      KERNEL s          - The EFI app (possibly with arguments) to chain to.
  *      APPEND s          - Command line arguments (added after any in KERNEL).
  *      IPAPPEND n        - Ignored.
  *      LOCALBOOT n       - Return from the menu program, with failure if
- *                            n = -1, success if n = -2.  Other values of n are
- *                            reserved but treated as -1 for now.  If menu.efi
- *                            was invoked directly by the UEFI boot manager, -1
- *                            should go on to the next boot option in the UEFI
- *                            boot order, while -2 should stop in the UEFI UI.
+ *                          n = -1, success if n = -2.  Other values of n are
+ *                          reserved but treated as -1 for now.  If menu.efi
+ *                          was invoked directly by the UEFI boot manager, -1
+ *                          should go on to the next boot option in the UEFI
+ *                          boot order, while -2 should stop in the UEFI UI.
  *      CONFIG s          - Restart with file s as the menu.
  *      MENU HIDE         - Don't display this item.
  *      MENU LABEL s      - Display this string instead of the item's label.
@@ -129,22 +141,23 @@
  *      If multiple KERNEL (or EFI KERNEL) options are given in an item, only
  *      the last is effective, and similarly for APPEND (or EFI APPEND).  If
  *      multiple DEFAULT or MENU DEFAULT options are given, the last of each is
- *      effective.
+ *      effective.  Used together with the "EFI s" syntax, these features can
+ *      be handy to make the same menu behave differently with pxelinux versus
+ *      menu.efi.
  *
  *      Certain command names are handled specially when chaining:
  *
  *      * A .c32 or .0 extension is automatically changed to .efi.
  *
- *      * menu.efi (or menu.c32) restarts the same instance of menu.efi
- *        with its argument as the menu, instead of loading a new instance.
- *        This is essentially just an optimization.
+ *      * menu.efi (or menu.c32) restarts the same instance of menu.efi with
+ *        its argument as the menu, instead of loading a new instance.  This is
+ *        essentially just an optimization.
  *
- *      * if{gpxe,vm,ver410}.c32 expects arguments of the form
- *        "s1 -- s2".  It executes s1 as either a label or command
- *        line.  s2 is ignored.  This kludge helps deal with some
- *        existing pxelinux menus used at VMware, where an "if*.c32"
- *        program is used to continue with the current version of
- *        pxelinux in the "then" (s1) case or chainload a different
+ *      * if{gpxe,vm,ver410}.c32 expects arguments of the form "s1 -- s2".  It
+ *        executes s1 as either a label or command line.  s2 is ignored.  This
+ *        kludge helps deal with some existing pxelinux menus used at VMware,
+ *        where an "if*.c32" program is used to continue with the current
+ *        version of pxelinux in the "then" (s1) case or chainload a different
  *        version of pxelinux and restart in the "else" (s2) case.
  */
 
@@ -157,6 +170,33 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <compat.h>
+#include <md.h>
+
+/*
+ * Hash computed by elf2efi.  (This feature was designed for the
+ * crypto module, for use in a runtime integrity check that is
+ * required by FIPS, but menu.efi simply uses it as a version stamp.)
+ */
+#define HASH_SIZE MBEDTLS_MD_MAX_SIZE
+uint8_t _expected_hash[HASH_SIZE]
+   __attribute__ ((section (".integrity"))) = { 0xff, 0, /*...*/ };
+
+/*
+ * HMAC key used for the hash.  Randomly generated.
+ *
+ * 03c405aedf13a33d6cdb54f69bf793260f8d8b2df8e54f42e49b9b9a31621d9c
+ * fc6ff1afac094f71ef756c2ecd78f634ac14f7f15da5c1ff1735169e4963dec6
+ */
+const uint8_t _hmac_key[HASH_SIZE] = {
+   0x03, 0xc4, 0x05, 0xae, 0xdf, 0x13, 0xa3, 0x3d, 0x6c, 0xdb, 0x54, 0xf6,
+   0x9b, 0xf7, 0x93, 0x26, 0x0f, 0x8d, 0x8b, 0x2d, 0xf8, 0xe5, 0x4f, 0x42,
+   0xe4, 0x9b, 0x9b, 0x9a, 0x31, 0x62, 0x1d, 0x9c, 0xfc, 0x6f, 0xf1, 0xaf,
+   0xac, 0x09, 0x4f, 0x71, 0xef, 0x75, 0x6c, 0x2e, 0xcd, 0x78, 0xf6, 0x34,
+   0xac, 0x14, 0xf7, 0xf1, 0x5d, 0xa5, 0xc1, 0xff, 0x17, 0x35, 0x16, 0x9e,
+   0x49, 0x63, 0xde, 0xc6
+};
+
+static char welcome[100];
 
 #define LOCALBOOT_NONE 0xb0091e
 #define TIMEOUT_INFINITE 30000
@@ -203,7 +243,7 @@ char *menuefi_d;
 char *pxelinux_cfg;
 Menu *rootmenu;
 EFI_HANDLE Volume;
-int err_timeout = 30;
+int err_timeout = 30; //seconds
 
 /*
  * Debug bit flags
@@ -217,10 +257,42 @@ int err_timeout = 30;
 unsigned debug = 0;
 bool verbose = false;
 
+const char bios_version_name[] = "bios-version";
+const char* bios_version = NULL;
+
+const char vendor_name[] = "vendor";
+const char *vendor = NULL;
+
+const char model_name[] = "model";
+const char *model = NULL;
+
+const char family_name[] = "family";
+const char *family = NULL;
+
+const char serial_number_name[] = "serial-number";
+const char *serial_number = NULL;
+
+const char system_uuid_name[] = "system-uuid";
+const uint8_t *system_uuid = NULL;
+char *system_uuid_str = NULL;
+
+const char mac_name[] = "boot-ift-mac";
+const char *mac_str = NULL;
+
+int smbios_version_major = 0;
+int smbios_version_minor = 0;
+int simbios_version_doc_rev = 0;
+
+oem_strings_t oem_strings;
+bool collect_and_use_smbios_data = false;
+
 int do_menu(const char *filename);
 int do_item(Menu *menu, MenuItem *item);
 int chain_to(const char *program, const char *arguments);
 void set_verbose(bool verbose);
+
+static unsigned int query_string_arguments_nr = 0;
+static char **query_string_arguments = NULL;
 
 /*-- set_homedir ---------------------------------------------------------------
  *
@@ -621,9 +693,6 @@ bool parse_efi_subcommand(Menu *menu)
          return false;
       }
 
-   } else if (match_token(menu, "NATIVEHTTP")) {
-      set_http_criteria(parse_int(menu));
-
    } else if (match_token(menu, "TFTPBLKSIZE")) {
       tftp_set_block_size(parse_int(menu));
 
@@ -689,10 +758,8 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
       skip_white(menu);
 
       if (match_token(menu, "EFI")) {
-         if (parse_efi_subcommand(menu)) {
-            continue;
-         }
-         skip_white(menu);
+         parse_efi_subcommand(menu);
+         continue;
       }
 
       if (*menu->parse == '#') {
@@ -928,6 +995,48 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
    return status;
 }
 
+/*-- get_uuid_str --------------------------------------------------------------
+ *
+ *      Convert a UUID to a human readable string where each byte in
+ *      the UUID is seen as an unsigned char and represented by a 0-prefixed,
+ *      2-characters, lower case hexadecimal string. The output string is
+ *      allocated with malloc() and can be freed with free().
+ *
+ * Parameters
+ *      IN uuid: pointer to the UUID
+ *      OUT uuid_str:  pointer to the freshly allocated output string
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+int get_uuid_str(const uint8_t uuid[16], char **uuid_str)
+{
+   int major = smbios_version_major;
+   int minor = smbios_version_minor;
+
+   /* if version < 2.6 , use big endian for all the fields, see PR 3347702 */
+   if (major < 2 || (major == 2 && minor < 6) ) {
+      return asprintf(
+         uuid_str,
+         "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+         uuid[0], uuid[1], uuid[2], uuid[3],
+         uuid[4], uuid[5],
+         uuid[6], uuid[7],
+         uuid[8], uuid[9],
+         uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]) < 0
+            ? EFI_INVALID_PARAMETER : EFI_SUCCESS;
+   } else {
+      return asprintf(
+         uuid_str,
+         "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+         uuid[3], uuid[2], uuid[1], uuid[0],
+         uuid[5], uuid[4],
+         uuid[7], uuid[6],
+         uuid[8], uuid[9],
+         uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]) < 0
+            ? EFI_INVALID_PARAMETER : EFI_SUCCESS;
+   }
+}
 
 /*-- run_menu ------------------------------------------------------------------
  *
@@ -966,6 +1075,8 @@ int run_menu(Menu *menu)
  redraw:
    firmware_print("\n");
    st->ConOut->ClearScreen(st->ConOut);
+   firmware_print(welcome);
+   firmware_print("\n");
    if (menu->title) {
       firmware_print(menu->title);
       firmware_print("\n\n");
@@ -1340,6 +1451,157 @@ void set_verbose(bool state)
    log_subscribe(firmware_print, verbose ? LOG_DEBUG : LOG_INFO);
 }
 
+/*-- add_smbios_query_string_parameters ----------------------------------------
+ *
+ *      Take the globally saved smbios values and add them to the query
+ *      strings, as if -q was passed to main N times. If some of these fields
+ *      are not found then these values can be NULL or "", and when appending
+ *      will be shown as "family=" a.k.a. the value for the key family is ""
+ *
+ * Parameters
+ *
+ * Results
+ *      ERR_SUCCESS on success or a generic error status
+ *----------------------------------------------------------------------------*/
+int add_smbios_query_string_parameters(void)
+{
+   int result = ERR_SUCCESS;
+
+   key_value_t smbios_query_string_parameters[] = {
+      { bios_version_name,  bios_version    },
+      { vendor_name,        vendor          },
+      { model_name,         model           },
+      { family_name,        family          },
+      { serial_number_name, serial_number   },
+      { system_uuid_name,   system_uuid_str },
+      { mac_name,           mac_str         },
+   };
+
+   if ((result = query_string_add_parameters(
+         ARRAYSIZE(smbios_query_string_parameters),
+         smbios_query_string_parameters)) != ERR_SUCCESS) {
+      return result;
+   }
+
+   if ((result = query_string_add_parameters(
+        oem_strings.length,
+        oem_strings.entries)) != ERR_SUCCESS) {
+      return result;
+   }
+
+   return result;
+}
+
+/*-- process_query_string ------------------------------------------------------
+ *
+ *      Take the global query string arguments from menu.c and transfer them
+ *      to the global values in uri.c to make the query strings usable in
+ *      URL-s
+ *
+ * Parameters
+ *
+ * Results
+ *      ERR_SUCCESS on success or a generic error status
+ *----------------------------------------------------------------------------*/
+int process_query_string(void)
+{
+   int status = ERR_SUCCESS;
+
+   if (query_string_arguments_nr > 0) {
+      size_t query_string_parameters_count = 0;
+      key_value_t* query_string_parameters = malloc(
+         query_string_arguments_nr * sizeof(query_string_parameters[0]));
+
+      if (query_string_parameters == NULL) {
+         status = ERR_OUT_OF_RESOURCES;
+         goto out;
+      }
+
+      for (size_t index = 0; index < query_string_arguments_nr; index++) {
+         char* ps = strchr(query_string_arguments[index], '=');
+         if (ps == NULL) {
+            Log(LOG_ERR, "Query string parameter %s does not contain \"=\"",
+               query_string_arguments[index]);
+            status = ERR_INVALID_PARAMETER;
+            free(query_string_parameters);
+            goto out;
+         } else {
+            key_value_t query_string_parameter =
+               { query_string_arguments[index], ps + 1 };
+            *ps = '\0';
+            query_string_parameters[query_string_parameters_count++] =
+               query_string_parameter;
+         }
+      }
+      status = query_string_add_parameters(
+         query_string_parameters_count, query_string_parameters);
+      free(query_string_parameters);
+      if (status != ERR_SUCCESS) {
+         goto out;
+      }
+   }
+   out:
+   return status;
+}
+
+/*-- fetch_smbios_data ---------------------------------------------------------
+ *
+ *      Extract smbios data and save it globally. Calling this function more
+ *      than once will cause memory leaks in the dynamic count fields.
+ *
+ * Parameters
+ *
+ * Results
+ *      ERR_SUCCESS on success or a generic error status
+ *----------------------------------------------------------------------------*/
+int fetch_smbios_data(void)
+{
+   int status;
+   if ((status = smbios_get_system_info(
+        &vendor, &model, NULL, &serial_number, &system_uuid, NULL, &family))
+         != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain SMBIOS type 1 data");
+      goto out;
+   }
+
+   status = smbios_get_version(
+      &smbios_version_major,
+      &smbios_version_minor,
+      &simbios_version_doc_rev
+   );
+
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain SMBIOS version");
+      goto out;
+   }
+
+   if ((status = smbios_get_oem_strings(&oem_strings)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain OEM strings");
+      goto out;
+   }
+
+   if ((status = get_uuid_str(system_uuid, &system_uuid_str)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to store UUID, error code");
+      goto out;
+   }
+
+   if ((status = smbios_get_firmware_info(&bios_version, NULL))
+         != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain Bios Version");
+      goto out;
+   }
+
+   if ((status = get_mac_address(&mac_str)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain MAC address");
+      goto out;
+   }
+
+
+
+   out:
+   return status;
+}
+
 /*-- main ----------------------------------------------------------------------
  *
  *      Main program.  Setup, call do_menu, handle errors.
@@ -1363,6 +1625,7 @@ int main(int argc, char **argv)
    int baud = DEFAULT_SERIAL_BAUDRATE;
    int i;
    EFI_STATUS Status;
+   const char* query_string;
 
 #ifdef DEBUG
   /*
@@ -1371,7 +1634,6 @@ int main(int argc, char **argv)
    */
    verbose = true;
    serial = true;
-   debug = DEBUG_STRICT_SYNTAX;
 #endif /* DEBUG */
 
    status = log_init(verbose);
@@ -1379,13 +1641,19 @@ int main(int argc, char **argv)
       goto out;
    }
 
+    for (i = 0; i < argc; i++) {
+       Log(LOG_DEBUG, "argv[%d]=%s", i, argv[i]);
+    }
+
    if (argc > 0) {
       int opt;
 
       optind = 1;
       do {
-         opt = getopt(argc, argv, "D:S:s:VhH:N:b:");
+         opt = getopt(argc, argv, ":D:S:s:VhH:b:E:q:C");
          switch (opt) {
+         case -1:
+            break;
          case 'D': /* debug flags */
             debug = atoi(optarg);
             break;
@@ -1408,19 +1676,42 @@ int main(int argc, char **argv)
                    opt == 'h' ? "" : optarg, error_str[status]);
             }
             break;
-         case 'N': /* nativehttp */
-            set_http_criteria(atoi(optarg));
-            break;
-         case -1:
-            break;
          case 'b': /* tftpblksize */
             tftp_set_block_size(atoi(optarg));
             break;
          case 'E': /* errtimeout */
             err_timeout = atoi(optarg);
             break;
-         case '?':
-         default:
+         case 'q': {
+               char **tmp = sys_realloc(
+                  query_string_arguments,
+                  query_string_arguments_nr * sizeof query_string_arguments[0],
+                  (query_string_arguments_nr + 1) *
+                     sizeof query_string_arguments[0]);
+               if (tmp == NULL) {
+                  free(query_string_arguments);
+                  query_string_arguments = NULL;
+                  query_string_arguments_nr = 0;
+                  status = ERR_OUT_OF_RESOURCES;
+                  goto out;
+               }
+               query_string_arguments = tmp;
+               query_string_arguments[query_string_arguments_nr++] = optarg;
+            }
+            break;
+         case 'C':
+            collect_and_use_smbios_data = true;
+            break;
+         case ':': /* missing option argument */
+            Log(LOG_CRIT, "Missing argument to -%c", optopt);
+            status = ERR_SYNTAX;
+            goto out;
+         case '?': /* unknown option */
+            Log(LOG_CRIT, "Unknown option -%c", optopt);
+            status = ERR_SYNTAX;
+            goto out;
+         default: /* bug: option in string but no case for it */
+            Log(LOG_CRIT, "Unknown option -%c", opt);
             status = ERR_SYNTAX;
             goto out;
          }
@@ -1442,8 +1733,40 @@ int main(int argc, char **argv)
     * because of HEADERS_SIZE is uefi/uefi.lds.  Check the symbol
     * table in the .elf binary to be sure.
     */
-   Log(LOG_DEBUG, "menu.efi __executable_start is at %p\n",
+   Log(LOG_DEBUG, "menu.efi __executable_start is at %p",
        __executable_start);
+
+   if ((status = fetch_smbios_data()) != ERR_SUCCESS) {
+      goto out;
+   }
+
+   /*
+    * Use the first few bytes of this binary's hash as a version stamp
+    * in the welcome message.
+    */
+   snprintf(welcome, sizeof(welcome), "vSphere Boot Manager %08x, MAC %s",
+            *(uint32_t *)_expected_hash, mac_str);
+   Log(LOG_DEBUG, welcome);
+
+   if ((status = process_query_string()) != ERR_SUCCESS) {
+      goto out;
+   }
+
+   if (collect_and_use_smbios_data) {
+      if ((status = add_smbios_query_string_parameters()) != ERR_SUCCESS) {
+         Log(LOG_ERR, "Failed to add smbios query string parameters");
+         goto out;
+      }
+   }
+
+   if ((status = query_string_get(&query_string)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to construct query string");
+      goto out;
+   }
+
+   if (query_string != NULL) {
+      Log(LOG_DEBUG, "Generated query_string %s", query_string);
+   }
 
    status = get_boot_file(&bootfile);
    if (status != ERR_SUCCESS) {
@@ -1471,9 +1794,6 @@ int main(int argc, char **argv)
 
    Log(LOG_DEBUG, "main bootfile=%s homedir=%s argc=%d",
        bootfile, homedir, argc);
-   for (i = 0; i < argc; i++) {
-      Log(LOG_DEBUG, "argv[%d]=%s", i, argv[i]);
-   }
 
    status = do_menu(optind < argc ? argv[optind] : NULL);
 
@@ -1487,5 +1807,6 @@ int main(int argc, char **argv)
           status, error_str[status]);
       kbd_waitkey_timeout(&key, err_timeout);
    }
+   query_string_cleanup();
    return status;
 }

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013,2015,2019,2021,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -90,8 +91,10 @@ int main(int argc, char **argv)
    Status = image_load(BootVolume, ISO9660_DRIVER, NULL, 0,
                        &DriverImageHandle[0], &ChildStatus);
    if (EFI_ERROR(Status)) {
+      char *isoDriverAscii = NULL;
+      ucs2_to_ascii(ISO9660_DRIVER, &isoDriverAscii, FALSE);
       status = error_efi_to_generic(Status);
-      Log(LOG_ERR, "image_load: %s", error_str[status]);
+      Log(LOG_ERR, "Failed to load image (%s): %s",  isoDriverAscii, error_str[status]);
       return status;
    }
    if (EFI_ERROR(ChildStatus)) {
@@ -146,8 +149,10 @@ int main(int argc, char **argv)
    Status = image_load(CdromDevice, NEXT_LOADER, LoadOptions, LoadOptionsSize,
                        NULL, &ChildStatus);
    if (EFI_ERROR(Status)) {
+      char *nextLoaderAscii = NULL;
+      ucs2_to_ascii(NEXT_LOADER, &nextLoaderAscii, FALSE);
       status = error_efi_to_generic(Status);
-      Log(LOG_ERR, "image_load: %s", error_str[status]);
+      Log(LOG_ERR, "Failed to load image (%s): %s", nextLoaderAscii, error_str[status]);
       return status;
    }
    if (EFI_ERROR(ChildStatus)) {
@@ -156,6 +161,6 @@ int main(int argc, char **argv)
       return status;
    }
 
-   efi_free(LoadOptions);
+   free(LoadOptions);
    return error_efi_to_generic(EFI_SUCCESS);
 }

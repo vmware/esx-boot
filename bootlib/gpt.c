@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018,2021-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -118,26 +119,26 @@ static int gpt_read_header(disk_t *disk, gpt_header **gpt_out)
 
    *gpt_out = NULL;
 
-   gpt = sys_malloc(disk->bytes_per_sector);
+   gpt = malloc(disk->bytes_per_sector);
    if (gpt == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
    status = disk_read(disk, gpt, 1, 1);
    if (status != ERR_SUCCESS) {
-      sys_free(gpt);
+      free(gpt);
       return status;
    }
 
    if (gpt->signature != GPT_SIGNATURE || gpt->myLba != 1) {
-      sys_free(gpt);
+      free(gpt);
       return ERR_NOT_FOUND;
    }
 
    checksum = gpt->headerCrc32;
    gpt->headerCrc32 = 0;
    if (crc32(0, (uint8_t *)gpt, gpt->headerSize) != checksum) {
-      sys_free(gpt);
+      free(gpt);
       return ERR_NOT_FOUND;
    }
 
@@ -171,7 +172,7 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
    }
 
    if ((uint32_t)part_id > gpt->numberOfEntries) {
-      sys_free(gpt);
+      free(gpt);
       return ERR_NOT_FOUND;
    }
 
@@ -179,31 +180,31 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
    ptable_size = gpt->numberOfEntries * entry_size;
    ptable_size_in_sectors = ceil(ptable_size, disk->bytes_per_sector);
 
-   ptable = sys_malloc(ptable_size_in_sectors * disk->bytes_per_sector);
+   ptable = malloc(ptable_size_in_sectors * disk->bytes_per_sector);
    if (ptable == NULL) {
-      sys_free(gpt);
+      free(gpt);
       return ERR_OUT_OF_RESOURCES;
    }
 
    status = disk_read(disk, ptable, gpt->entryArrayLba, ptable_size_in_sectors);
    if (status != ERR_SUCCESS) {
-      sys_free(gpt);
-      sys_free(ptable);
+      free(gpt);
+      free(ptable);
       return status;
    }
 
    checksum = crc32(0, ptable, ptable_size);
    if (checksum != gpt->entryArrayCrc32) {
-      sys_free(gpt);
-      sys_free(ptable);
+      free(gpt);
+      free(ptable);
       return ERR_NOT_FOUND;
    }
 
    gpt_to_partinfo((gpt_entry *)&ptable[(part_id - 1) * entry_size],
                    part_id, partition);
 
-   sys_free(gpt);
-   sys_free(ptable);
+   free(gpt);
+   free(ptable);
 
    return ERR_SUCCESS;
 }
@@ -231,7 +232,7 @@ int gpt_get_max_part(disk_t *disk, int *max)
    }
 
    *max = gpt->numberOfEntries;
-   sys_free(gpt);
+   free(gpt);
 
    return ERR_SUCCESS;
 }

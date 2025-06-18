@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2008-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
  * mboot.c -- ESXBootInfo (and Multiboot) loader
  *
- *   mboot [aSstRpeVDQU] -c <FILEPATH> [KERNEL_OPTIONS]
+ *   mboot [OPTIONS] [KERNEL_OPTIONS]
  *
  *      OPTIONS
  *         -a             Do not pass extended attributes in the Multiboot
@@ -16,9 +17,9 @@
  *                        not meaningful for ESXBootInfo kernels.
  *         -c <FILEPATH>  Set the configuration file to FILEPATH.
  *         -S <1...4>     Set the default serial port (1=COM1, 2=COM2, 3=COM3,
- *                        4=COM4, 0xNNNN=hex I/O port address ).
+ *                        4=COM4, 0xNNNN=hex I/O port address).
  *         -s <BAUDRATE>  Set the serial port speed to BAUDRATE (in bits per
- *                        second).
+ *                        second, default=115200).
  *         -t <TITLE>     Set the bootloader banner title.
  *         -R <CMDLINE>   Set the command to be executed when <SHIFT+R> is
  *                        pressed. <CMDLINE> is only executed if the underlying
@@ -32,21 +33,24 @@
  *                        sent to the GUI, once the GUI is sufficiently
  *                        initialized.  Without this option only LOG_INFO and
  *                        below are sent to the GUI.
- *         -D             Enable additional debug logging; see code for details.
- *         -L             Final log expansion size can be configured with this
+ *         -D             Enable additional highly verbose debug logging.  Some
+ *                        of this is logged too early to appear on the GUI even
+ *                        with the -V option; use -S to see it.
+ *         -L <BYTES>     Final log expansion size can be configured with this
  *                        option [size in bytes].
  *         -H             Ignore graphical framebuffer and boot ESXi headless.
  *         -Q             Disable workarounds for platform quirks.
  *         -U             Disable UEFI runtime services support.
- *         -N <N>         Set criteria for using native UEFI HTTP to N.
- *                        0: Never use native UEFI HTTP.
- *                        1: Use native UEFI HTTP if mboot itself was
- *                           loaded via native UEFI HTTP (default).
- *                        2: Use native UEFI HTTP if it allows plain http URLs.
- *                        3: Always use native UEFI HTTP.
  *         -r             Enable the hardware runtime watchdog.
  *         -b <BLKSIZE>   For TFTP transfers, set the blksize option to the
  *                        given value, default 1468.  UEFI only.
+ *         -A <FILEPATH>  Additional boot module. Add the provided module name
+ *                        (URL) to the boot modules defined in boot.cfg
+ *         -q <key=value> Add provided data as a query string parameter to be
+ *                        used each time a file is retrieved over HTTP(S).
+ *                        Supported only for UEFI.
+ *                        This option may be provided multiple times to add
+ *                        multiple parameters to the query string.
  *
  * Note: if you add more options that take arguments, be sure to update
  * safeboot.c so that safeboot can pass them through to mboot.
@@ -75,6 +79,12 @@ boot_info_t boot;
 static char *kopts = NULL;
 static uint32_t expand_size = 0;
 
+static unsigned int additional_modules_nr = 0;
+static char **additional_module_names = NULL;
+
+static unsigned int query_string_arguments_nr = 0;
+static char **query_string_arguments = NULL;
+
 /*-- clean ---------------------------------------------------------------------
  *
  *      Clean up everything so mboot can return properly.
@@ -93,8 +103,17 @@ static int clean(int status)
       }
    }
 
-   sys_free(kopts);
-   sys_free(boot.cfgfile);
+   free(kopts);
+   if (additional_module_names != NULL) {
+      free(additional_module_names);
+      additional_module_names = NULL;
+   }
+   if (query_string_arguments != NULL) {
+      free(query_string_arguments);
+      query_string_arguments = NULL;
+   }
+   query_string_cleanup();
+   free(boot.cfgfile);
    uninstall_acpi_tables();
    unload_boot_modules();
    config_clear();
@@ -140,7 +159,7 @@ static int mboot_init(int argc, char **argv)
    optind = 1;
 
    do {
-      opt = getopt(argc, argv, ":ac:R:p:S:s:t:VeDL:HQUN:rb:");
+      opt = getopt(argc, argv, ":ac:S:s:t:R:p:E:eVDL:HQUrb:A:q:");
       switch (opt) {
          case -1:
             break;
@@ -150,22 +169,6 @@ static int mboot_init(int argc, char **argv)
          case 'c':
             boot.cfgfile = strdup(optarg);
             if (boot.cfgfile == NULL) {
-               return ERR_OUT_OF_RESOURCES;
-            }
-            break;
-         case 'p':
-            if (!is_number(optarg)) {
-               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
-               return ERR_SYNTAX;
-            }
-            boot.volid = atoi(optarg);
-            break;
-         case 'V':
-            boot.verbose = true;
-            break;
-         case 'R':
-            boot.recovery_cmd = strdup(optarg);
-            if (boot.recovery_cmd == NULL) {
                return ERR_OUT_OF_RESOURCES;
             }
             break;
@@ -184,6 +187,19 @@ static int mboot_init(int argc, char **argv)
          case 't':
             gui_set_title(optarg);
             break;
+         case 'R':
+            boot.recovery_cmd = strdup(optarg);
+            if (boot.recovery_cmd == NULL) {
+               return ERR_OUT_OF_RESOURCES;
+            }
+            break;
+         case 'p':
+            if (!is_number(optarg)) {
+               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
+               return ERR_SYNTAX;
+            }
+            boot.volid = atoi(optarg);
+            break;
          case 'E':
             if (!is_number(optarg)) {
                Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
@@ -194,15 +210,18 @@ static int mboot_init(int argc, char **argv)
          case 'e':
             boot.err_timeout = 30;
             break;
+         case 'V':
+            boot.verbose = true;
+            break;
+         case 'D':
+            boot.debug = true;
+            break;
          case 'L':
             if (!is_number(optarg)) {
                Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
                return ERR_SYNTAX;
             }
             expand_size = atoi(optarg);
-            break;
-         case 'D':
-            boot.debug = true;
             break;
          case 'H':
             boot.headless = true;
@@ -212,13 +231,6 @@ static int mboot_init(int argc, char **argv)
             break;
          case 'U':
             boot.no_rts = true;
-            break;
-         case 'N':
-            if (!is_number(optarg)) {
-               Log(LOG_CRIT, "Nonnumeric argument to -%c: %s", opt, optarg);
-               return ERR_SYNTAX;
-            }
-            set_http_criteria(atoi(optarg));
             break;
          case 'r':
             boot.runtimewd = true;
@@ -230,13 +242,30 @@ static int mboot_init(int argc, char **argv)
             }
             tftp_set_block_size(atoi(optarg));
             break;
-         case 'd':
-            /*
-             * XXX: 'drive number/signature' (To be implemented)
-             *      mboot currently loads modules from the boot media. This
-             *      option will allow to specify an alternate boot drive to
-             *      boot modules from.
-             */
+         case 'A': {
+               char **tmp = sys_realloc(
+                  additional_module_names,
+                  additional_modules_nr * sizeof (char*),
+                  (additional_modules_nr + 1) * sizeof (char*));
+               if (tmp == NULL) {
+                  return ERR_OUT_OF_RESOURCES;
+               }
+               additional_module_names = tmp;
+               additional_module_names[additional_modules_nr++] = optarg;
+            }
+            break;
+         case 'q': {
+               char **tmp = sys_realloc(
+                  query_string_arguments,
+                  query_string_arguments_nr * sizeof (char*),
+                  (query_string_arguments_nr + 1) * sizeof (char*));
+               if (tmp == NULL) {
+                  return ERR_OUT_OF_RESOURCES;
+               }
+               query_string_arguments = tmp;
+               query_string_arguments[query_string_arguments_nr++] = optarg;
+            }
+            break;
          case ':':
             /* Missing option argument */
             Log(LOG_CRIT, "Missing argument to -%c", optopt);
@@ -285,6 +314,35 @@ static int mboot_init(int argc, char **argv)
    Log(LOG_DEBUG, "Built on %s/%s", __DATE__, __TIME__);
 #endif
    snprintf(boot.name, MBOOT_ID_SIZE, "%s", MBOOT_ID_STR);
+
+   if (query_string_arguments_nr > 0) {
+      size_t query_string_parameters_count = 0;
+      key_value_t* query_string_parameters =
+         malloc(
+            query_string_arguments_nr * sizeof(query_string_parameters[0]));
+
+      for (size_t index = 0; index < query_string_arguments_nr; index++) {
+         char* ps = strchr(query_string_arguments[index], '=');
+         if (ps == NULL) {
+            Log(LOG_ERR, "Query string parameter %s does not contain \"=\"\n", query_string_arguments[index]);
+            status = ERR_INVALID_PARAMETER;
+            free(query_string_parameters);
+            return status;
+         } else {
+            key_value_t query_string_parameter =
+               { query_string_arguments[index], ps + 1 };
+            *ps = '\0';
+            query_string_parameters[query_string_parameters_count++]
+               = query_string_parameter;
+         }
+      }
+      status = query_string_add_parameters(
+         query_string_parameters_count, query_string_parameters);
+      free(query_string_parameters);
+      if (status != ERR_SUCCESS) {
+         return status;
+      }
+   }
 
    return ERR_SUCCESS;
 }
@@ -385,6 +443,55 @@ static int start_runtimewd(void)
    }
 
    // TODO: Add a refresh timer here
+   return ERR_SUCCESS;
+}
+
+/*-- append_additional_modules -------------------------------------------------
+ *
+ *      Appends additional modules passed via command line option(s).
+ *
+ * Parameters
+ *      IN additional_modules_nr:   Number of additional modules.
+ *      IN additional_module_names: Array of character pointers pointing to the
+ *                                  names of the modules in the argv[] array.
+ *
+ * Results
+ *      ERR_SUCCESS, or a generic error status.
+ *----------------------------------------------------------------------------*/
+static int append_additional_modules(
+   int additional_modules_nr,
+   char** additional_module_names)
+{
+   int status;
+   module_t* tmp;
+   unsigned int total_modules_nr = boot.modules_nr + additional_modules_nr;
+
+   if (additional_module_names == NULL) {
+      return ERR_SUCCESS;
+   }
+
+   tmp = sys_realloc(
+      boot.modules,
+      boot.modules_nr * sizeof (module_t),
+      total_modules_nr * sizeof (module_t));
+   if (tmp == NULL) {
+      /* the function clear called in the main function will cleanup the modules */
+      return ERR_OUT_OF_RESOURCES;
+   }
+   boot.modules = tmp;
+   memset(
+      &boot.modules[boot.modules_nr], 0,
+      additional_modules_nr * sizeof (module_t));
+
+   for (int i = 0; boot.modules_nr < total_modules_nr; boot.modules_nr++, i++) {
+      module_t *module = &boot.modules[boot.modules_nr];
+      status = make_path(
+         boot.prefix, additional_module_names[i], &module->filename);
+      if (status != ERR_SUCCESS) {
+         return status;
+      }
+   }
+
    return ERR_SUCCESS;
 }
 
@@ -555,6 +662,12 @@ int main(int argc, char **argv)
       return clean(status);
    }
 
+   status = append_additional_modules(
+      additional_modules_nr, additional_module_names);
+   if (status != ERR_SUCCESS) {
+      return clean(status);
+   }
+
    if (boot.runtimewd) {
       Log(LOG_DEBUG, "Initializing hardware runtime watchdog...");
       status = start_runtimewd();
@@ -679,6 +792,12 @@ int main(int argc, char **argv)
       }
    }
    syslogbuf_expand_disable(expand_size);
+
+   status = parse_acpi_cedt();
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "CXL: Parsing CEDT failed with status %s", error_str[status]);
+      return clean(status);
+   }
 
    if (firmware_shutdown(&boot.mmap, &boot.mmap_count,
                          &boot.efi_info)                 != ERR_SUCCESS

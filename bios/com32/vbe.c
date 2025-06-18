@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -328,7 +329,7 @@ int vbe_get_info(vbe_t *vbe, vbe_mode_id_t **modes)
    }
 
    modes_list_size = (count + 1) * sizeof (vbe_mode_id_t);
-   modes_list = sys_malloc(modes_list_size);
+   modes_list = malloc(modes_list_size);
    if (modes_list == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }

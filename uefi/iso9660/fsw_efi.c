@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Portions Copyright (c) 2010-2011,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2010-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -290,7 +291,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
     }
 
     // allocate volume structure
-    Volume = efi_calloc(1, sizeof(FSW_VOLUME_DATA));
+    Volume = calloc(1, sizeof(FSW_VOLUME_DATA));
     Volume->Signature       = FSW_VOLUME_DATA_SIGNATURE;
     Volume->Handle          = ControllerHandle;
     Volume->DiskIo          = DiskIo;
@@ -317,7 +318,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Start(IN EFI_DRIVER_BINDING_PROTOCOL  *T
     if (EFI_ERROR(Status)) {
         if (Volume->vol != NULL)
             fsw_unmount(Volume->vol);
-        efi_free(Volume);
+        free(Volume);
 
         bs->CloseProtocol(ControllerHandle,
                           &DiskIoProto,
@@ -379,7 +380,7 @@ EFI_STATUS EFIAPI fsw_efi_DriverBinding_Stop(IN  EFI_DRIVER_BINDING_PROTOCOL  *T
     // release private data structure
     if (Volume->vol != NULL)
         fsw_unmount(Volume->vol);
-    efi_free(Volume);
+    free(Volume);
 
     // close the consumed protocols
     Status = bs->CloseProtocol(ControllerHandle,
@@ -543,7 +544,7 @@ EFI_STATUS EFIAPI fsw_efi_FileHandle_Close(IN EFI_FILE *This)
 #endif
 
     fsw_shandle_close(&File->shand);
-    efi_free(File);
+    free(File);
 
     return EFI_SUCCESS;
 }
@@ -692,7 +693,7 @@ EFI_STATUS fsw_efi_dnode_to_FileHandle(IN struct fsw_dnode *dno,
         return EFI_UNSUPPORTED;
 
     // allocate file structure
-    File = efi_calloc(1, sizeof(FSW_FILE_DATA));
+    File = calloc(1, sizeof(FSW_FILE_DATA));
     File->Signature = FSW_FILE_DATA_SIGNATURE;
     if (dno->type == FSW_DNODE_TYPE_FILE)
         File->Type = FSW_EFI_FILE_TYPE_FILE;
@@ -703,7 +704,7 @@ EFI_STATUS fsw_efi_dnode_to_FileHandle(IN struct fsw_dnode *dno,
     Status = fsw_efi_map_status(fsw_shandle_open(dno, &File->shand),
                                 (FSW_VOLUME_DATA *)dno->vol->host_data);
     if (EFI_ERROR(Status)) {
-        efi_free(File);
+        free(File);
         return Status;
     }
 

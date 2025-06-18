@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015,2017-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -166,7 +167,7 @@ void unload_boot_modules(void)
    memset(&boot.kernel, 0, sizeof (kernel_t));
 
    for (i = 0; i < boot.modules_nr; i++) {
-      sys_free(boot.modules[i].addr);
+      free(boot.modules[i].addr);
       boot.modules[i].addr = NULL;
       boot.modules[i].load_size = 0;
       boot.modules[i].size = 0;
@@ -327,7 +328,7 @@ static void log_module_transfer_stats(unsigned int n)
           path, md5str, extracted_size);
    }
 
-   sys_free(filepath);
+   free(filepath);
 }
 
 /*-- extract_cksum_module ------------------------------------------------------
@@ -362,7 +363,7 @@ static int extract_cksum_module(const char *modname, void **buffer,
    }
 
    status = gzip_extract(*buffer, size, &data, &size);
-   sys_free(*buffer);
+   free(*buffer);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "gzip_extract failed for %s (size %zu): %s\n",
           modname, size, error_str[status]);
@@ -459,7 +460,7 @@ static int load_module(unsigned int n)
       if (status != ERR_SUCCESS) {
          status = check_multiboot_kernel(addr, size);
          if (status != ERR_SUCCESS) {
-            sys_free(addr);
+            free(addr);
             Log(LOG_ERR, "Error %d (%s) while loading kernel: %s. "
                          "kernel is either invalid or corrupted.\n",
                 status, error_str[status], filepath);

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2021-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -20,7 +21,7 @@
  *      Convert a VMware FAT UUID to a human readable string where each byte in
  *      the UUID is seen as an unsigned char and represented by a 0-prefixed,
  *      2-characters, lower case hexadecimal string. The output string is
- *      allocated with sys_malloc() and can be freed with sys_free().
+ *      allocated with malloc() and can be freed with free().
  *
  * Parameters
  *      IN uuid: pointer to the VMware FAT UUID
@@ -47,7 +48,7 @@ int vmfat_uuid_to_str(const unsigned char *uuid, char **str)
    for (i = 0; i < VMWARE_FAT_UUID_LEN; i++) {
       len = snprintf(s, 3, "%02x", (unsigned int)uuid[i]);
       if (len != 2) {
-         sys_free(s);
+         free(s);
          return ERR_INVALID_PARAMETER;
       }
       s += 2;
@@ -127,7 +128,7 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
     * First determine the sector size to get the required offset
     * to read the UUID from.
     */
-   block = sys_malloc(disk.bytes_per_sector);
+   block = malloc(disk.bytes_per_sector);
    if (block == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -135,18 +136,18 @@ int vmfat_get_uuid(int volid, void *buffer, size_t buflen)
    status = volume_read(&disk, &partition, block, disk.bytes_per_sector,
                         disk.bytes_per_sector);
    if (status != ERR_SUCCESS) {
-      sys_free(block);
+      free(block);
       return status;
    }
 
    if (memcmp(VMWARE_FAT_MAGIC, block, VMWARE_FAT_MAGIC_LEN)) {
-      sys_free(block);
+      free(block);
       return ERR_NOT_FOUND;
    }
 
    uuid = &block[VMWARE_FAT_MAGIC_LEN];
    memcpy(buffer, uuid, VMWARE_FAT_UUID_LEN);
 
-   sys_free(block);
+   free(block);
    return ERR_SUCCESS;
 }

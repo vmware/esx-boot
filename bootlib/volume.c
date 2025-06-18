@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -35,14 +36,14 @@ int get_volume_info(disk_t *disk, int part_id, partition_t *partition)
       return ERR_INVALID_PARAMETER;
    }
 
-   mbr = sys_malloc(disk->bytes_per_sector);
+   mbr = malloc(disk->bytes_per_sector);
    if (mbr == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
    status = disk_read(disk, mbr, 0, 1);
    if (status != ERR_SUCCESS) {
-      sys_free(mbr);
+      free(mbr);
       return status;
    }
 
@@ -51,13 +52,13 @@ int get_volume_info(disk_t *disk, int part_id, partition_t *partition)
    if (PART_IS_PROTECTIVE_MBR(part)) {
       status = gpt_get_part_info(disk, part_id, partition);
       if (status != ERR_NOT_FOUND) {
-         sys_free(mbr);
+         free(mbr);
          return status;
       }
    }
 
    status = mbr_get_part_info(disk, mbr, part_id, partition);
-   sys_free(mbr);
+   free(mbr);
    return status;
 }
 
@@ -86,14 +87,14 @@ int get_max_volume(disk_t *disk, int *max)
 
    *max = 0;
 
-   mbr = sys_malloc(disk->bytes_per_sector);
+   mbr = malloc(disk->bytes_per_sector);
    if (mbr == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
 
    status = disk_read(disk, mbr, 0, 1);
    if (status != ERR_SUCCESS) {
-      sys_free(mbr);
+      free(mbr);
       return status;
    }
 
@@ -104,7 +105,7 @@ int get_max_volume(disk_t *disk, int *max)
    } else {
       status = mbr_get_max_part(disk, mbr, max);
    }
-   sys_free(mbr);
+   free(mbr);
    return status;
 }
 
@@ -135,7 +136,7 @@ int volume_read(disk_t *disk, partition_t *partition,
    sector = partition->info.start_lba + start / disk->bytes_per_sector;
 
    if (bytes > size) {
-      buffer = sys_malloc(size);
+      buffer = malloc(size);
       if (buffer == NULL) {
          return ERR_OUT_OF_RESOURCES;
       }
@@ -149,7 +150,7 @@ int volume_read(disk_t *disk, partition_t *partition,
       if (status == ERR_SUCCESS) {
          memcpy(dest, buffer, size);
       }
-      sys_free(buffer);
+      free(buffer);
    }
 
    return status;

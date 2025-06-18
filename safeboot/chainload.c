@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -99,7 +100,7 @@ static int locate_safeboot(char **filepath)
    }
 
    status = make_path(bootdir, safeboot.self_path, &path);
-   sys_free(bootdir);
+   free(bootdir);
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -145,7 +146,7 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
       len = asprintf(&serial_opts, " -S %d -s %d",
                      safeboot.serial_com, safeboot.serial_speed);
       if (len == -1) {
-         sys_free(uuid);
+         free(uuid);
          return ERR_OUT_OF_RESOURCES;
       }
    } else {
@@ -160,8 +161,8 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
 
    status = locate_safeboot(&safeboot_path);
    if (status != ERR_SUCCESS) {
-      sys_free(uuid);
-      sys_free(serial_opts);
+      free(uuid);
+      free(serial_opts);
       return status;
    }
 
@@ -171,10 +172,10 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
                   safeboot.serial ? serial_opts : "",
                   next_loader);
 
-   sys_free(safeboot_path);
+   free(safeboot_path);
    if (len == -1) {
-      sys_free(uuid);
-      sys_free(serial_opts);
+      free(uuid);
+      free(serial_opts);
       return ERR_OUT_OF_RESOURCES;
    }
 
@@ -190,9 +191,9 @@ static int build_mboot_cmdline(bootbank_t *bank, const char *next_loader,
                   uuid,
                   safeboot.rollback ? " rollback" : "");
 
-   sys_free(serial_opts);
-   sys_free(uuid);
-   sys_free(chainload);
+   free(serial_opts);
+   free(uuid);
+   free(chainload);
 
    if (len == -1) {
       return ERR_OUT_OF_RESOURCES;
@@ -233,11 +234,11 @@ int chainload(bootbank_t *bank, int *retval)
       Log(LOG_DEBUG, "EXEC: %s\n", cmdline);
 
       *retval = firmware_file_exec(next_loader, cmdline);
-      sys_free(cmdline);
+      free(cmdline);
    }
 
    if (next_loader != safeboot.next_loader) {
-      sys_free(next_loader);
+      free(next_loader);
    }
 
    return status;

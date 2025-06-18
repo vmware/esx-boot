@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2013,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -16,13 +17,32 @@
 /*
  * safeboot configuration file options.
  */
+
+/* Type  Name               Default value */
+#define SAFEBOOT_OPTIONS          \
+   STR(  build,             NULL) \
+   INT(  updated,           0)    \
+   INT(  bootstate,         0)    \
+   INT(  quickboot,         0)
+
+#define STR(name, defval) \
+   { #name, "=", { .str = defval }, OPT_STRING, { .str = NULL } },
+#define INT(name, defval) \
+   { #name, "=", { .integer = defval }, OPT_INTEGER, { .integer = 0 } },
 static option_t opts[] = {
-   {"build", "=", {NULL}, OPT_STRING, {0}},
-   {"updated", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"bootstate", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {"quickboot", "=", {.integer = 0}, OPT_INTEGER, {0}},
-   {NULL, NULL, {NULL}, OPT_INVAL, {0}}
+   SAFEBOOT_OPTIONS
+   { NULL, NULL, { NULL }, OPT_INVAL, { NULL } }
 };
+#undef STR
+#undef INT
+
+#define STR(name, defval) opt_ ## name,
+#define INT(name, defval) opt_ ## name,
+enum optname {
+   SAFEBOOT_OPTIONS
+};
+#undef STR
+#undef INT
 
 /*-- bank_get_config -----------------------------------------------------------
  *
@@ -46,10 +66,10 @@ int bank_get_config(bootbank_t *bank)
       return status;
    }
 
-   bank->build = opts[0].value.str;
-   bank->updated = opts[1].value.integer;
-   bank->bootstate = opts[2].value.integer;
-   bank->quickboot = opts[3].value.integer;
+   bank->build = opts[opt_build].value.str;
+   bank->updated = opts[opt_updated].value.integer;
+   bank->bootstate = opts[opt_bootstate].value.integer;
+   bank->quickboot = opts[opt_quickboot].value.integer;
 
    return ERR_SUCCESS;
 }
@@ -173,12 +193,12 @@ int bank_set_bootstate(bootbank_t *bank, int bootstate)
    state_ptr = scan_config(buffer, size, "bootstate", "=");
    if (state_ptr == NULL) {
       Log(LOG_ERR, "BANK%d: boot state not found.\n", bank->volid);
-      sys_free(buffer);
+      free(buffer);
       return ERR_SYNTAX;
    }
 
    if (*state_ptr < '0' || *state_ptr > '3') {
-      sys_free(buffer);
+      free(buffer);
       Log(LOG_ERR, "BANK%d: invalid boot state.\n", bank->volid);
       return ERR_SYNTAX;
    }
@@ -193,7 +213,7 @@ int bank_set_bootstate(bootbank_t *bank, int bootstate)
    } else {
       status = file_overwrite(bank->volid, SAFEBOOT_CFG, buffer, size);
    }
-   sys_free(buffer);
+   free(buffer);
 
    if (status != ERR_SUCCESS) {
       Log(LOG_WARNING, "BANK%d: failed to overwrite %s: %d (ignored)\n",

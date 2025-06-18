@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2020-2021,2023 VMware, Inc.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -344,8 +345,8 @@ int log_init(bool verbose)
     * Allocate the log buffer if not already allocated
     */
    if (syslogbuf == NULL) {
-      syslogbuf = sys_malloc(sizeof *syslogbuf);
-      syslogbuf->buf = sys_malloc(PAGE_SIZE);
+      syslogbuf = malloc(sizeof *syslogbuf);
+      syslogbuf->buf = malloc(PAGE_SIZE);
       if (syslogbuf->buf != NULL) {
          memset(syslogbuf->buf, '\0', PAGE_SIZE);
          syslogbuf->bufferSize = PAGE_SIZE;

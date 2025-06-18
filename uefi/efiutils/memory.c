@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021,2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -56,7 +58,7 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
 
    do {
       if (Buffer != NULL) {
-         sys_free(Buffer);
+         free(Buffer);
       }
       BufLen = 0;
       Buffer = NULL;
@@ -77,11 +79,11 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
        * on what "more" is supposed to constitute (remember, you don't
        * know the descriptor size, and have no idea about how many
        * separate new descriptors could be created due to the
-       * sys_malloc below). So just double it.
+       * malloc below). So just double it.
        */
       BufLen *= 2;
 
-      Buffer = sys_malloc(BufLen);
+      Buffer = malloc(BufLen);
       if (Buffer == NULL) {
          return EFI_OUT_OF_RESOURCES;
       }
@@ -101,7 +103,7 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
        * Now we know DescSize and can allocate Buffer for real.
        */
       EFI_ASSERT_FIRMWARE(DescSize > 0);
-      sys_free(Buffer);
+      free(Buffer);
       /*
        * We know DescSize, but it's unclear by how many descriptors the
        * memory map could grow as a result of the allocation below.
@@ -114,7 +116,7 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
        * Now adjust by desc_extra_mem.
        */
       BufLen += (BufLen / DescSize) * desc_extra_mem;
-      Buffer = sys_malloc(BufLen);
+      Buffer = malloc(BufLen);
       if (Buffer == NULL) {
          return EFI_OUT_OF_RESOURCES;
       }
@@ -129,7 +131,7 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
       }
    } while (Status == EFI_BUFFER_TOO_SMALL);
 
-   sys_free(Buffer);
+   free(Buffer);
 
    return Status;
 }
@@ -148,8 +150,8 @@ EFI_STATUS efi_get_memory_map(UINTN desc_extra_mem,
  *
  *   The 'desc_extra_mem' parameter
  *      Depending on the dynamic memory allocator implementation, the system
- *      memory map may vary after each call to sys_malloc(), sys_realloc(), or
- *      sys_free(). This rises the following problem:
+ *      memory map may vary after each call to malloc(), sys_realloc(), or
+ *      free(). This raises the following problem:
  *
  *      Let's consider a situation where we need to convert the E820 memory map
  *      to a different format (e.g. the Multiboot format). Both memory maps
@@ -208,7 +210,7 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
    if (efi_info->mmap != NULL) {
       EFI_ASSERT(efi_info->num_descs != 0);
       EFI_ASSERT(efi_info->desc_size != 0);
-      sys_free(efi_info->mmap);
+      free(efi_info->mmap);
       efi_info->mmap = NULL;
       efi_info->num_descs = 0;
       efi_info->desc_size = 0;
@@ -243,30 +245,14 @@ int get_memory_map(size_t desc_extra_mem, e820_range_t **e820_mmap,
             type = E820_TYPE_BOOTLOADER;
             break;
          case EfiConventionalMemory:
-
-            switch (MMap->Attribute & (EFI_MEMORY_NV | EFI_MEMORY_SP)) {
-               case 0:
-                  type = E820_TYPE_AVAILABLE;
-                  break;
-               case EFI_MEMORY_NV:
-                  type = E820_TYPE_PMEM;
-                  break;
-               case EFI_MEMORY_SP:
-                  type = (efi_info->use_memtype_sp ? E820_TYPE_SP:
-                          E820_TYPE_AVAILABLE);
-                  break;
-               default:
-                  type = (efi_info->use_memtype_sp ? E820_TYPE_PMEM_SP:
-                          E820_TYPE_PMEM);
-            }
-            break;
-         case EfiPersistentMemory:
-            if ((MMap->Attribute & EFI_MEMORY_SP) != 0) {
-               type = (efi_info->use_memtype_sp ? E820_TYPE_PMEM_SP:
-                       E820_TYPE_PMEM);
+            if ((MMap->Attribute & EFI_MEMORY_NV) == 0) {
+               type = E820_TYPE_AVAILABLE;
             } else {
                type = E820_TYPE_PMEM;
             }
+            break;
+         case EfiPersistentMemory:
+            type = E820_TYPE_PMEM;
             break;
          case EfiACPIReclaimMemory:
             type = E820_TYPE_ACPI;
@@ -372,11 +358,11 @@ void log_memory_map(efi_info_t *efi_info)
 void free_memory_map(UNUSED_PARAM(e820_range_t *e820_mmap),
                      efi_info_t *efi_info)
 {
-   sys_free(efi_info->mmap);
+   free(efi_info->mmap);
    efi_info->mmap = NULL;
 }
 
-/*-- efi_malloc ----------------------------------------------------------------
+/*-- malloc --------------------------------------------------------------------
  *
  *      Allocate dynamic memory.
  *
@@ -386,7 +372,7 @@ void free_memory_map(UNUSED_PARAM(e820_range_t *e820_mmap),
  * Results
  *      A pointer to the allocated memory, or NULL if an error occurred.
  *----------------------------------------------------------------------------*/
-VOID *efi_malloc(UINTN size)
+VOID *malloc(UINTN size)
 {
    EFI_STATUS Status;
    VOID *p;
@@ -400,34 +386,10 @@ VOID *efi_malloc(UINTN size)
    return EFI_ERROR(Status) ? NULL : p;
 }
 
-/*-- efi_calloc ----------------------------------------------------------------
+/*-- sys_realloc ---------------------------------------------------------------
  *
- *      Allocate dynamic memory and set it to zero.
- *
- * Parameters
- *      IN nmemb: number of contiguous elements to allocate
- *      IN size:  size of each element in bytes.
- *
- * Results
- *      A pointer to the allocated memory, or NULL if an error occurred.
- *----------------------------------------------------------------------------*/
-VOID *efi_calloc(UINTN nmemb, UINTN size)
-{
-   VOID *p;
-
-   size *= nmemb;
-
-   p = efi_malloc(size);
-   if (p != NULL) {
-      memset(p, 0, size);
-   }
-
-   return p;
-}
-
-/*-- efi_realloc ---------------------------------------------------------------
- *
- *      Adjust the size of a previously allocated buffer.
+ *      Adjust the size of a previously allocated buffer.  Unlike standard
+ *      realloc, this function requires the old size as a parameter.
  *
  * Parameters
  *      IN ptr:     pointer to the old memory buffer
@@ -437,34 +399,32 @@ VOID *efi_calloc(UINTN nmemb, UINTN size)
  * Results
  *      A pointer to the allocated memory, or NULL if an error occurred.
  *----------------------------------------------------------------------------*/
-VOID *efi_realloc(VOID *ptr, UINTN oldsize, UINTN newsize)
+VOID *sys_realloc(VOID *ptr, UINTN oldsize, UINTN newsize)
 {
    VOID *p = NULL;
 
    if (newsize > 0) {
-      p = efi_malloc(newsize);
+      p = malloc(newsize);
    }
 
-   if (ptr != NULL) {
-      if (p != NULL) {
-         memcpy(p, ptr, MIN(oldsize, newsize));
-      }
-      sys_free(ptr);
+   if (ptr != NULL && p != NULL) {
+      memcpy(p, ptr, MIN(oldsize, newsize));
+      free(ptr); // like standard realloc, free only on success
    }
 
    return p;
 }
 
-/*-- efi_free ------------------------------------------------------------------
+/*-- free ----------------------------------------------------------------------
  *
  *      Free the memory space pointed to by 'ptr', which must have been returned
- *      by a previous call to sys_malloc(). If 'ptr' is NULL, no operation is
+ *      by a previous call to malloc(). If 'ptr' is NULL, no operation is
  *      performed.
  *
  * Parameters
  *      IN ptr: pointer to the memory to free
  *----------------------------------------------------------------------------*/
-VOID efi_free(VOID *ptr)
+VOID free(VOID *ptr)
 {
    EFI_ASSERT(bs != NULL);
    EFI_ASSERT_FIRMWARE(bs->FreePool != NULL);
@@ -489,46 +449,41 @@ void mem_init(EFI_MEMORY_TYPE MemType)
    ImageDataType = MemType;
 }
 
-/*-- sys_malloc ----------------------------------------------------------------
+/*-- blacklist_specific_purpose_memory -----------------------------------------
  *
- *      Generic wrapper for efi_malloc().
+ *      Blacklist all SPM(Specific Purpose Memory) ranges so that bootloader
+ *      won't use it for relocation.
  *
- * Parameters
- *      IN size: amount of contiguous memory to allocate
- *
- * Results
- *      A pointer to the allocated memory, or NULL if an error occurred.
- *----------------------------------------------------------------------------*/
-void *sys_malloc(size_t size)
-{
-   return efi_malloc((UINTN)size);
-}
-
-/*-- sys_realloc ---------------------------------------------------------------
- *
- *      Generic wrapper for efi_realloc().
- *
- * Parameters
- *      IN ptr:     pointer to the old memory buffer
- *      IN oldsize: size of the old memory buffer
- *      IN newsize: new desired size
+ *      Note: Called after exit boot services, so be careful to not try
+ *      allocating any memory.
  *
  * Results
- *      A pointer to the allocated memory, or NULL if an error occurred.
+ *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-void *sys_realloc(void *ptr, size_t oldsize, size_t newsize)
+int blacklist_specific_purpose_memory(efi_info_t *efi_info)
 {
-   return efi_realloc(ptr, (UINTN)oldsize, (UINTN)newsize);
-}
+   EFI_MEMORY_DESCRIPTOR *MMap;
+   uint64_t base, length;
+   UINTN i;
+   int status = ERR_SUCCESS;
 
-/*-- sys_free ------------------------------------------------------------------
- *
- *      Generic wrapper for efi_free().
- *
- * Parameters
- *      IN ptr: pointer to the memory to free
- *----------------------------------------------------------------------------*/
-void sys_free(void *ptr)
-{
-   efi_free(ptr);
+   MMap = efi_info->mmap;
+   for (i = 0; i < efi_info->num_descs; i++) {
+      base = MMap->PhysicalStart;
+      length = MMap->NumberOfPages << EFI_PAGE_SHIFT;
+
+      switch (MMap->Type) {
+         case EfiConventionalMemory:
+         case EfiPersistentMemory:
+            if ((MMap->Attribute & EFI_MEMORY_SP) != 0) {
+               status = blacklist_runtime_mem(base, length);
+               if (status != ERR_SUCCESS) {
+                  return status;
+               }
+            }
+            break;
+      }
+      MMap = NextMemoryDescriptor(MMap, efi_info->desc_size);
+   }
+   return status;
 }

@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2015-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -58,7 +60,7 @@
 #define ESXBOOTINFO_FLAG_LOADESX_VERSION  (1 << 19)  /* LoadESX version field valid */
 #define ESXBOOTINFO_FLAG_VIDEO_MIN        (1 << 20)  /* Video min fields valid */
 #define ESXBOOTINFO_FLAG_TPM_MEASUREMENT  (1 << 21)  /* TPM measurement field valid */
-#define ESXBOOTINFO_FLAG_MEMTYPE_SP       (1 << 22)  /* Can use specific purpose memory */
+#define ESXBOOTINFO_FLAG_MEMTYPE_SP_OLD   (1 << 22)  /* Reserved; do not redefine */
 
 /*
  * ARM64 supports multiple image types identified by a mode which is

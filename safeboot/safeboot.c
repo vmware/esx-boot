@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2014,2016,2018,2020-2023 VMware, Inc.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -73,7 +74,7 @@ static int safeboot_init(int argc, char **argv)
    if (argc > 1) {
       optind = 1;
       do {
-         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:E:fN:b:L:");
+         opt = getopt(argc, argv, ":m:rs:S:Vc:t:R:p:E:fN:b:L:A:q:");
          switch (opt) {
             case -1:
                break;
@@ -108,6 +109,8 @@ static int safeboot_init(int argc, char **argv)
             case 'N':
             case 'b':
             case 'L':
+            case 'A':
+            case 'q':
                /*
                 * Other mboot options that take an argument.  Pass
                 * through to mboot after the options that safeboot
@@ -235,8 +238,8 @@ int main(int argc, char **argv)
       }
    } while (retval == ERR_SUCCESS);
 
-   sys_free(safeboot.next_loader);
-   sys_free(safeboot.self_path);
+   free(safeboot.next_loader);
+   free(safeboot.self_path);
 
    kbd_waitkey(&key);
 

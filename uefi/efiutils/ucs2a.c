@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2016,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -38,11 +39,11 @@ EFI_STATUS argv_to_ucs2(int argc, char **argv, CHAR16 **ArgStr)
    Str = NULL;
    Status = ascii_to_ucs2(str, &Str);
    if (EFI_ERROR(Status)) {
-      sys_free(str);
+      free(str);
       return Status;
    }
 
-   sys_free(str);
+   free(str);
    *ArgStr = Str;
 
    return EFI_SUCCESS;

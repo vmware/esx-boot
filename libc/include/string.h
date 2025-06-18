@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2015 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -12,6 +13,11 @@
 
 #include <compiler.h>
 #include <stddef.h>
+
+typedef struct {
+   const char* key;
+   const char* value;
+} key_value_t;
 
 EXTERN int strcasecmp(const char *, const char *);
 EXTERN int strncasecmp(const char *, const char *, size_t);

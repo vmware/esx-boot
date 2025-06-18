@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2019-2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -109,11 +110,36 @@ int firmware_file_read(const char *filepath,
    EFI_STATUS Status;
    EFI_HANDLE Volume;
    unsigned try;
-
+   bool filepath_is_url =
+      (strstr(filepath, "http://") != NULL) ||
+      (strstr(filepath, "https://") != NULL);
+   char* fileurl = (char*) filepath;
+   const char* querystring = "";
+   char querystring_separator = '?';
    Status = get_boot_volume(&Volume);
    if (EFI_ERROR(Status)) {
       return error_efi_to_generic(Status);
    }
+
+   if (filepath_is_url) {
+      Status = query_string_get(&querystring);
+      if (EFI_ERROR(Status)) {
+         return error_efi_to_generic(Status);
+      }
+
+      if (strrchr(filepath, querystring_separator) != NULL) {
+         querystring_separator = '&';
+      }
+
+      if (querystring != NULL) {
+         Status = asprintf(
+            &fileurl, "%s%c%s", filepath, querystring_separator, querystring);
+         if (EFI_ERROR(Status)) {
+            return error_efi_to_generic(Status);
+         }
+      }
+   }
+
 
    *buffer = NULL; // ensure a new buffer is allocated
    Status = EFI_UNSUPPORTED;
@@ -122,7 +148,7 @@ int firmware_file_read(const char *filepath,
    for (try = 0; try < ARRAYSIZE(fam); try++) {
       EFI_STATUS St;
 
-      St = fam[try].load(Volume, filepath, callback, buffer, buflen);
+      St = fam[try].load(Volume, fileurl, callback, buffer, buflen);
 #if DEBUG
       Log(LOG_DEBUG, "%s_file_load returns %s", fam[try].name,
           error_str[error_efi_to_generic(St)]);
@@ -135,10 +161,15 @@ int firmware_file_read(const char *filepath,
       }
    }
 
+
    if (!EFI_ERROR(Status)) {
       Log(LOG_DEBUG, "%s loaded via %s_file_load at %p, size %zu",
-          filepath, fam[try].name, *buffer, *buflen);
+          fileurl, fam[try].name, *buffer, *buflen);
       last_fam = &fam[try];
+   }
+
+   if (fileurl != filepath) {
+      free(fileurl);
    }
 
    return error_efi_to_generic(Status);
@@ -268,7 +299,7 @@ int firmware_image_load(const char *filepath, const char *options,
          goto out;
       }
       Status = file_devpath(Volume, Filepath, &ChildPath);
-      sys_free(Filepath);
+      free(Filepath);
       if (EFI_ERROR(Status)) {
          goto out;
       }
@@ -302,7 +333,7 @@ int firmware_image_load(const char *filepath, const char *options,
          bs->UnloadImage(*ChildHandle);
          *ChildHandle = NULL;
       }
-      sys_free(LoadOptions);
+      free(LoadOptions);
    }
    return error_efi_to_generic(Status);
 }
@@ -341,9 +372,9 @@ int firmware_image_start(EFI_HANDLE ChildHandle)
       }
       Log(LOG_WARNING, "StartImage returned %s, %s",
           error_str[status], exit_data);
-      sys_free(exit_data);
+      free(exit_data);
    }
-   sys_free(ExitData);
+   free(ExitData);
 
    return status;
 }
@@ -385,15 +416,15 @@ firmware_filepath_load(const char *filepath, const char *options)
    optbuf = NULL;
    Status = ascii_to_ucs2(options, &optbuf);
    if (EFI_ERROR(Status)) {
-      sys_free(Path);
+      free(Path);
       return error_efi_to_generic(Status);
    }
 
    Status = image_load(Volume, Path, optbuf, (UINT32)UCS2SIZE(optbuf),
                        NULL, NULL);
 
-   sys_free(optbuf);
-   sys_free(Path);
+   free(optbuf);
+   free(Path);
 
    return error_efi_to_generic(Status);
 }
@@ -435,7 +466,7 @@ int firmware_file_exec(const char *filepath, const char *options)
     * Loading an image copied to memory failed; attempt with the file path
     * instead.
     */
-   sys_free(image);
+   free(image);
    return firmware_filepath_load(filepath, options);
 }
 

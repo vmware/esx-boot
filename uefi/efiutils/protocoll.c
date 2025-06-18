@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -48,7 +49,7 @@ void log_protocols_on_handle(int level, const char *label, EFI_HANDLE Handle)
           g->Data4[4], g->Data4[5], g->Data4[6], g->Data4[7]);
    }
    if (ProtocolBufferCount > 0) {
-      sys_free(ProtocolBuffer);
+      free(ProtocolBuffer);
    }
 }
 

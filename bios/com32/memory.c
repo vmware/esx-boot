@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2018,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -303,7 +305,7 @@ static int get_e820_mmap(e820_range_t **mmap, size_t *count)
 
    sanitize_e820_mmap(e820, &nentries);
    if (nentries == 0) {
-      sys_free(e820);
+      free(e820);
       return ERR_NOT_FOUND;
    }
 
@@ -404,7 +406,9 @@ void free_memory_map(e820_range_t *e820_mmap,
 
 /*-- sys_realloc ---------------------------------------------------------------
  *
- *      Generic wrapper for the COM32 realloc().
+ *      Generic wrapper for the COM32 realloc().  Unlike standard realloc, this
+ *      interface takes the old size as a parameter so as to be usable in both
+ *      COM32 and UEFI builds.
  *
  * Parameters
  *      IN ptr:     pointer to the old memory buffer
@@ -414,7 +418,20 @@ void free_memory_map(e820_range_t *e820_mmap,
  * Results
  *      A pointer to the allocated memory, or NULL if an error occurred.
  *----------------------------------------------------------------------------*/
-void *sys_realloc(void *ptr, size_t oldsize, size_t newsize)
+void *sys_realloc(void *ptr, UNUSED_PARAM(size_t oldsize), size_t newsize)
 {
-   return (oldsize == newsize) ? ptr : realloc(ptr, newsize);
+   return realloc(ptr, newsize);
+}
+
+/*-- blacklist_specific_purpose_memory -----------------------------------------
+ *
+ *    on UEFI systems used to black list SPM(Specific Purpose Memrory),
+ *    on BIOS its just a No-OP.
+ *
+ * Results
+ *      ERR_SUCCESS
+ *----------------------------------------------------------------------------*/
+int blacklist_specific_purpose_memory(UNUSED_PARAM(efi_info_t *efi_info))
+{
+   return ERR_SUCCESS;
 }

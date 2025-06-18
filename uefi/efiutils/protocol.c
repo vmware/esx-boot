@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -75,10 +76,10 @@ EFI_STATUS LocateHandleByProtocol(EFI_GUID *Protocol, UINTN *count,
 
    do {
       if (buffer != NULL) {
-         sys_free(buffer);
+         free(buffer);
       }
 
-      buffer = sys_malloc(buflen);
+      buffer = malloc(buflen);
       if (buffer == NULL) {
          return EFI_OUT_OF_RESOURCES;
       }
@@ -91,7 +92,7 @@ EFI_STATUS LocateHandleByProtocol(EFI_GUID *Protocol, UINTN *count,
       }
    } while (Status == EFI_BUFFER_TOO_SMALL);
 
-   sys_free(buffer);
+   free(buffer);
    return Status;
 }
 
@@ -134,6 +135,6 @@ EFI_STATUS LocateProtocol(EFI_GUID *Protocol, void **Interface)
       }
    }
 
-   sys_free(Handles);
+   free(Handles);
    return Status;
 }

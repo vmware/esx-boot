@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -155,7 +156,7 @@ char *urldecode(const char *string)
    char *result, *q;
    char tmp[3];
 
-   result = sys_malloc(strlen(string)); // at least long enough
+   result = malloc(strlen(string)); // at least long enough
    p = string;
    q = result;
    while (*p != '\0') {
@@ -224,8 +225,8 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
    EFI_ASSERT_PARAM(Image != NULL);
 
 #ifdef DEBUG
-   log_init(true);
    serial_log_init(DEFAULT_SERIAL_COM, DEFAULT_SERIAL_BAUDRATE);
+   log_init(true);
 #endif /* DEBUG */
 
    *argvp = NULL;
@@ -266,8 +267,12 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
       if (CommandLine != NULL && Image->LoadOptionsSize > 0 &&
           CommandLine[Image->LoadOptionsSize / sizeof(CHAR16) - 1] == L'\0') {
          Status = ucs2_to_ascii(CommandLine, &cmdline_options, true);
-         if (EFI_ERROR(Status) && Status != EFI_INVALID_PARAMETER) {
-            goto error;
+         if (EFI_ERROR(Status)) {
+            if (Status == EFI_INVALID_PARAMETER) {
+               Status = EFI_SUCCESS; // silently ignore
+            } else {
+               goto error;
+            }
          }
       }
    }
@@ -326,10 +331,10 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
 
    /* insert bn as argv[0] if not already present */
    if (!bnpresent) {
-      char **tmp = sys_malloc((*argcp + 1) * sizeof(char *));
+      char **tmp = malloc((*argcp + 1) * sizeof(char *));
       memcpy(tmp + 1, argv, *argcp * sizeof(char *));
       tmp[0] = strdup(bn);
-      sys_free(argv);
+      free(argv);
       argv = *argvp = tmp;
       (*argcp)++;
 #ifdef DEBUG
@@ -348,7 +353,7 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
 #endif /* DEBUG */
 
  error:
-   sys_free(path);
+   free(path);
 
    return Status;
 }
@@ -373,7 +378,7 @@ EFI_STATUS efi_create_argv(EFI_HANDLE Handle,
 void efi_destroy_argv(char **argv)
 {
    if (argv != NULL) {
-      sys_free(argv[0]);
-      sys_free(argv);
+      free(argv[0]);
+      free(argv);
    }
 }

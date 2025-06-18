@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2019-2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -21,7 +22,7 @@ void log_devpath(int level, const char *prefix, const EFI_DEVICE_PATH *DevPath)
 
    text = devpath_text(DevPath, false, false);
    Log(level, "%s: %s", prefix, text);
-   sys_free(text);
+   free(text);
 }
 
 /*-- log_handle_devpath --------------------------------------------------------

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -81,7 +82,7 @@ static EFI_STATUS uga_list_resolutions(resolution_t **resolutions,
       return Status;
    }
 
-   res = sys_malloc(sizeof (resolution_t));
+   res = malloc(sizeof (resolution_t));
    if (res == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }

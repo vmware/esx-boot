@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -505,7 +506,7 @@ int disk_write(const disk_t *disk, void *buffer, uint64_t lba, size_t count)
       }
    }
 
-   buf = sys_malloc(count * disk->bytes_per_sector);
+   buf = malloc(count * disk->bytes_per_sector);
    if (buf == NULL) {
       return ERR_OUT_OF_RESOURCES;
    }
@@ -513,17 +514,17 @@ int disk_write(const disk_t *disk, void *buffer, uint64_t lba, size_t count)
    status = disk_read(disk, buf, lba, count);
    if (status != ERR_SUCCESS) {
       Log(LOG_DEBUG, "disk_write: readback returned %d\n", status);
-      sys_free(buf);
+      free(buf);
       return status;
    }
 
    if (memcmp(buffer, buf, count * disk->bytes_per_sector) != 0) {
       Log(LOG_DEBUG, "disk_write: readback value doesn't match\n");
-      sys_free(buf);
+      free(buf);
       return ERR_DEVICE_ERROR;
    }
 
-   sys_free(buf);
+   free(buf);
 
    return ERR_SUCCESS;
 }

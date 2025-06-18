@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -13,24 +14,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-
-EXTERN void *sys_malloc(size_t size);
-EXTERN void sys_free(void *ptr);
-
-/*-- malloc --------------------------------------------------------------------
- *
- *      Allocate dynamic memory.
- *
- * Parameters
- *      IN size: needed amount of memory, in bytes
- *
- * Results
- *      A pointer to the allocated memory, or NULL if an error occurred.
- *----------------------------------------------------------------------------*/
-void *malloc(size_t size)
-{
-   return sys_malloc(size);
-}
 
 /*-- calloc --------------------------------------------------------------------
  *
@@ -56,19 +39,6 @@ void *calloc(size_t nmemb, size_t size)
    }
 
    return p;
-}
-
-/* free ------------------------------------------------------------------------
- *
- *      Free the memory space pointed to by 'ptr', which must have been returned
- *      by a previous call to malloc() or calloc().
- *
- * Parameters
- *      IN ptr: pointer to the memory to free
- *----------------------------------------------------------------------------*/
-void free(void *ptr)
-{
-   sys_free(ptr);
 }
 
 /*-- strtol --------------------------------------------------------------------

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Portions Copyright (c) 2018,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2018-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -213,7 +214,7 @@ static void *__malloc_from_block(struct free_arena_header *fp, size_t size)
    return (void *)(&fp->a + 1);
 }
 
-void *sys_malloc(size_t size)
+void *malloc(size_t size)
 {
    struct free_arena_header *fp;
    struct stack_frame *frame;
@@ -242,7 +243,7 @@ void *sys_malloc(size_t size)
    return NULL;
 }
 
-void sys_free(void *ptr)
+void free(void *ptr)
 {
    struct free_arena_header *ah;
 
@@ -255,6 +256,19 @@ void sys_free(void *ptr)
    __free_block(ah);
 }
 
+/*-- realloc -------------------------------------------------------------------
+ *
+ *      C standard realloc that does not take oldsize as a parameter.  Not
+ *      available in UEFI mode; use sys_realloc in code that is compiled for
+ *      both COM32 and UEFI.
+ *
+ * Parameters
+ *      IN ptr:     pointer to the old memory buffer
+ *      IN size:    new desired size, in bytes
+ *
+ * Results
+ *      A pointer to the allocated memory, or NULL if an error occurred.
+ *----------------------------------------------------------------------------*/
 void *realloc(void *ptr, size_t size)
 {
    struct free_arena_header *ah, *nah;
@@ -262,10 +276,10 @@ void *realloc(void *ptr, size_t size)
    size_t newsize, oldsize, xsize;
 
    if (!ptr)
-      return sys_malloc(size);
+      return malloc(size);
 
    if (size == 0) {
-      sys_free(ptr);
+      free(ptr);
       return NULL;
    }
 
@@ -315,9 +329,9 @@ void *realloc(void *ptr, size_t size)
             /* Insert into free list */
             if (newsize > oldsize) {
                /* Hack: this free block is in the path of a memory object
-             which has already been grown at least once.  As such, put
-             it at the *end* of the freelist instead of the beginning;
-             trying to save it for future realloc()s of the same block. */
+                  which has already been grown at least once.  As such, put
+                  it at the *end* of the freelist instead of the beginning;
+                  trying to save it for future realloc()s of the same block. */
                nah->prev_free = __malloc_head.prev_free;
                nah->next_free = &__malloc_head;
                __malloc_head.prev_free = nah;
@@ -334,10 +348,10 @@ void *realloc(void *ptr, size_t size)
       } else {
          /* Last resort: need to allocate a new block and copy */
          oldsize -= sizeof(struct arena_header);
-         newptr = sys_malloc(size);
+         newptr = malloc(size);
          if (newptr) {
             memcpy(newptr, ptr, MIN(size, oldsize));
-            sys_free(ptr);
+            free(ptr);
          }
          return newptr;
       }

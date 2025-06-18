@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Portions Copyright (c) 2015,2017,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 

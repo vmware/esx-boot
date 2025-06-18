@@ -1,6 +1,7 @@
 esx-boot
 
-Copyright 2017 VMware, Inc. All Rights Reserved. 
+Copyright 2008-2024 Broadcom. All Rights Reserved.
+The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 
 This product is licensed to you under the GNU GENERAL PUBLIC LICENSE Version 2 license (the "License").  You may not use this product except in compliance with the GPL 2.0 License.  
 

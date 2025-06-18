@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2019-2020,2022-2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2019-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -28,18 +29,13 @@ static EFI_EVENT HttpEvent;
 static bool HttpDone;
 static UINT16 LocalPort;
 
-/*
- * Current criteria for using UEFI HTTP, initialized to the default.
- * In the future the default may be changed to
- * http_if_plain_http_allowed.  Remember to change the usage comment
- * in mboot.c and the usage help in mboot/config.c if changing the
- * default here.
- */
-static http_criteria_t httpCriteria = http_if_http_booted;
-
 #define NUM_HEADERS 2
 #define TIMEOUT_MS 10000
 #define MAX_RETRIES 2
+#define MAX_REDIRECTS 20
+
+static const EFI_IPv4_ADDRESS ZeroIp4 = { .Addr = {0, 0, 0, 0} };
+#define IsZeroIp4(addr) (memcmp(&addr, &ZeroIp4, sizeof(ZeroIp4)) == 0)
 
 static const char *HttpStatusStrings[] = {
    [HTTP_STATUS_UNSUPPORTED_STATUS] = "Unknown",
@@ -60,6 +56,7 @@ static const char *HttpStatusStrings[] = {
    [HTTP_STATUS_304_NOT_MODIFIED] = "304 Not Modified",
    [HTTP_STATUS_305_USE_PROXY] = "305 Use Proxy",
    [HTTP_STATUS_307_TEMPORARY_REDIRECT] = "307 Temporary Redirect",
+   [HTTP_STATUS_308_PERMANENT_REDIRECT] = "308 Permanent Redirect",
    [HTTP_STATUS_400_BAD_REQUEST] = "400 Bad Request",
    [HTTP_STATUS_401_UNAUTHORIZED] = "401 Unauthorized",
    [HTTP_STATUS_402_PAYMENT_REQUIRED] = "402 Payment Required",
@@ -104,14 +101,19 @@ EFI_LOAD_FILE_PROTOCOL HttpLoadFile = {
 };
 
 static EFI_STATUS
-http_file_load_try(const CHAR16 *Url, const char *hostname,
-                   int (*callback)(size_t), VOID **Buffer, UINTN *BufSize);
+http_file_load_try(EFI_HANDLE Volume, const char *url, const CHAR16 *ucs2Url,
+                   const char *hostname, int (*callback)(size_t),
+                   VOID **Buffer, UINTN *BufSize, int depth);
+static EFI_STATUS
+http_file_load_work(EFI_HANDLE Volume, const char *filepath,
+                    int (*callback)(size_t), VOID **Buffer,
+                    UINTN *BufSize, int depth);
 
 /*-- get_http_nic_info --------------------------------------------------------
  *
- *      Get the NIC handle, MAC address, IP version, IP parameters, and DNS
- *      server address specified by the given handle's devpath.  Any OUT
- *      parameter can be NULL if the output is not needed.
+ *      Get the NIC handle, MAC address, IP version, and IP parameters,
+ *      specified by the given handle's devpath.  Any OUT parameter can be NULL
+ *      if the output is not needed.
  *
  * Parameters
  *      IN  volume:     EFI handle
@@ -120,15 +122,14 @@ http_file_load_try(const CHAR16 *Url, const char *hostname,
  *      OUT ipvOut:     4 or 6
  *      OUT ip4Out:     IPv4 parameters
  *      OUT ip6Out:     IPv6 parameters
- *      OUT dnsOut:     DNS server address
  *
  * Results
  *      EFI_SUCCESS, or an EFI error status.
  *----------------------------------------------------------------------------*/
 EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
-                             MAC_ADDR_DEVICE_PATH *macOut,
-                             int *ipvOut, IPv4_DEVICE_PATH *ip4Out,
-                             IPv6_DEVICE_PATH *ip6Out, DNS_DEVICE_PATH *dnsOut)
+                             MAC_ADDR_DEVICE_PATH *macOut, int *ipvOut,
+                             IPv4_DEVICE_PATH *ip4Out,
+                             IPv6_DEVICE_PATH *ip6Out)
 {
    static struct {
       EFI_HANDLE volume;
@@ -136,7 +137,6 @@ EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
       int ipv;
       IPv4_DEVICE_PATH ip4;
       IPv6_DEVICE_PATH ip6;
-      DNS_DEVICE_PATH dns;
       MAC_ADDR_DEVICE_PATH mac;
       EFI_STATUS Status;
    } cache;
@@ -183,8 +183,6 @@ EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
          } else if (node->SubType == MSG_IPv6_DP) {
             cache.ipv = 6;
             cache.ip6 = *(IPv6_DEVICE_PATH *)node;
-         } else if (node->SubType == MSG_DNS_DP) {
-            cache.dns = *(DNS_DEVICE_PATH *)node;
          }
       }
    }
@@ -197,9 +195,16 @@ EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
           error_str[error_efi_to_generic(cache.Status)]);
    }
 
-   if (cache.ipv == 0) {
-      Log(LOG_DEBUG, "No IP version in volume devpath");
-      cache.Status = EFI_NOT_FOUND;
+   if (cache.ipv == 0 ||
+       (cache.ipv == 4 && IsZeroIp4(cache.ip4.LocalIpAddress))) {
+      Log(LOG_DEBUG, "No IP address in volume devpath");
+      /*
+       * Trying to use 0.0.0.0 or to set IPv4Node.UseDefaultAddress = true in
+       * http_init() has been observed not to work; see comment in http_init().
+       * Return an error here so that http_init() will return an error and
+       * has_http() will return false.
+       */
+      cache.Status = EFI_NO_MAPPING;
    }
 
    if (cache.mac.IfType == MAC_UNKNOWN) {
@@ -212,49 +217,8 @@ EFI_STATUS get_http_nic_info(EFI_HANDLE volume, EFI_HANDLE *nicOut,
    if (ipvOut) *ipvOut = cache.ipv;
    if (ip4Out) *ip4Out = cache.ip4;
    if (ip6Out) *ip6Out = cache.ip6;
-   if (dnsOut) *dnsOut = cache.dns;
    if (macOut) *macOut = cache.mac;
    return cache.Status;
-}
-
-/*-- hide_pxe ------------------------------------------------------------------
- *
- *      Apply a workaround in case the child was built with an older, buggy
- *      version of httpfile.c.  The older code is too sloppy when looking up a
- *      NIC handle based on the devpath of the Image->DeviceHandle and will
- *      find the PXE handle instead if it exists.  To prevent this, uninstall
- *      the PXE handle's device path so that it can't be looked up by devpath.
- *
- *      Essentially, this workaround is needed only when menu.efi is loaded via
- *      PXE *and* menu.efi then uses native UEFI HTTP to load an old build of
- *      mboot.efi that was linked with a buggy version of is_http_boot().
- *      Therefore it can be exposed only if menu.efi has httpCriteria >=
- *      http_if_plain_http_allowed.  The bug (PR 2451182) was introduced in
- *      efiboot/main @808773 and was fixed in efiboot/main @926760.  Buggy
- *      builds were used on bora/main for a time, and on bora/esx-7.0.0.0, but
- *      ESXi 7.0 GA was released from bora/esx-7.0.0.1, so no buggy build was
- *      ever shipped in a GA product.  Thus it's not clear we really need to
- *      keep this workaround, but it seems harmless to keep it.
- *
- * Results
- *      PXE handle's device path.
- *----------------------------------------------------------------------------*/
-EFI_STATUS hide_pxe(void)
-{
-   EFI_STATUS Status;
-   EFI_HANDLE BootVolume;
-   EFI_DEVICE_PATH *DevPath;
-
-   Status = get_boot_volume(&BootVolume);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-   Status = devpath_get(BootVolume, &DevPath);
-   if (EFI_ERROR(Status)) {
-      return Status;
-   }
-   return bs->UninstallProtocolInterface(BootVolume,
-                                         &DevicePathProto, DevPath);
 }
 
 /*-- make_http_child_dh --------------------------------------------------------
@@ -305,7 +269,7 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
    s1 = (char *)node - (char *)VolumePath;
    s2 = sizeof(EFI_DEVICE_PATH) + strlen(url) + 1;
 
-   p = sys_malloc(s1 + s2 + sizeof(EFI_DEVICE_PATH));
+   p = malloc(s1 + s2 + sizeof(EFI_DEVICE_PATH));
    memcpy(p, VolumePath, s1);
    node = (EFI_DEVICE_PATH *)(p + s1);
    node->Type = MESSAGING_DEVICE_PATH;
@@ -340,20 +304,16 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
       goto out;
    }
 
-   if (is_pxe_boot(NULL)) {
-      hide_pxe();
-   }
-
  out:
    if (EFI_ERROR(Status) && ChildPath != NULL) {
-      sys_free(ChildPath);
+      free(ChildPath);
    }
    return Status;
 }
 
 /*-- get_url_hostname ----------------------------------------------------------
  *
- *      Get the hostname from a URL.
+ *      Get the hostname from an absolute URL.
  *
  * Parameters
  *      IN  url:      URL
@@ -403,7 +363,7 @@ static EFI_STATUS get_url_hostname(const char *url, char **hostname)
       len = q - p;
    }
 
-   h = sys_malloc(len + 1);
+   h = malloc(len + 1);
    if (h == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -457,7 +417,7 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
    /*
     * Parse the volume devpath to find out which NIC to use, etc.
     */
-   Status = get_http_nic_info(Volume, &NicHandle, NULL, &ipv, &ip4, NULL, NULL);
+   Status = get_http_nic_info(Volume, &NicHandle, NULL, &ipv, &ip4, NULL);
    if (EFI_ERROR(Status)) {
       /*
        * Fail silently in this case, and cache the error.  It can occur when
@@ -466,27 +426,6 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
        */
       HttpVolume = Volume;
       goto out;
-   }
-
-   /*
-    * If this is IPv4 and our NIC doesn't have an IP address, get one.
-    *
-    * This seems to be needed; otherwise Http->Request typically fails with
-    * EFI_NO_MAPPING (which is not documented as a possibility for it, by the
-    * way).  From study of a packet trace on the original machine used to
-    * develop this code, it appears that without this, the Http->Request does
-    * automatically cause DHCP to be started, but Http fails to wait for the
-    * DHCP transaction to finish before trying to connect to the HTTP server.
-    *
-    * It doesn't seem to be necessary to do this for the IPv6 case.
-    */
-   if (ipv == 4) {
-      Status = get_ipv4_addr(NicHandle, ip4.LocalIpAddress);
-      if (EFI_ERROR(Status)) {
-         Log(LOG_ERR, "Error acquiring IPv4 address: %s",
-             error_str[error_efi_to_generic(Status)]);
-         goto out;
-      }
    }
 
    /*
@@ -542,7 +481,17 @@ static EFI_STATUS http_init(EFI_HANDLE Volume)
       HttpConfigData.AccessPoint.IPv6Node = &IPv6Node;
    } else {
       memset(&IPv4Node, 0, sizeof(IPv4Node));
-      IPv4Node.UseDefaultAddress = true;
+      /*
+       * Explicitly use the local IPv4 address from the volume devpath; see
+       * PR 3403178.  For unknown reasons, setting UseDefaultAddress = true
+       * here has consistently been seen to result in Http->Request failing
+       * with EFI_NO_MAPPING because there is no IPv4 address.  This occurs
+       * regardless of whether UEFI networking is configured for DHCP or for
+       * static IP.
+       */
+      IPv4Node.UseDefaultAddress = false;
+      IPv4Node.LocalAddress = ip4.LocalIpAddress;
+      IPv4Node.LocalSubnet = ip4.SubnetMask;
       IPv4Node.LocalPort = LocalPort++;
       HttpConfigData.AccessPoint.IPv4Node = &IPv4Node;
    }
@@ -594,8 +543,8 @@ bool plain_http_allowed(EFI_HANDLE Volume)
        * or isn't supported.
        */
       Log(LOG_DEBUG, "Probing for plain http:// URL support...");
-      Status = http_file_load_try(L"http://0.0.0.0/probe", "0.0.0.0",
-                                  NULL, NULL, &BufSize);
+      Status = http_file_load_try(Volume, NULL, L"http://0.0.0.0/probe",
+                                  "0.0.0.0", NULL, NULL, &BufSize, 0);
       VolCached = Volume;
       allowed = Status != EFI_ACCESS_DENIED;
       Log(LOG_DEBUG,
@@ -605,51 +554,21 @@ bool plain_http_allowed(EFI_HANDLE Volume)
    return allowed;
 }
 
-/*-- set_http_criteria ---------------------------------------------------------
- *
- *      Adjust the criteria for when UEFI HTTP may be used.
- *
- *      http_never = never use native UEFI HTTP.
- *
- *      http_if_http_booted = attempt native UEFI HTTP if the current image
- *      was loaded via native UEFI HTTP.
- *
- *      http_if_plain_http_allowed = attempt native UEFI HTTP if the system
- *      supports it and allows plain http URLs.
- *
- *      http_always = attempt native UEFI HTTP if the system supports it, even
- *      if it allows only https URLs.
- *----------------------------------------------------------------------------*/
-void set_http_criteria(http_criteria_t criteria)
-{
-   Log(LOG_DEBUG, "set_http_criteria: %u -> %u", httpCriteria, criteria);
-   httpCriteria = criteria;
-}
-
 /*-- has_http ------------------------------------------------------------------
  *
  *      Check whether the NIC and IP version implied by the given volume is
  *      capable and usable for native UEFI HTTP.
+ *
+ *      Note: We can use native UEFI HTTP only if the current app was loaded
+ *      via native UEFI HTTP.  Attempts to make UEFI HTTP work when the current
+ *      app was loaded via UEFI PXE have failed so far (PR 3416314).
  *
  * Results
  *      True/false
  *----------------------------------------------------------------------------*/
 bool has_http(EFI_HANDLE Volume)
 {
-   switch (httpCriteria) {
-   case http_never:
-      return false;
-
-   case http_if_http_booted:
-      return is_http_boot() && http_init(Volume) == EFI_SUCCESS;
-
-   case http_if_plain_http_allowed:
-      return http_init(Volume) == EFI_SUCCESS && plain_http_allowed(Volume);
-
-   case http_always:
-      return http_init(Volume) == EFI_SUCCESS;
-   }
-   return false;
+   return is_http_boot() && http_init(Volume) == EFI_SUCCESS;
 }
 
 /*-- http_cleanup --------------------------------------------------------------
@@ -696,7 +615,9 @@ static const char *http_status(EFI_HTTP_STATUS_CODE code)
  *      Try once to load a file into memory or get its length, using HTTP.
  *
  * Parameters
- *      IN     Url:       URL to load.
+ *      IN     Volume:    handle to the "volume" from which to load the file.
+ *      IN     url:       the ASCII absolute URL of the file to retrieve.
+ *      IN     ucs2Url:   URL converted to UCS2.
  *      IN     hostname:  hostname from URL.
  *      IN     callback:  routine to be called periodically while the file
  *                        is being loaded.
@@ -708,16 +629,23 @@ static const char *http_status(EFI_HTTP_STATUS_CODE code)
  *                           if Buffer=NULL, OUT only;
  *                           else if *Buffer=NULL, OUT only;
  *                           else IN/OUT.
+ *      IN depth:         recursion depth.
+ *
+ *      Volume, url, and depth are used only if a redirect occurs, in
+ *      which case they are passed to http_file_load_work.
  *
  * Results
  *      EFI_SUCCESS, or an EFI error status.  EFI_ACCESS_DENIED or
  *      EFI_CONNECTION_FIN indicates that a retry is needed because the
  *      connection was closed.
  *----------------------------------------------------------------------------*/
-static EFI_STATUS http_file_load_try(const CHAR16 *Url,
+static EFI_STATUS http_file_load_try(EFI_HANDLE Volume,
+                                     const char *url,
+                                     const CHAR16 *ucs2Url,
                                      const char *hostname,
                                      int (*callback)(size_t),
-                                     VOID **Buffer, UINTN *BufSize)
+                                     VOID **Buffer, UINTN *BufSize,
+                                     int depth)
 {
    EFI_STATUS Status;
    EFI_HTTP_TOKEN ReqToken;
@@ -727,6 +655,8 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    EFI_HTTP_TOKEN RespToken;
    EFI_HTTP_MESSAGE RespMessage;
    EFI_HTTP_RESPONSE_DATA RespData;
+   UINTN RespHeaderCount = 0;
+   EFI_HTTP_HEADER *RespHeaders = NULL;
    EFI_HTTP_STATUS_CODE HttpStatus = HTTP_STATUS_200_OK;
    unsigned i;
    uint8_t *buf = NULL;
@@ -753,7 +683,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    ReqMessage.HeaderCount = NUM_HEADERS;
    ReqMessage.Headers = ReqHeaders;
    ReqData.Method = (Buffer == NULL) ? HttpMethodHead : HttpMethodGet;
-   ReqData.Url = (CHAR16 *)Url;
+   ReqData.Url = (CHAR16 *)ucs2Url;
    ReqHeaders[0].FieldName = (CHAR8 *)"User-Agent";
    ReqHeaders[0].FieldValue = (CHAR8 *)"esx-boot/2.0";
    ReqHeaders[1].FieldName = (CHAR8 *)"Host";
@@ -801,12 +731,12 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    if (EFI_ERROR(RespToken.Status)) {
       if (RespToken.Status == EFI_HTTP_ERROR) {
          /*
-          * In this case we still must proceed to read the body, but we'll
-          * throw it away later.  The body will typically be an HTML file
-          * complaining about the error; e.g., a "404 Not Found" page.
+          * In the HTTP error case, a GET request must proceed to read the
+          * body, but we'll throw it away later.  The body will typically be
+          * HTML complaining about the error; e.g., a "404 Not Found" page.
           */
          HttpStatus = RespData.StatusCode;
-         Log(LOG_DEBUG, "HTTP error from Http->Response: %s",
+         Log(LOG_DEBUG, "HTTP status from Http->Response: %s",
              http_status(HttpStatus));
       } else {
          Status = RespToken.Status;
@@ -815,16 +745,14 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
          goto out;
       }
    }
-   for (i = 0; i < RespMessage.HeaderCount; ++i) {
+   RespHeaderCount = RespMessage.HeaderCount;
+   RespHeaders = RespMessage.Headers;
+   for (i = 0; i < RespHeaderCount; ++i) {
       /* Get the length of the file from the ContentLength header */
-      if (strcasecmp(RespMessage.Headers[i].FieldName, "Content-Length") == 0) {
-         size = strtol(RespMessage.Headers[i].FieldValue, NULL, 10);
+      if (strcasecmp(RespHeaders[i].FieldName, "Content-Length") == 0) {
+         size = strtol(RespHeaders[i].FieldValue, NULL, 10);
          break;
       }
-   }
-   if (RespMessage.Headers != NULL) {
-      sys_free(RespMessage.Headers);
-      RespMessage.Headers = NULL;
    }
    if (size == (size_t)-1) {
       Log(LOG_DEBUG, "No http Content-Length header");
@@ -852,7 +780,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
       }
       buf = *Buffer;
    } else {
-      buf = sys_malloc(size);
+      buf = malloc(size);
       if (buf == NULL) {
          Status = EFI_OUT_OF_RESOURCES;
          Log(LOG_ERR, "Out of memory to receive http file");
@@ -886,8 +814,47 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    }
 
  out:
-   if (RespMessage.Headers != NULL) {
-      sys_free(RespMessage.Headers);
+   /*
+    * Check for redirect.
+    */
+   if (!EFI_ERROR(Status)) {
+      switch (HttpStatus) {
+      case HTTP_STATUS_301_MOVED_PERMANENTLY:
+      case HTTP_STATUS_302_FOUND:
+      case HTTP_STATUS_307_TEMPORARY_REDIRECT:
+      case HTTP_STATUS_308_PERMANENT_REDIRECT:
+         for (i = 0; i < RespHeaderCount; ++i) {
+            if (strcasecmp(RespHeaders[i].FieldName, "Location") == 0) {
+               char *location;
+
+               if (buf != NULL && buf != *Buffer) {
+                  free(buf);
+               }
+               location =
+                  url_resolve_relative(url, RespHeaders[i].FieldValue);
+               Log(LOG_DEBUG, "Location: \"%s\" -> \"%s\"",
+                   RespHeaders[i].FieldValue, location);
+               free(RespHeaders);
+               Status = http_file_load_work(Volume, location, callback,
+                                            Buffer, BufSize, depth + 1);
+               free(location);
+               return Status;
+            }
+         }
+         Log(LOG_ERR, "Redirect with no http Location header");
+         Status = EFI_PROTOCOL_ERROR;
+         break;
+
+      default:
+         break;
+      }
+   }
+
+   /*
+    * Not a redirect.
+    */
+   if (RespHeaders != NULL) {
+      free(RespHeaders);
    }
    if (!EFI_ERROR(Status) && HttpStatus != HTTP_STATUS_200_OK) {
       Status = EFI_HTTP_ERROR;
@@ -897,7 +864,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
          Http->Cancel(Http, NULL);
       }
       if (buf != NULL && buf != *Buffer) {
-         sys_free(buf);
+         free(buf);
       }
    } else {
       if (Buffer != NULL) {
@@ -908,7 +875,7 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
    return Status;
 }
 
-/*-- http_file_load ------------------------------------------------------------
+/*-- http_file_load_work -------------------------------------------------------
  *
  *      Load a file into memory or get its length, using HTTP.
  *
@@ -926,24 +893,31 @@ static EFI_STATUS http_file_load_try(const CHAR16 *Url,
  *                           if Buffer=NULL, OUT only;
  *                           else if *Buffer=NULL, OUT only;
  *                           else IN/OUT.
+ *      IN depth:         redirect depth; error if > MAX_REDIRECTS.
  *
  * Results
  *      EFI_SUCCESS, or an EFI error status.
  *----------------------------------------------------------------------------*/
-EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
-                          int (*callback)(size_t), VOID **Buffer,
-                          UINTN *BufSize)
+static EFI_STATUS http_file_load_work(EFI_HANDLE Volume, const char *filepath,
+                               int (*callback)(size_t), VOID **Buffer,
+                               UINTN *BufSize, int depth)
 {
    EFI_STATUS Status;
    char *hostname = NULL;
-   CHAR16 *Url = NULL;
+   CHAR16 *ucs2Url = NULL;
    unsigned try;
+
+   if (depth > MAX_REDIRECTS) {
+      Log(LOG_ERR, "Maximum HTTP redirect depth exceeded at %s", filepath);
+      Status = EFI_HTTP_ERROR;
+      goto out;
+   }
 
    Status = get_url_hostname(filepath, &hostname);
    if (EFI_ERROR(Status)) {
       /*
        * Don't log in this case.  It is normal when firmware_file_* is looping
-       * though methods and tries http_file_load on a non-URL.
+       * through methods and tries http_file_load on a non-URL.
        */
       goto out;
    }
@@ -953,14 +927,15 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
         !plain_http_allowed(Volume))) {
       /*
        * Don't log in this case.  It is normal when firmware_file_* is looping
-       * though methods and tries http_file_load on a machine where HTTP is not
-       * available in firmware or the httpCriteria setting doesn't allow it.
+       * through methods and tries http_file_load on a machine where either
+       * firmware does not support HTTP at all or firmware supports only HTTPS
+       * but the URL specifies plain HTTP.
        */
       Status = EFI_UNSUPPORTED;
       goto out;
    }
 
-   ascii_to_ucs2(filepath, &Url);
+   ascii_to_ucs2(filepath, &ucs2Url);
    efi_set_watchdog_timer(WATCHDOG_DISABLE);
 
    for (try = 0; try <= MAX_RETRIES; try++) {
@@ -968,7 +943,8 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
       if (EFI_ERROR(Status)) {
          break;
       }
-      Status = http_file_load_try(Url, hostname, callback, Buffer, BufSize);
+      Status = http_file_load_try(Volume, filepath, ucs2Url, hostname, callback,
+                                  Buffer, BufSize, depth);
       if (EFI_ERROR(Status) && Status != EFI_HTTP_ERROR) {
          /*
           * The HTTP 1.1 connection may need to be reopened.  The UEFI spec
@@ -1004,9 +980,38 @@ EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
 
  out:
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
-   sys_free(Url);
-   sys_free(hostname);
+   free(ucs2Url);
+   free(hostname);
    return Status;
+}
+
+/*-- http_file_load ------------------------------------------------------------
+ *
+ *      Load a file into memory or get its length, using HTTP.
+ *
+ * Parameters
+ *      IN     Volume:    handle to the "volume" from which to load the file.
+ *      IN     filepath:  the ASCII absolute path of the file to retrieve;
+ *                        must be in URL format.
+ *      IN     callback:  routine to be called periodically while the file
+ *                        is being loaded.
+ *      IN/OUT Buffer:    buffer where the file is loaded:
+ *                           if Buffer=NULL, just get the file's length;
+ *                           else if *Buffer=NULL, allocate a buffer;
+ *                           else use the given *Buffer (size in *BufSize).
+ *      IN/OUT BufSize:   length of Buffer, size of file:
+ *                           if Buffer=NULL, OUT only;
+ *                           else if *Buffer=NULL, OUT only;
+ *                           else IN/OUT.
+ *
+ * Results
+ *      EFI_SUCCESS, or an EFI error status.
+ *----------------------------------------------------------------------------*/
+EFI_STATUS http_file_load(EFI_HANDLE Volume, const char *filepath,
+                          int (*callback)(size_t), VOID **Buffer,
+                          UINTN *BufSize)
+{
+   return http_file_load_work(Volume, filepath, callback, Buffer, BufSize, 0);
 }
 
 /*-- http_file_get_size --------------------------------------------------------
@@ -1099,6 +1104,6 @@ http_efi_load_file(UNUSED_PARAM(EFI_LOAD_FILE_PROTOCOL *This),
    Status = http_file_load(Volume, filepath, NULL,
                            Buffer == NULL ? NULL : &Buffer, BufSize);
 
-   sys_free(FilePath);
+   free(FilePath);
    return Status;
 }

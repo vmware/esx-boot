@@ -1,6 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2008-2013,2016,2018-2019,2021,2023 VMware, Inc.
-# All rights reserved.
+# Copyright (c) 2008-2023 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -34,6 +34,7 @@ SRC         := \
                smbios.c      \
                sort.c        \
                string.c      \
+               uri.c         \
                video.c       \
                volume.c      \
 

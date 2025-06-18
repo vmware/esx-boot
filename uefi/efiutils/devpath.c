@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2016,2019-2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -143,7 +144,7 @@ static EFI_STATUS devpath_append(const EFI_DEVICE_PATH *Multi,
    devpath_size(Multi, &s1, &instances);
    devpath_instance_size(Single, &s2);
 
-   Path = sys_malloc(s1 + instances * s2);
+   Path = malloc(s1 + instances * s2);
    if (Path == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -196,7 +197,7 @@ static EFI_STATUS make_file_devpath(const CHAR16 *PathName,
 
    Size = sizeof (FilePath->Header) + UCS2SIZE(PathName);
 
-   FilePath = sys_malloc(Size + sizeof (EFI_DEVICE_PATH));
+   FilePath = malloc(Size + sizeof (EFI_DEVICE_PATH));
    if (FilePath == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -251,7 +252,7 @@ EFI_STATUS file_devpath(EFI_HANDLE Device, const CHAR16 *FileName,
    }
 
    Status = devpath_append(DevPath, FilePath, FileDevPath);
-   sys_free(FilePath);
+   free(FilePath);
 
    return Status;
 }
@@ -399,7 +400,7 @@ EFI_STATUS devpath_duplicate(const EFI_DEVICE_PATH *DevPath,
 
    devpath_size(DevPath, &size, NULL);
 
-   Path = sys_malloc(size);
+   Path = malloc(size);
    if (Path == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -469,7 +470,7 @@ char *devpath_text(const EFI_DEVICE_PATH *DevPath,
       uint8_t *p = (uint8_t *)DevPath;
 
       devpath_size(DevPath, &size, NULL);
-      s = sys_malloc(2 * size + 1);
+      s = malloc(2 * size + 1);
 
       for (i = 0; i < size; i++) {
          snprintf(&s[2 * i], 3, "%02x", p[i]);

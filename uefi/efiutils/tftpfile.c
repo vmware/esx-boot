@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2013-2015,2021-2022 VMware, Inc. All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -35,7 +36,7 @@
  * "The pad option can be used to cause subsequent fields to align on word
  * boundaries.  The code for the pad option is 0, and its length is 1 octet."
  */
-#define OPT_PAD 0
+#define OPT4_PAD 0
 
 /*
  * Option 255: End Option
@@ -44,7 +45,15 @@
  * Subsequent octets should be filled with pad options.  The code for the end
  * option is 255, and its length is 1 octet."
  */
-#define OPT_END 255
+#define OPT4_END 255
+
+/*
+ * Option 67: boot-file
+ *
+ * "This string is the path for the boot file. It MUST comply with STD 66
+ *  [RFC3986]. The string is not NUL-terminated."
+ */
+#define OPT4_BOOTFILE_PATH 67
 
 /* Option 54: Server Identifier
  *
@@ -52,7 +61,7 @@
  * destination address for any DHCP messages unicast to the DHCP
  * server. ... The identifier is the IP address of the selected server."
  */
-#define OPT_SERVER_IDENTIFIER 54
+#define OPT4_SERVER_IDENTIFIER 54
 
 /*
  * Standard DHCPv6 options
@@ -61,13 +70,19 @@
  *   This string is the URL for the boot file. It MUST comply with STD 66
  *   [RFC3986]. The string is not NUL-terminated.
  */
-#define OPT_BOOTFILE_URL 59
+#define OPT6_BOOTFILE_URL 59
 
 /*
  * RFC3986 specifies that URLs should not be longer than 255 characters.
  * Let's tolerate more, in case a DHCP server chose to ignore that.
  */
 #define URL_SIZE_MAX 1024
+
+/*
+ * Maximum supported boot file length that can be specified with option
+ * 67 is 255 characters as per PXE standards and 1 byte for NUL.
+ */
+#define BOOTFILE_SIZE_MAX 256
 
 /*
  * TFTP block size to request (RFC 2348).  The server can always choose to use
@@ -136,7 +151,7 @@ static const char *get_ipv6_boot_url(const EFI_PXE_BASE_CODE_PACKET *Packet,
    uint16_t optCode, optLen;
 
    p = (uint8_t *)Packet->Dhcpv6.DhcpOptions;
-   optEnd = p + sizeof (Packet->Dhcpv6.DhcpOptions);
+   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
 
    while (p < optEnd) {
       optCode = ntohs(*(uint16_t *)p);
@@ -148,8 +163,8 @@ static const char *get_ipv6_boot_url(const EFI_PXE_BASE_CODE_PACKET *Packet,
       // Protect from bogus/malicious length in DHCP option packets
       optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
 
-      if (optCode == OPT_BOOTFILE_URL) {
-         // Per RFC3986, option string is not NULL-terminated.
+      if (optCode == OPT6_BOOTFILE_URL) {
+         // Per RFC3986, option string is not NUL-terminated.
          optLen = MIN(optLen, URL_SIZE_MAX - 1);
          memcpy(urlBuf, p, optLen);
          urlBuf[optLen] = '\0';
@@ -239,6 +254,56 @@ static EFI_STATUS get_pxe_base_code_packet(EFI_PXE_BASE_CODE *Pxe,
    return EFI_SUCCESS;
 }
 
+/*-- get_ipv4_boot_file -------------------------------------------------------
+ *
+ *      Retrieve the IPv4 boot file from a PXE option 67. PXE BC packet is
+ *      parsed to retrive the boot file path.
+ *
+ * Parameters
+ *      IN Packet:    pointer to a PXE BC packet
+ *      OUT bootfile: Full path for boot file configured using option 67.
+ *
+ * Results
+ *      Valid bootfile on success else NULL.
+ *----------------------------------------------------------------------------*/
+static const char *get_ipv4_boot_file(const EFI_PXE_BASE_CODE_PACKET *Packet,
+                                      char bootFile[BOOTFILE_SIZE_MAX])
+{
+   const uint8_t *p;
+   const uint8_t *optEnd;
+   uint8_t optCode, optLen;
+
+   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
+   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
+
+   while (p < optEnd) {
+      optCode = *p++;
+
+      if (optCode == OPT4_PAD) {
+         continue;
+      }
+      if (optCode == OPT4_END) {
+         break;
+      }
+
+      optLen = *p++;
+
+      // Protect from bogus/malicious length in DHCP option packets
+      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
+      if (optCode == OPT4_BOOTFILE_PATH) {
+         // Per RFC3986, option string is not NUL-terminated.
+         optLen = MIN(optLen, BOOTFILE_SIZE_MAX - 1);
+         memcpy(bootFile, p, optLen);
+         bootFile[optLen] = '\0';
+         return bootFile;
+      }
+
+      p += optLen;
+   }
+
+   return NULL;
+}
+
 /*-- get_ipv4_dhcp_ip ----------------------------------------------------------
  *
  *      Retrieve the IPv4 DHCP server IP from the cached options in
@@ -259,15 +324,15 @@ static EFI_STATUS get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
    uint8_t optCode, optLen;
 
    p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
-   optEnd = p + sizeof (Packet->Dhcpv4.DhcpOptions);
+   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
 
    while (p < optEnd) {
       optCode = *p++;
 
-      if (optCode == OPT_PAD) {
+      if (optCode == OPT4_PAD) {
          continue;
       }
-      if (optCode == OPT_END) {
+      if (optCode == OPT4_END) {
          break;
       }
 
@@ -276,7 +341,7 @@ static EFI_STATUS get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
       // Protect from bogus/malicious length in DHCP option packets
       optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
 
-      if (optCode == OPT_SERVER_IDENTIFIER &&
+      if (optCode == OPT4_SERVER_IDENTIFIER &&
           optLen == sizeof(ServerIp->v4)) {
 
          memcpy(ServerIp, p, optLen);
@@ -448,7 +513,17 @@ EFI_STATUS get_pxe_boot_file(EFI_PXE_BASE_CODE *Pxe, CHAR16 **BootFile)
       *BootFile = NULL;
       return ascii_to_ucs2(ip, BootFile);
    } else {
+      char file[BOOTFILE_SIZE_MAX];
       *BootFile = NULL;
+
+      /*
+       * Boot file can be passed by DHCP option 67 for ipv4 cases which takes
+       * precedence over boot file in DHCP header.
+       */
+      if (get_ipv4_boot_file(Packet, file) != NULL) {
+         return ascii_to_ucs2(file, BootFile);
+      }
+
       return ascii_to_ucs2(((char *)Packet->Dhcpv4.BootpBootFile), BootFile);
    }
 }
@@ -552,7 +627,7 @@ EFI_STATUS tftp_file_load(EFI_HANDLE Volume, const char *filepath,
       return Status;
    }
 
-   Data = sys_malloc(Size);
+   Data = malloc(Size);
    if (Data == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -567,7 +642,7 @@ EFI_STATUS tftp_file_load(EFI_HANDLE Volume, const char *filepath,
   efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
 
    if (EFI_ERROR(Status)) {
-      sys_free(Data);
+      free(Data);
       return Status;
    }
 
@@ -578,7 +653,7 @@ EFI_STATUS tftp_file_load(EFI_HANDLE Volume, const char *filepath,
    if (callback != NULL) {
       error = callback((size_t)Size64);
       if (error != 0) {
-         sys_free(Data);
+         free(Data);
          return error_generic_to_efi(error);
       }
    }

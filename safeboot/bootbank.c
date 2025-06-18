@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2018-2019,2022 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -97,7 +98,7 @@ static void bank_dump(const bootbank_t *bank)
        bank->updated, bank->quickboot,
        (uuid != NULL) ? uuid : "(Failed to get UUID)");
 
-   sys_free(uuid);
+   free(uuid);
 }
 
 /*-- bank_scan -----------------------------------------------------------------
@@ -386,6 +387,6 @@ void bank_clean(void)
    int i;
 
    for (i = 0; i < BOOTBANKS_NR; i++) {
-      sys_free(banks[i].build);
+      free(banks[i].build);
    }
 }

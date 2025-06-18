@@ -1,5 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2008-2016,2022 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -13,7 +14,6 @@ include env/common.mk
 MAKEFLAGS  += -I ../env
 
 SHAREDLIBS := bootlib       \
-              libbp         \
               libc          \
               libfat        \
               libcrc        \

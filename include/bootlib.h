@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2016,2018-2021,2023 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -14,6 +15,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 #include <fb.h>
 #include <syslog.h>
@@ -24,6 +26,7 @@
 #include <cpu.h>
 #include <sm_bios.h>
 #include <acpi.h>
+#include <uri.h>
 
 #define ceil(x,y)                (((x) + (y) - 1) / (y))
 #define MILLISECS_IN_ONE_SEC     1000
@@ -216,7 +219,6 @@ EXTERN void log_unsubscribe(log_callback_t callback);
 EXTERN char *log_buffer_info(uint32_t *bufferSize);
 EXTERN int log_init(bool verbose);
 EXTERN int syslog_get_message_level(const char *msg, int *level);
-EXTERN void syslogbuf_expand_enable(void);
 EXTERN void syslogbuf_expand_disable(uint32_t expand_size);
 EXTERN void log_data(int level, uint8_t *data, size_t length);
 
@@ -308,10 +310,23 @@ EXTERN int smbios_get_struct(smbios_entry ptr, smbios_entry end,
                              uint8_t type, smbios_entry *entry);
 EXTERN char *smbios_get_string(smbios_entry ptr, smbios_entry end,
                                unsigned index);
+EXTERN int smbios_get_firmware_info(const char **bios_ver,
+                                    const char **bios_date);
+EXTERN int smbios_get_system_info(const char **manufacturer,
+                                  const char **product_name,
+                                  const char **version,
+                                  const char **serial_number,
+                                  const uint8_t *system_uuid[16],
+                                  const char **sku,
+                                  const char **family);
 EXTERN int smbios_get_platform_info(const char **manufacturer,
                                     const char **product,
                                     const char **bios_ver,
                                     const char **bios_date);
+EXTERN int smbios_get_version(int *major,
+                              int *minor,
+                              int *docrev);
+EXTERN int smbios_get_oem_strings(oem_strings_t *oem_strings);
 
 /*-- is_valid_firmware_table ---------------------------------------------------
  *
@@ -340,6 +355,16 @@ static INLINE bool is_valid_firmware_table(void *base, size_t size)
 
    return !(checksum > 0);
 }
+
+ /*
+ * uri.c
+ */
+
+EXTERN int query_string_add_parameters(
+   const size_t length,
+   const key_value_t* parameters);
+EXTERN int query_string_get(const char** query_string);
+EXTERN void query_string_cleanup(void);
 
 /*
  * error.c

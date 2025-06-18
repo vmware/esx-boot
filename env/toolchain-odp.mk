@@ -1,5 +1,6 @@
 #*******************************************************************************
-# Copyright (c) 2008-2012,2015,2017-2020 VMware, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Broadcom. All Rights Reserved.
+# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
 
@@ -17,14 +18,6 @@ TCROOT          := /build/toolchain/lin32
 
 HOST_CC         := gcc
 HOST_CFLAGS     := 
-#
-# Known to work with libbfd 2.17.50. libbfd
-# used should be aware of all architecture types
-# used in build.
-#
-HOST_LIBBFDINC  := /usr/include
-HOST_LIBBFD     := -lbfd
-HOST_LIBERTY    := -liberty
 HOST_LIBCRYPTO  := -lcrypto
 
 #=============================================================

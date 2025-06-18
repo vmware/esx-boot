@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008-2011,2021 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -132,13 +133,13 @@ EFI_STATUS gop_set_video_mode(unsigned int width, unsigned int height,
          if (mode->HorizontalResolution == width &&
              mode->VerticalResolution == height &&
              (unsigned int)VBE_BPP(&pxl) == depth) {
-            sys_free(mode);
+            free(mode);
 
             return gop->SetMode(gop, i);
          }
       }
 
-      sys_free(mode);
+      free(mode);
    }
 
    return EFI_UNSUPPORTED;
@@ -165,7 +166,7 @@ static EFI_STATUS gop_list_resolutions(resolution_t **resolutions,
    pixel32_t pxl;
    EFI_STATUS Status;
 
-   res = sys_malloc(gop->Mode->MaxMode * sizeof (resolution_t));
+   res = malloc(gop->Mode->MaxMode * sizeof (resolution_t));
    if (res == NULL) {
       return EFI_OUT_OF_RESOURCES;
    }
@@ -188,7 +189,7 @@ static EFI_STATUS gop_list_resolutions(resolution_t **resolutions,
          n++;
       }
 
-      sys_free(mode);
+      free(mode);
    }
 
    *count = n;
@@ -247,7 +248,7 @@ EFI_STATUS gop_get_fb_info(resolution_t *res, framebuffer_t *fb)
          pixelsPerScanLine = gop_mode->PixelsPerScanLine;
 
          if (i != gop->Mode->Mode) {
-            sys_free(gop_mode);
+            free(gop_mode);
          }
 
          Status = gop_get_pixel_layout(&fb->pxl, pixelFormat,

@@ -1,5 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2015-2018,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2015-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -245,7 +246,7 @@ int relocate_runtime_services(efi_info_t *efi_info, bool no_rts, bool no_quirks)
    }
 
    /*
-    * At this point efi_malloc is no longer usable because boot
+    * At this point malloc is no longer usable because boot
     * services have been shut down.  But mboot's alloc is usable
     * because blacklist_bootloader_mem has been run; see alloc.c.
     */

@@ -1,5 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2008-2017,2020 VMware, Inc.  All rights reserved.
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term "Broadcom" refers to Broadcom Inc.
+ * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
@@ -54,7 +56,7 @@ int dump_firmware_info(void)
          Log(LOG_WARNING, "Unknown firmware\n");
    }
 
-   sys_free(firmware.vendor);
+   free(firmware.vendor);
 
    if (smbios_get_platform_info(&manufacturer, &product, &bios_ver,
                                 &bios_date) == ERR_SUCCESS) {
@@ -170,7 +172,8 @@ static int scan_smbios_memory(void)
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-static int system_blacklist_memory(e820_range_t *mmap, size_t count)
+static int system_blacklist_memory(e820_range_t *mmap, size_t count,
+                                   efi_info_t *efi_info)
 {
    int status;
 
@@ -183,6 +186,17 @@ static int system_blacklist_memory(e820_range_t *mmap, size_t count)
    if (status != ERR_SUCCESS) {
       return status;
    }
+
+   status = blacklist_specific_purpose_memory(efi_info);
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
+   status = blacklist_cxl_memory();
+   if (status != ERR_SUCCESS) {
+      return status;
+   }
+
    status = e820_to_blacklist(mmap, count);
    if (status != ERR_SUCCESS) {
       return status;
@@ -240,7 +254,7 @@ int firmware_shutdown(e820_range_t **mmap, size_t *count, efi_info_t *efi_info)
 
    e820_mmap_merge(*mmap, count);
 
-   status = system_blacklist_memory(*mmap, *count);
+   status = system_blacklist_memory(*mmap, *count, efi_info);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Error scanning system memory.\n");
       return status;
