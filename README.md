@@ -63,15 +63,15 @@ esx-boot consists of several modules.
 
 The main bootloader module is called mboot. The mboot module is responsible for:
 
-    1. Reading ESXi's boot configuration file (boot.cfg), and retrieving information about:
-    - location of the kernel and boot modules
-    - kernel boot options
-    2. Loading the kernel and other modules from the boot media into main memory
-    3. Verifying the cryptographic signatures on the early modules for Secure Boot purposes.
-    4. Setting up system information (Multiboot or ESXBootInfo) structures and passing them to the kernel
-    5. Preparing the firmware for kernel hand-off.
-    6. Exiting from firmware (on UEFI, ExitBootServices).
-    7. Jumping to the kernel. 
+1. Reading ESXi's boot configuration file (boot.cfg), and retrieving information about:
+   * location of the kernel and boot modules
+   * kernel boot options
+2. Loading the kernel and other modules from the boot media into main memory
+3. Verifying the cryptographic signatures on the early modules for Secure Boot purposes.
+4. Setting up system information (Multiboot or ESXBootInfo) structures and passing them to the kernel
+5. Preparing the firmware for kernel hand-off.
+6. Exiting from firmware (on UEFI, ExitBootServices).
+7. Jumping to the kernel. 
 
 Depending on how you boot ESXi, one or more other esx-boot modules may run prior to mboot.
 
@@ -132,19 +132,15 @@ binaries you create with your own certificate(s).
 ## Releases & Major Branches
 
 We started esx-boot's github repository with the ESXi 6.7u1 version of
-esx-boot as the root of the main (master) branch.  We'll push updates
-for each released version of the bootloader, but we usually won't
-push work-in-progress updates.
+esx-boot as the root of the main (master) branch.  We push updates
+for each released version of the bootloader, but we don't generally
+push work-in-progress updates. We sometimes push small updates to fix compile issues discovered in the github release.
 
 Newer esx-boot versions are always kept compatible with older versions
-of the ESXi vmkernel (though not vice versa!), so we usually do not
-branch esx-boot even when an older ESXi release needs a bugfix; we
-simply pull in the newest stable version from the main branch.  The
-one exception since we created this github repository is 6.7p01 on the
-vsphere67 branch, which cherry-picked a couple of small fixes from
-main.  Another oddity is that 7.0.1a is an *older* version that 7.0.1;
-the 7.0.1a patch release of ESXi temporarily moved back to an older
-bootloader to work around an installer issue.
+of the ESXi vmkernel (though not vice versa!), so we won't necessarily
+branch esx-boot even when an older ESXi release needs a bugfix; we may
+simply pull in the newest stable version from the main branch. There
+are a few exceptions where we created branches and made point fixes for ESXi patch releases.
 
 If you are interested in versions of esx-boot that have been used in
 ESXi releases prior to the start of this repository, they are
