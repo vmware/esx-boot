@@ -17,7 +17,11 @@ TCROOT          := /build/toolchain/lin32
 #=============================================================
 
 HOST_CC         := gcc
-HOST_CFLAGS     := 
+ifeq ($(BUILDENV),uefi32)
+HOST_CFLAGS     := -m32 -DEFI_TARGET32
+else
+HOST_CFLAGS     := -m64 -DEFI_TARGET64
+endif
 HOST_LIBCRYPTO  := -lcrypto
 
 #=============================================================

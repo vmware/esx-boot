@@ -316,7 +316,7 @@ EXTERN int smbios_get_system_info(const char **manufacturer,
                                   const char **product_name,
                                   const char **version,
                                   const char **serial_number,
-                                  const uint8_t *system_uuid[16],
+                                  const uint8_t **system_uuid,
                                   const char **sku,
                                   const char **family);
 EXTERN int smbios_get_platform_info(const char **manufacturer,

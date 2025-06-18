@@ -1746,7 +1746,7 @@ int main(int argc, char **argv)
     */
    snprintf(welcome, sizeof(welcome), "vSphere Boot Manager %08x, MAC %s",
             *(uint32_t *)_expected_hash, mac_str);
-   Log(LOG_DEBUG, welcome);
+   Log(LOG_DEBUG, "%s", welcome);
 
    if ((status = process_query_string()) != ERR_SUCCESS) {
       goto out;

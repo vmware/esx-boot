@@ -1,4 +1,3 @@
-
 #*******************************************************************************
 # Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
@@ -16,10 +15,10 @@ HOST_CFLAGS += -Wno-stringop-truncation
 
 all: $(BUILD_DIR) $(ELF2EFI)
 
-$(ELF2EFI): elf2efi.c $(HOST_LIBCRYPTO)
+$(ELF2EFI): elf2efi.c
 	$(call print,CC,$@)
 	$(HOST_CC) $(HOST_CFLAGS) -O2 $(patsubst %,-I%,$(INC)) -o $@ $^ \
-		-lpthread -ldl
+		$(HOST_LIBCRYPTO) -lpthread -ldl
 
 $(BUILD_DIR):
 	$(call MKDIR,$@)
