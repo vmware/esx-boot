@@ -53,10 +53,10 @@ static struct quirk {
  * ---------------------------------------------------------------------------*/
 void check_efi_quirks(efi_info_t *efi_info)
 {
-   const char *manufacturer;
-   const char *product;
-   const char *bios_ver;
-   const char *bios_date;
+   const char *manufacturer = NULL;
+   const char *product = NULL;
+   const char *bios_ver = NULL;
+   const char *bios_date = NULL;
    struct quirk *q = quirks;
 
    if (st->FirmwareVendor != NULL &&

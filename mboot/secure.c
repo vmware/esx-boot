@@ -31,7 +31,6 @@
  *      little-endian order.
  *
  *         module data (covered by signature)
- *         [optional schema version dependent data] (covered by signature)
  *         4-byte schema version number (covered by signature)
  *         signature
  *         4-byte signature length
@@ -69,7 +68,7 @@
 #define SCHEMA_MAGIC 0x1abe11ed
 
 /*
- * In schema versions 1-4 the first 16 bytes of a signature are an ASCII
+ * In schema versions 1-5 the first 16 bytes of a signature are an ASCII
  * key id.  This is compared with the expected key id and used to generate
  * nicer error messages on failure.
  */
@@ -121,6 +120,17 @@ NamedModule v4Named[] = {
    {"sb", 0},
    {"esxcore", 0}, // present only in esxcore builds
    {"esxupdt", 0}, // esximage library
+   {NULL, 0}
+};
+
+NamedModule v5Named[] = {
+   {"s",  0},
+   {"sb", 0},
+   {"esxcore", 0},  // present only in esxcore builds
+   {"esxupdt", 0},  // esximage library
+   {"uc_amd", 0},   // microcode modules...
+   {"uc_hygon", 0},
+   {"uc_intel", 0},
    {NULL, 0}
 };
 
@@ -447,14 +457,18 @@ int secure_boot_check(bool crypto_module)
    case 4:
       named = v4Named;
       break;
+   case 5:
+      named = v5Named;
+      break;
    default:
       Log(LOG_CRIT, "Unknown schema version %u on module 0 (%s)",
           schema0, boot.modules[0].filename);
       return ERR_SECURITY_VIOLATION;
    }
+   Log(LOG_INFO, "Secure boot schema version is %u", schema0);
 
    /*
-    * In schema versions 1-4:
+    * In all schema versions so far:
     * - All ELF modules must be signed.
     * - The modules listed by name for the schema must be signed and
     *   their names must not be duplicated.

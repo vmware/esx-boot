@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
@@ -198,12 +198,15 @@ int main(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       return status;
    }
+   if (safeboot.serial) {
+      serial_log_init(safeboot.serial_com, safeboot.serial_speed);
+   }
+
+   for (int i = 0; i < argc; i++) {
+      Log(LOG_DEBUG, "argv[%d] = '%s'", i, argv[i]);
+   }
 
    do {
-      if (safeboot.serial) {
-         serial_log_init(safeboot.serial_com, safeboot.serial_speed);
-      }
-
       /*
        * (Re-)initialize the video display if any. gui_init() return value is
        * ignored, letting headless platforms (with no video adpater) continue
@@ -235,6 +238,9 @@ int main(int argc, char **argv)
          shift_r = true;
 
          retval = log_init(safeboot.verbose);
+         if (safeboot.serial) {
+            serial_log_init(safeboot.serial_com, safeboot.serial_speed);
+         }
       }
    } while (retval == ERR_SUCCESS);
 

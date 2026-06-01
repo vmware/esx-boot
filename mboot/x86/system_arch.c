@@ -14,7 +14,7 @@
 
 #include "mboot.h"
 
-static bool is_intel_skylake;
+static bool needs_hle_blacklist;
 CPUIDRegs cpuid0;
 CPUIDRegs cpuid1;
 
@@ -23,8 +23,8 @@ check_cpu_quirks(void)
 {
    __GET_CPUID(0, &cpuid0);
    __GET_CPUID(1, &cpuid1);
-   is_intel_skylake = (CPUID_IsVendorIntel(&cpuid0) &&
-                       CPUID_UARCH_IS_SKYLAKE(cpuid1.eax));
+   needs_hle_blacklist = (CPUID_IsVendorIntel(&cpuid0) &&
+                          CPUID_IntelNeedsHLEBlacklist(cpuid1.eax));
 }
 
 /*-- system_arch_blacklist_memory ----------------------------------------------
@@ -47,7 +47,7 @@ int system_arch_blacklist_memory(void)
       return status;
    }
 
-   if (is_intel_skylake)  {
+   if (needs_hle_blacklist)  {
       Log(LOG_DEBUG, "Intel Skylake Arch detected, applying HLE workaround.\n");
 
       status = blacklist_runtime_mem(SKYLAKE_HLE_BLACKLIST_MA_LOW,

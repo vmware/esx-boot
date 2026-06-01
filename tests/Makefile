@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2015-2022 Broadcom. All Rights Reserved.
+# Copyright (c) 2015-2025 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
@@ -14,10 +14,6 @@ SUBDIRS := test_acpi test_libuart test_gui test_smbios test_libc \
 
 ifneq ($(BUILDENV),com32)
 SUBDIRS += test_rts
-endif
-
-ifneq ($(IARCH),x86)
-SUBDIRS += test_fdt
 endif
 
 # Building rules

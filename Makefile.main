@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+# Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
@@ -20,14 +20,17 @@ SHAREDLIBS := bootlib       \
               libmd5        \
               libuart       \
               mbedtls       \
-              zlib          \
-              libfdt
+              zlib
 
 SUBDIRS    := $(SHAREDLIBS) \
               $(FIRMWARE)   \
-              tests         \
               mboot         \
               safeboot
+
+## Build the test programs only in obj (developer) builds
+ifeq ($(OBJDIR),obj)
+   SUBDIRS += tests
+endif
 
 # Building rules
 .PHONY: all clean $(SUBDIRS)

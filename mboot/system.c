@@ -16,10 +16,10 @@
 
 int dump_firmware_info(void)
 {
-   const char *manufacturer;
-   const char *product;
-   const char *bios_ver;
-   const char *bios_date;
+   const char *manufacturer = NULL;
+   const char *product = NULL;
+   const char *bios_ver = NULL;
+   const char *bios_date = NULL;
 
    firmware_t firmware;
    int status;
@@ -131,10 +131,10 @@ static int reserve_smbios_ranges(void *eps_start, size_t eps_length,
  *----------------------------------------------------------------------------*/
 static int scan_smbios_memory(void)
 {
-   void *eps_start;
-   size_t eps_length;
-   void *table_start;
-   size_t table_length;
+   void *eps_start = NULL;
+   size_t eps_length = 0;
+   void *table_start = NULL;
+   size_t table_length = 0;
    int status;
 
    status = smbios_get_info(&eps_start, &eps_length, &table_start, &table_length);

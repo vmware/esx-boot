@@ -24,4 +24,8 @@ TARGETTYPE  := lib
 CDEF        =  NO_GZCOMPRESS NO_STRERROR
 CFLAGS      += -Wno-strict-prototypes
 
+ifeq ($(ARCH),arm64)
+CFLAGS      += -march=armv8-a+crc
+endif
+
 include rules.mk

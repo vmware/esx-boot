@@ -173,4 +173,9 @@ uint64_t get_l1e_flags(uint64_t *l4pt, uint64_t lpn);
  */
 char *url_resolve_relative(const char *rel_url, const char *base_url);
 
+/*
+ * pxeboot.c
+ */
+EFI_STATUS get_pxe_info(EFI_PXE_BASE_CODE **Pxe, EFI_IP_ADDRESS *ServerIp);
+
 #endif /* !EFI_PRIVATE_H_ */

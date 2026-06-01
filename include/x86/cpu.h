@@ -159,8 +159,21 @@ static INLINE unsigned int CPUID_EFFECTIVE_MODEL(unsigned int v)
    return m + (em << 4);
 }
 
-/* IN: %eax from CPUID with %eax=1. */
-static INLINE bool CPUID_UARCH_IS_SKYLAKE(unsigned int v)
+/*-- CPUID_IntelNeedsHLEBlacklist ----------------------------------------------
+ *
+ *      Check whether the CPU needs certain memory blacklisted to work around
+ *      an Intel erratum.  See comments below for the errata numbers.
+ *
+ *      The list of models checked for in vmkBoot must match the list in mboot
+ *      to prevent spurious ASSERT failures.  See bug 3609145.
+ *
+ * Parameters:
+ *      IN: %eax from CPUID with %eax=1.
+ *
+ * Results:
+ *      true if erratum is present
+ *----------------------------------------------------------------------------*/
+static INLINE bool CPUID_IntelNeedsHLEBlacklist(unsigned int v)
 {
    unsigned int model = 0;
 
@@ -170,12 +183,12 @@ static INLINE bool CPUID_UARCH_IS_SKYLAKE(unsigned int v)
 
    model = CPUID_EFFECTIVE_MODEL(v);
 
-   return (model == CPUID_MODEL_SKYLAKE_4E    ||
-           model == CPUID_MODEL_SKYLAKE_55    ||
-           model == CPUID_MODEL_SKYLAKE_5E    ||
-           model == CPUID_MODEL_CANNONLAKE_66 ||
-           model == CPUID_MODEL_KABYLAKE_8E   ||
-           model == CPUID_MODEL_KABYLAKE_9E);
+   return (model == CPUID_MODEL_SKYLAKE_4E    || // Skylake U/Y
+           model == CPUID_MODEL_SKYLAKE_55    || // SKX72, SKZ63, SKXD78
+           model == CPUID_MODEL_SKYLAKE_5E    || // SKW159, SKL170
+           model == CPUID_MODEL_CANNONLAKE_66 || // Cannon Lake
+           model == CPUID_MODEL_KABYLAKE_8E   || // KBL121
+           model == CPUID_MODEL_KABYLAKE_9E);    // KBW113, CFL106, CFW103
 }
 
 static INLINE bool CPUID_IsRawVendor(CPUIDRegs *id0, const char* vendor)

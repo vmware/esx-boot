@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2021 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -148,31 +148,6 @@ int get_smbios_v3_eps(void **eps_start)
    }
 
    *eps_start = eps;
-   return ERR_SUCCESS;
-}
-
-/*-- get_fdt ---------------------------------------------------------
- *
- *      Get the Flattened Device Tree blob.
- *
- * Parameters
- *      OUT fdt_start: pointer to starting address of the FDT.
- *
- * Results
- *      ERR_SUCCESS, or a generic error status.
- *----------------------------------------------------------------------------*/
-int get_fdt(void **fdt_start)
-{
-   void *fdt;
-   EFI_STATUS Status;
-   EFI_GUID guid = FDT_TABLE_GUID;
-
-   Status = efi_get_system_config_table(&guid, &fdt);
-   if (Status != EFI_SUCCESS) {
-      return error_efi_to_generic(Status);
-   }
-
-   *fdt_start = fdt;
    return ERR_SUCCESS;
 }
 

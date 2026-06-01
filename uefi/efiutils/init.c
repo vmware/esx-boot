@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -156,7 +156,7 @@ char *urldecode(const char *string)
    char *result, *q;
    char tmp[3];
 
-   result = malloc(strlen(string)); // at least long enough
+   result = malloc(strlen(string) + 1); // at least long enough
    p = string;
    q = result;
    while (*p != '\0') {

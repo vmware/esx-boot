@@ -486,3 +486,457 @@ char *devpath_text(const EFI_DEVICE_PATH *DevPath,
    ucs2_to_ascii(ws, (char **)&ws, false);
    return (char *)ws;
 }
+
+/*-- asprintf_address_v4 -------------------------------------------------------
+ *
+ *      Wrapper around asprintf designed for ipv4.
+ *
+ * Parameters
+ *      IN / OUT s: The first parameter to asprintf.
+ *      IN addr_ptr: A pointer to the fixed length array where the ipv4 value
+ *         is kept.
+ *
+ * Results
+ *      -1 if addr_ptr is NULL, the return value of asprintf otherwise.
+ *----------------------------------------------------------------------------*/
+static int asprintf_address_v4(char** s, uint8_t (*addr_ptr)[4])
+{
+   const uint8_t* addr = NULL;
+
+   if (addr_ptr == NULL) {
+      return -1;
+   }
+
+   addr = &((*addr_ptr)[0]);
+
+   return asprintf(
+      s,
+      "%d.%d.%d.%d",
+      addr[0], addr[1], addr[2], addr[3]
+   );
+}
+
+/*-- asprintf_address_v6 -------------------------------------------------------
+ *
+ *      Wrapper around asprintf designed for ipv6.
+ *
+ * Parameters
+ *      IN / OUT s: The first parameter to asprintf.
+ *      IN addr_ptr: A pointer to the fixed length array where the ipv6 value
+ *         is kept.
+ *
+ * Results
+ *      -1 if addr_ptr is NULL, the return value of asprintf otherwise.
+ *----------------------------------------------------------------------------*/
+static int asprintf_address_v6(char** s, uint8_t (*addr_ptr)[16])
+{
+   const uint8_t* addr = NULL;
+
+   if (addr_ptr == NULL) {
+      return -1;
+   }
+
+   addr = &((*addr_ptr)[0]);
+
+   return asprintf(
+      s,
+      "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
+      "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+      addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6],
+      addr[7], addr[8], addr[9], addr[10], addr[11], addr[12], addr[13],
+      addr[14], addr[15]
+   );
+}
+
+/*-- get_hash_id ---------------------------------------------------------------
+ *
+ *      Retrieves the first 4 bytes of the given hash string in native
+ *         endianness.
+ *
+ * Parameters
+ *      IN hash: A char array that is usable for a runtime integrity check and
+ *         remains unchanged after the current binary is cryptographically
+ *         signed.
+ *
+ * Results
+ *      The first 4 bytes as a uint32_t value. If hash is NULL the return value
+ *         is 0.
+ *----------------------------------------------------------------------------*/
+uint32_t get_hash_id(const uint8_t* hash)
+{
+   return hash ? *((const uint32_t *)hash) : 0;
+}
+
+/*-- extract_efiboot_version ---------------------------------------------------
+ *
+ *      Retrieves a string variable used for versioning.
+ *
+ *      This function requires for asprintf to leave the out parameter
+ *      unchanged on error, this is true for our asprintf implementation, but
+ *      not true for glibc's asprintf implementation.
+ *
+ * Parameters
+ *      IN hash: A char array that is usable for a runtime integrity check and
+ *         remains unchanged after the current binary is cryptographically
+ *         signed.
+ *      OUT version: a pointer to a dynamic string specifying where the result
+ *          is returned, (*version) needs to be NULL otherwise and error is
+ *          reported.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameter via free(*version) if (*version) is NULL.
+ *----------------------------------------------------------------------------*/
+EFI_STATUS extract_efiboot_version(const uint8_t* hash, char** version)
+{
+   if (version == NULL || hash == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (*version != NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   /*
+    * This version must be changed by hand for future releases
+    */
+   if (asprintf(version, "%s.%08x",
+      EFIBOOT_VERSION,
+      get_hash_id(hash)
+   ) == -1) {
+      return EFI_OUT_OF_RESOURCES;
+   }
+
+   return EFI_SUCCESS;
+}
+
+/*-- extract_vlan_id -----------------------------------------------------------
+ *
+ *      Retrieves the vlan id from the specified node.
+ *
+ *      When the node is accessed this function causes misaligned memory
+ *      access as stated in UEFI spec for Device Path.
+ *
+ *      This function requires for asprintf to leave the out parameter
+ *      unchanged on error, this is true for our asprintf implementation, but
+ *      not true for glibc's asprintf implementation.
+ *
+ * Parameters
+ *      IN node: A pointer to the node containing the vlan data, required to
+ *          be different from NULL.
+ *      OUT vlan_id: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as a base 10 integer. It must point to char*
+ *          which is NULL.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameter via free(*vlan_id) if (*vlan_id) is NULL.
+ *----------------------------------------------------------------------------*/
+EFI_STATUS extract_vlan_id(VLAN_DEVICE_PATH* node, char** vlan_id)
+{
+   if (node == NULL || vlan_id == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (*vlan_id != NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (asprintf(vlan_id, "%d", node->VlanId) == -1) {
+      return EFI_OUT_OF_RESOURCES;
+   }
+
+   return EFI_SUCCESS;
+}
+
+/*-- extract_mac ---------------------------------------------------------------
+ *
+ *      Retrieves the mac address from the given node.
+ *
+ *      When the node is accessed this function causes misaligned memory
+ *      access as stated in UEFI spec for Device Path.
+ *
+ *      This function requires for asprintf to leave the out parameter
+ *      unchanged on error, this is true for our asprintf implementation, but
+ *      not true for glibc's asprintf implementation.
+ *
+ * Parameters
+ *      IN node: A pointer to the node containing the mac data, required to
+ *          be different from NULL.
+ *      OUT mac: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as "aa:bb:cc:dd:ee:ff". It must point to
+ *          char* which is NULL.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameter via free(*mac) if (*mac) is NULL.
+ *----------------------------------------------------------------------------*/
+EFI_STATUS extract_mac(MAC_ADDR_DEVICE_PATH* node, char** mac)
+{
+   const uint8_t* mac_addr = NULL;
+   if (node == NULL || mac == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (*mac != NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   mac_addr = node->MacAddress.Addr;
+
+   if (asprintf(mac, "%02x:%02x:%02x:%02x:%02x:%02x",
+      mac_addr[0], mac_addr[1], mac_addr[2],
+      mac_addr[3], mac_addr[4], mac_addr[5]) == -1) {
+      return EFI_OUT_OF_RESOURCES;
+   }
+
+   return EFI_SUCCESS;
+}
+
+/*-- extract_ipv4_data ---------------------------------------------------------
+ *
+ *      Retrieves the ipv4 address, netmask and gatewayv4 address from the
+ *      specified node.
+ *
+ *      When the node is accessed this function causes misaligned memory
+ *      access as stated in UEFI spec for Device Path.
+ *
+ *      This function requires for asprintf to leave the out parameter
+ *      unchanged on error, this is true for our asprintf implementation, but
+ *      not true for glibc's asprintf implementation.
+ *
+ * Parameters
+ *      IN node: A pointer to the node containing the ipv4 data, required to
+ *          be different from NULL.
+ *      OUT ipv4: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as "255.254.253.252". If ipv4 is NULL then
+ *          it is unused, otherwise it must point to char* which is NULL.
+ *      OUT netmask: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as "fffefdfc". If netmask is NULL then
+ *          it is unused, otherwise it must point to char* which is NULL.
+ *      OUT gatewayv4: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as "255.254.253.252". If gatewayv4 is NULL
+ *          then it is unused, otherwise it must point to char* which is NULL.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameters via:
+ *         free(*ipv4);
+ *         free(*netmask);
+ *         free(*gatewayv4);
+ *----------------------------------------------------------------------------*/
+EFI_STATUS extract_ipv4_data(IPv4_DEVICE_PATH* ipNode, char** ipv4,
+   char** netmask, char** gatewayv4)
+{
+   if (ipNode == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (ipv4 != NULL) {
+      if (*ipv4 != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf_address_v4(ipv4, &(ipNode->LocalIpAddress.Addr)) == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   if (netmask != NULL) {
+      if (*netmask != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf_address_v4(netmask, &(ipNode->SubnetMask.Addr)) == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   if (gatewayv4 != NULL) {
+      if (*gatewayv4 != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf_address_v4(gatewayv4, &(ipNode->GatewayIpAddress.Addr))
+         == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   return EFI_SUCCESS;
+}
+
+/*-- extract_ipv6_data ---------------------------------------------------------
+ *
+ *      Retrieves the ipv6 address, prefix and gatewayv6 address from the
+ *      specified node.
+ *
+ *      When the node is accessed this function causes misaligned memory
+ *      access as stated in UEFI spec for Device Path.
+ *
+ *      This function requires for asprintf to leave the out parameter
+ *      unchanged on error, this is true for our asprintf implementation, but
+ *      not true for glibc's asprintf implementation.
+ *
+ * Parameters
+ *      IN node: A pointer to the node containing the ipv6 data, required to
+ *          be different from NULL.
+ *      OUT ipv6: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as an ipv6 address. If ipv6 is NULL then
+ *          it is unused, otherwise it must point to char* which is NULL.
+ *      OUT prefix: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as a base 10 integer. If prefix is NULL then
+ *          it is unused, otherwise it must point to char* which is NULL.
+ *      OUT gatewayv6: a pointer to a dynamic string specifying where the result
+ *          is returned formatted as an ipv6 address. If gatewayv6 is NULL then
+ *          it is unused, otherwise it must point to char* which is NULL.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameters via:
+ *         free(*ipv6);
+ *         free(*prefix);
+ *         free(*gatewayv6)
+ *----------------------------------------------------------------------------*/
+EFI_STATUS extract_ipv6_data(IPv6_DEVICE_PATH* ipNode, char** ipv6,
+   char** prefix, char** gatewayv6)
+{
+   if (ipNode == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if (ipv6 != NULL) {
+      if (*ipv6 != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf_address_v6(ipv6, &(ipNode->LocalIpAddress.Addr)) == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   if (prefix != NULL) {
+      if (*prefix != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf(prefix, "%d", ipNode->PrefixLength) == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   if (gatewayv6 != NULL) {
+      if (*gatewayv6 != NULL) {
+         return EFI_INVALID_PARAMETER;
+      }
+
+      if (asprintf_address_v6(gatewayv6, &(ipNode->GatewayIpAddress.Addr))
+            == -1) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+   }
+
+   return EFI_SUCCESS;
+}
+
+/*-- extract_dns_data ----------------------------------------------------------
+ *
+ *      Retrieves the dns addresses from the specified node.
+ *
+ *      This function assumes that the byte size of the formatted section after
+ *      the DNS_DEVICE_PATH struct is divisible by sizeof(EFI_IP_ADDRESS). If
+ *      this assumption is not true then unexpected dns servers will be
+ *      returned.
+ *
+ *      When the node is accessed this function causes misaligned memory
+ *      access as stated in UEFI spec for Device Path.
+ *
+ * Parameters
+ *      IN node: A pointer to the node containing the dns data, required to
+ *          be different from NULL.
+ *      OUT dns_servers_param: a pointer to a dns_severs_t value where the
+ *          result is returned, either in ipv4 or ipv6 format for each dns
+ *          address. It must point to a valid and accessible dns_servers_t
+ *          instance which has .length = 0 and .entries = NULL.
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. Regardless of the
+ *      returned value, the caller is responsible for cleaning up the out
+ *      parameters via:
+ *      for(size_t i = 0; i < dns_servers_param->length; ++i) {
+ *         free((char*)(dns_servers_param->entries[i].key));
+ *         free((char*)(dns_servers_param->entries[i].value));
+ *      }
+ *      free(dns_servers_param->entries);
+ *
+ *      and optionally
+ *
+ *      dns_servers_param->entries = NULL;
+ *      dns_servers_param->length = 0;
+ *
+ *----------------------------------------------------------------------------*/
+EXTERN EFI_STATUS extract_dns_data(DNS_DEVICE_PATH* node_dns,
+   dns_servers_t* dns_servers_param)
+{
+   size_t byteCountRawData = 0;
+   size_t count = 0;
+   EFI_IP_ADDRESS* arr = NULL;
+   int rc;
+
+   if (node_dns == NULL || dns_servers_param == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   if ( dns_servers_param->entries != NULL ||
+      dns_servers_param->length != 0 ) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   byteCountRawData = DevPathNodeLength((EFI_DEVICE_PATH*)node_dns) -
+      sizeof(DNS_DEVICE_PATH);
+
+   count = byteCountRawData / sizeof(node_dns->DnsServerIp[0]);
+
+   if (count > 0) {
+      dns_servers_param->entries =
+         malloc(count * sizeof(dns_servers_param->entries[0]));
+
+      if (dns_servers_param->entries == NULL) {
+         return EFI_OUT_OF_RESOURCES;
+      }
+
+      arr = node_dns->DnsServerIp;
+
+      for(size_t i = 0; i < count; ++i) {
+         char* key;
+         char* value;
+
+         if (asprintf(&key, "dns_server_%zu", dns_servers_param->length)
+            == -1) {
+            return EFI_OUT_OF_RESOURCES;
+         }
+
+         if (node_dns->IsIPv6) {
+            rc = asprintf_address_v6(&value, &(arr[i].v6.Addr));
+         } else {
+            rc = asprintf_address_v4(&value, &(arr[i].v4.Addr));
+         }
+
+         if (rc == -1) {
+            free(key);
+            return EFI_OUT_OF_RESOURCES;
+         }
+         dns_servers_param->entries[dns_servers_param->length].key = key;
+         dns_servers_param->entries[dns_servers_param->length].value = value;
+
+         dns_servers_param->length += 1;
+      }
+   }
+
+   return EFI_SUCCESS;
+}

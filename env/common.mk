@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+# Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc.
 # and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
@@ -39,21 +39,30 @@ ifdef BUILDENV
 #-- Environment ----------------------------------------------------------------
 #
 ifeq ($(BUILDENV),com32)
-   FIRMWARE   := bios
-   APP_EXT    := .c32
-   ARCH       := ia32
+   FIRMWARE           := bios
+   APP_EXT            := .c32
+   ARCH               := ia32
+   AUTO_DEPLOY_ARCH   := 0
 else
    FIRMWARE   := uefi
    APP_EXT    := .efi-$(KEY)
 
    ifeq ($(BUILDENV),uefiarm64)
-      ARCH       := arm64
+      ARCH               := arm64
+      MTSN               := aa64
+      AUTO_DEPLOY_ARCH   := 11
    else ifeq ($(BUILDENV),uefiriscv64)
-      ARCH       := riscv64
+      ARCH               := riscv64
+      MTSN               := riscv64
+      AUTO_DEPLOY_ARCH   := 0
    else ifeq ($(BUILDENV),uefi64)
-      ARCH       := em64t
+      ARCH               := em64t
+      MTSN               := x64
+      AUTO_DEPLOY_ARCH   := 9
    else ifeq ($(BUILDENV),uefi32)
-      ARCH       := ia32
+      ARCH               := ia32
+      MTSN               := ia32
+      AUTO_DEPLOY_ARCH   := 6
    else
       $(error ERROR: $(BUILDENV): Unsupported build environment)
    endif
@@ -152,7 +161,11 @@ CFLAGS     += --sysroot=$(GCCROOT) -Donly_$(ARCH) -Donly_$(IARCH)            \
               -W -Wall -Werror -std=c99 -Wwrite-strings -Wstrict-prototypes  \
               -Wpointer-arith -Wdeclaration-after-statement                  \
               -Wvla -Woverlength-strings -Wredundant-decls -Wformat          \
-              -Wno-implicit-fallthrough
+              -Wno-implicit-fallthrough -Wshadow                             \
+              -DEFIBOOT_VERSION=\"$(EFIBOOT_VERSION)\"                       \
+              -DEFIBOOT_PARAMS_VERSION=\"1.0\"                               \
+              -DEFIBOOT_MTSN=\"$(MTSN)\"                                     \
+              -DAUTO_DEPLOY_ARCH=\"$(AUTO_DEPLOY_ARCH)\"
 
 LDFLAGS    += -nostdlib -q -T $(LDSCRIPT)
 
@@ -183,7 +196,6 @@ LIBGCC     := $(shell $(CC) $(CFLAGS) --print-libgcc)
 BOOTLIB    := $(LIB_DIR)/boot/libboot.a
 FIRMLIB    := $(LIB_DIR)/$(FIRMWARE)$(ARCH)/lib$(FIRMWARE)$(ARCH).a
 CRYPTOLIB  := $(LIB_DIR)/mbedtls/libmbedtls.a
-FDTLIB     := $(LIB_DIR)/fdt/libfdt.a
 
 ENV_LIB    := $(FIRMLIB) $(LIBFAT) $(LIBC) $(LIBCRC) $(LIBMD5) $(LIBUART) \
               $(ZLIB) $(LIBGCC)
@@ -200,12 +212,6 @@ UEFIINC    := $(TOPDIR)/uefi                              \
               $(EDK2INC)/MdePkg/Include/IndustryStandard  \
               $(EDK2INC)/EmbeddedPkg/Include
 CRYPTOINC  := $(TOPDIR)/mbedtls/mbedtls $(TOPDIR)/uefi/efiutils
-FDTINC     := $(TOPDIR)/libfdt
 UEFIPROTO  := $(TOPDIR)/uefi/efiutils/protocol
-
-ifneq ($(filter arm64 riscv64,$(ARCH)),)
-ENV_LIB += $(FDTLIB)
-STDINC += $(FDTINC)
-endif
 
 endif # !BUILDENV

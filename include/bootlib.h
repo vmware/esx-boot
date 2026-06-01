@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -269,7 +269,8 @@ typedef struct {
 } option_t;
 
 EXTERN int parse_config_file(int volid, const char *filename,
-                             option_t *options);
+                             option_t *options,
+                             void (*log_func)(const char *));
 
 /*
  * video.c
@@ -311,22 +312,38 @@ EXTERN int smbios_get_struct(smbios_entry ptr, smbios_entry end,
 EXTERN char *smbios_get_string(smbios_entry ptr, smbios_entry end,
                                unsigned index);
 EXTERN int smbios_get_firmware_info(const char **bios_ver,
-                                    const char **bios_date);
+                                    const char **bios_date,
+                                    const char **smbios_version);
 EXTERN int smbios_get_system_info(const char **manufacturer,
                                   const char **product_name,
                                   const char **version,
                                   const char **serial_number,
-                                  const uint8_t **system_uuid,
+                                  const uuid_t** system_uuid,
+                                  uint8_t *wake_up_type,
                                   const char **sku,
                                   const char **family);
+EXTERN int smbios_get_chassis_info (const char **manufacturer,
+                                    uint8_t *type,
+                                    const char **version,
+                                    const char **serial_number,
+                                    const char **asset_tag,
+                                    uint8_t *boot_up_state,
+                                    uint8_t *power_supply_state,
+                                    uint8_t *thermal_state,
+                                    uint8_t *security_status,
+                                    uint32_t *oem_defined,
+                                    uint8_t *height,
+                                    uint8_t *number_of_power_cords,
+                                    uint8_t *element_count,
+                                    uint8_t *element_length,
+                                    const uint8_t **elements_data,
+                                    const char **sku);
 EXTERN int smbios_get_platform_info(const char **manufacturer,
                                     const char **product,
                                     const char **bios_ver,
                                     const char **bios_date);
-EXTERN int smbios_get_version(int *major,
-                              int *minor,
-                              int *docrev);
 EXTERN int smbios_get_oem_strings(oem_strings_t *oem_strings);
+EXTERN int get_smbios_uuid_str(const uuid_t uuid, char **uuid_str);
 
 /*-- is_valid_firmware_table ---------------------------------------------------
  *

@@ -1,11 +1,11 @@
 /*******************************************************************************
- * Copyright (c) 2021 Broadcom. All Rights Reserved.
+ * Copyright (c) 2021-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
 
 /*
- * test_runtimewd.c -- tests fdt-related functionality
+ * test_runtimewd.c -- tests runtime watchdog-related functionality
  *
  *   test_runtimewd [-t]
  *

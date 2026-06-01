@@ -135,10 +135,10 @@ static int test_tables(void *eps_start, size_t eps_length,
 int main(int argc, char **argv)
 {
    int status;
-   void *eps_start;
-   size_t eps_length;
-   void *table_start;
-   size_t table_length;
+   void *eps_start = NULL;
+   size_t eps_length = 0;
+   void *table_start = NULL;
+   size_t table_length = 0;
 
    status = log_init(true);
    if (status != ERR_SUCCESS) {

@@ -1,5 +1,5 @@
 #*******************************************************************************
-# Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+# Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc.
 # and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
@@ -33,7 +33,6 @@ SRC         := acpi.c	             \
 ifeq ($(IARCH),x86)
 SRC += $(IARCH)/trampoline.s
 else
-SRC += fdt.c
 SRC += $(IARCH)/trampoline.S
 endif
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -141,11 +141,13 @@ static int parse_option(char *line, option_t *options)
  *      IN volid:    MBR/GPT partition number
  *      IN filename: pointer to the configuration file filename
  *      IN options:  pointer to the option dispatch structure
+ *      IN log_func: optional callback function to log each line
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
-int parse_config_file(int volid, const char *filename, option_t *options)
+int parse_config_file(int volid, const char *filename, option_t *options,
+                      void (*log_func)(const char *))
 {
    char *p, *newline, *line;
    void *buffer;
@@ -178,6 +180,9 @@ int parse_config_file(int volid, const char *filename, option_t *options)
          memcpy(line, p, len);
          line[len] = '\0';
 
+         if (log_func != NULL) {
+            log_func(line);
+         }
          status = parse_option(line, options);
          free(line);
          if (status != 0) {

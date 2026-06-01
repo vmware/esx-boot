@@ -24,6 +24,7 @@ EXTERN int strncasecmp(const char *, const char *, size_t);
 EXTERN char *strcat(char *, const char *);
 EXTERN char *strchr(const char *, int);
 EXTERN char *strrchr(const char *, int);
+EXTERN char *strpbrk(const char *, const char *);
 EXTERN int strcmp(const char *, const char *);
 EXTERN char *strcpy(char *, const char *);
 EXTERN size_t strlen(const char *);

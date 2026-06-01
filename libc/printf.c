@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2015 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -210,7 +210,7 @@ static int print_i(char *buffer, size_t buflen, uintmax_t value, uint32_t base,
    }
 
    /* Zero padding */
-   while (padding-- > 0) {
+   for ( ; padding > 0; padding--) {
       print_c(buffer, buflen, '0', offset);
    }
 
@@ -392,6 +392,8 @@ int asprintf(char **str, const char *format, ...)
 
    if (len != -1) {
       *str = buffer;
+   } else {
+      free(buffer);
    }
 
    return len;

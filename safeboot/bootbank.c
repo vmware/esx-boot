@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -139,6 +139,7 @@ static int bank_scan(int volid, bootbank_t *bank)
    is_valid_bootbank = true;
 
    /* Get bank state & configuration */
+   Log(LOG_DEBUG, "BANK%d: getting configuration file.", bank->volid);
    status = bank_get_config(bank);
    if (status != ERR_SUCCESS) {
       Log(LOG_DEBUG, "BANK%d: no valid configuration file.\n", volid);

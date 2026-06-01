@@ -36,6 +36,7 @@ SRC         := acpi_table.c \
                net.c        \
                protocol.c   \
                protocoll.c  \
+               pxeboot.c    \
                quirks.c     \
                runtime.c    \
                runtime_generic.c \

@@ -311,20 +311,20 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
    return Status;
 }
 
-/*-- get_url_hostname ----------------------------------------------------------
+/*-- get_url_hostname_with_port ------------------------------------------------
  *
  *      Get the hostname from an absolute URL.
  *
  * Parameters
  *      IN  url:      URL
- *      OUT hostname: freshly allocated hostname
+ *      OUT hostname: freshly allocated hostname with port
  *
  * Results
  *      EFI_SUCCESS if successful,
  *      EFI_INVALID_PARAMETER if not a URL,
  *      or an EFI error status.
  *----------------------------------------------------------------------------*/
-static EFI_STATUS get_url_hostname(const char *url, char **hostname)
+static EFI_STATUS get_url_hostname_with_port(const char *url, char **hostname)
 {
    const char *p, *q;
    char *h;
@@ -340,7 +340,7 @@ static EFI_STATUS get_url_hostname(const char *url, char **hostname)
    p = q + 3;
 
    /* Strip path */
-   q = strchr(p, '/');
+   q = strpbrk(p, "/?#");
    if (q == NULL) {
       len = strlen(p);
    } else {
@@ -351,16 +351,6 @@ static EFI_STATUS get_url_hostname(const char *url, char **hostname)
    q = strchr(p, '@');
    if (q != NULL) {
       p = q + 1;
-   }
-
-   /* Strip :port */
-   q = strrchr(p, ']');
-   if (q == NULL) {
-      q = p;
-   }
-   q = strrchr(q, ':');
-   if (q != NULL) {
-      len = q - p;
    }
 
    h = malloc(len + 1);
@@ -913,7 +903,7 @@ static EFI_STATUS http_file_load_work(EFI_HANDLE Volume, const char *filepath,
       goto out;
    }
 
-   Status = get_url_hostname(filepath, &hostname);
+   Status = get_url_hostname_with_port(filepath, &hostname);
    if (EFI_ERROR(Status)) {
       /*
        * Don't log in this case.  It is normal when firmware_file_* is looping

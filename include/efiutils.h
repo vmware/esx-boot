@@ -16,6 +16,7 @@
 #include <syslog.h>
 #include <stdbool.h>
 #include <efi.h>
+#include <string.h>
 
 /*
  * Debugging
@@ -145,6 +146,26 @@ EXTERN void log_devpath(int level, const char *prefix,
 EXTERN void log_handle_devpath(int level, const char *prefix,
                                EFI_HANDLE handle);
 
+typedef struct {
+   size_t length;
+   key_value_t* entries;
+} dns_servers_t;
+
+EXTERN uint32_t get_hash_id(const uint8_t* hash);
+
+EXTERN EFI_STATUS extract_mac(MAC_ADDR_DEVICE_PATH* node, char** mac);
+EXTERN EFI_STATUS extract_efiboot_version(const uint8_t* hash, char** version);
+EXTERN EFI_STATUS extract_vlan_id(VLAN_DEVICE_PATH* node, char** vlan_id);
+
+EXTERN EFI_STATUS extract_ipv4_data(IPv4_DEVICE_PATH* ipNode, char** ipv4,
+   char** netmask, char** gatewayv4);
+
+EXTERN EFI_STATUS extract_ipv6_data(IPv6_DEVICE_PATH* ipNode, char** ipv6,
+   char** prefix, char** gatewayv6);
+
+EXTERN EFI_STATUS extract_dns_data(DNS_DEVICE_PATH* node_dns,
+   dns_servers_t* dns_servers_param);
+
 /*
  * volume.c
  */
@@ -201,6 +222,16 @@ EXTERN EFI_STATUS load_file_get_size(EFI_HANDLE Volume, const char *filepath,
 EXTERN EFI_STATUS load_file_load(EFI_HANDLE Volume, const char *filepath,
                                  int (*callback)(size_t), VOID **Buffer,
                                  UINTN *BufSize);
+
+/*
+ * pxeboot.c
+ */
+EXTERN bool is_pxe_boot(EFI_PXE_BASE_CODE **Pxe);
+EXTERN EFI_STATUS get_pxe_boot_file(EFI_PXE_BASE_CODE *Pxe, CHAR16 **BootFile);
+EXTERN EFI_STATUS get_pxe_boot_hostname_and_domain(EFI_PXE_BASE_CODE *Pxe,
+                                                   const char **Hostname,
+                                                   const char **Domain);
+
 /*
  * tftpfile.c
  */
@@ -209,8 +240,6 @@ EXTERN EFI_STATUS tftp_file_get_size(EFI_HANDLE Volume, const char *filepath,
 EXTERN EFI_STATUS tftp_file_load(EFI_HANDLE Volume, const char *filepath,
                                  int (*callback)(size_t), VOID **Buffer,
                                  UINTN *BufSize);
-EXTERN EFI_STATUS get_pxe_boot_file(EFI_PXE_BASE_CODE *Pxe, CHAR16 **BootFile);
-EXTERN bool is_pxe_boot(EFI_PXE_BASE_CODE **Pxe);
 
 /*
  * file.c

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -44,6 +44,19 @@ enum optname {
 #undef STR
 #undef INT
 
+/*-- log_cb --------------------------------------------------------------------
+ *
+ *      Callback from parse_config_file to log each line parsed.
+ *
+ * Parameters:
+ *      IN line: line of text to log
+ *
+ *----------------------------------------------------------------------------*/
+void log_cb(const char *line)
+{
+   Log(LOG_DEBUG, "| %s", line);
+}
+
 /*-- bank_get_config -----------------------------------------------------------
  *
  *      Parse the given configuration file to fill up the bootbank information
@@ -61,7 +74,7 @@ int bank_get_config(bootbank_t *bank)
 
    ASSERT(bank != NULL);
 
-   status = parse_config_file(bank->volid, SAFEBOOT_CFG, opts);
+   status = parse_config_file(bank->volid, SAFEBOOT_CFG, opts, log_cb);
    if (status != ERR_SUCCESS) {
       return status;
    }

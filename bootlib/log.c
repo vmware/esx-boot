@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * All rights reserved.
  * SPDX-License-Identifier: GPL-2.0
@@ -372,7 +372,11 @@ int log_init(bool verbose)
  *----------------------------------------------------------------------------*/
 void syslogbuf_expand_disable(uint32_t expand_size)
 {
-   if (syslogbuf != NULL && expand_size != 0) {
+   if (syslogbuf == NULL) {
+      return;
+   }
+
+   if (expand_size != 0) {
       syslogbuf_expand(expand_size);
    }
 

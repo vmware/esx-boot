@@ -67,31 +67,55 @@ typedef uint8_t smbios_string_id;
 
 #pragma pack(1)
 typedef struct {
-   smbios_header header;
-   smbios_string_id vendor;
-   smbios_string_id bios_ver;
-   uint16_t bios_seg;
-   smbios_string_id bios_date;
-   uint8_t bios_seg_count;
-   uint64_t chars;
-   uint16_t ext_chars;
-   uint8_t major_release;
-   uint8_t minor_release;
+   smbios_header header; // 2.0+
+   smbios_string_id vendor; // 2.0+
+   smbios_string_id bios_ver; // 2.0+
+   uint16_t bios_seg; // 2.0+
+   smbios_string_id bios_date; // 2.0+
+   uint8_t bios_seg_count; // 2.0+
+   uint64_t chars; // 2.0+
+   uint16_t ext_chars; // 2.4+
+   uint8_t major_release; // 2.4+
+   uint8_t minor_release; // 2.4+
 } smbios_type0;
+#pragma pack()
+
+typedef const uint8_t uuid_t[16];
+
+#pragma pack(1)
+typedef struct {
+   smbios_header header; // 2.0+
+   smbios_string_id manufacturer; // 2.0+
+   smbios_string_id product_name; // 2.0+
+   smbios_string_id version; // 2.0+
+   smbios_string_id serial_number; // 2.0+
+   uuid_t uuid; // 2.1+
+   uint8_t wake_up_type; // 2.1+
+   smbios_string_id sku; // 2.4+
+   smbios_string_id family; // 2.4+
+} smbios_type1;
 #pragma pack()
 
 #pragma pack(1)
 typedef struct {
-   smbios_header header;
-   smbios_string_id manufacturer;
-   smbios_string_id product_name;
-   smbios_string_id version;
-   smbios_string_id serial_number;
-   uint8_t uuid[16];
-   uint8_t wake_up_type;
-   smbios_string_id sku;
-   smbios_string_id family;
-} smbios_type1;
+   smbios_header header; // 2.0+
+   smbios_string_id manufacturer; // 2.0+
+   uint8_t type; // 2.0+
+   smbios_string_id version; // 2.0+
+   smbios_string_id serial_number; // 2.0+
+   smbios_string_id asset_tag; // 2.0+
+   uint8_t boot_up_state; // 2.1+
+   uint8_t power_supply_state; // 2.1+
+   uint8_t thermal_state; // 2.1+
+   uint8_t security_status; // 2.1+
+   uint32_t oem_defined; // 2.3+
+   uint8_t height; // 2.3+
+   uint8_t number_of_power_cords; // 2.3+
+   uint8_t element_count; // 2.3+
+   uint8_t element_length; // 2.3+
+   uint8_t elements_data[]; // 2.3+ [element_count * element_length]
+   // smbios_string_id sku; // 2.7+
+} smbios_type3;
 #pragma pack()
 
 #pragma pack(1)
@@ -106,12 +130,12 @@ typedef union {
    smbios_header *header;
    smbios_type0 *type0;
    smbios_type1 *type1;
+   smbios_type3 *type3;
    smbios_type11 *type11;
 } smbios_entry;
 
 typedef struct {
    size_t length;
-   char** names;
    key_value_t* entries;
 } oem_strings_t;
 

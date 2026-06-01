@@ -26,7 +26,7 @@ import time
 # Load keyinfo library
 keyinfo_dir = os.getenv('KEYINFO_DIR', None)
 if keyinfo_dir:
-    sys.path.append(keyinfo_dir)
+    sys.path.insert(0, keyinfo_dir)
     from lib import keyinfo
     get_pem = keyinfo.GetPem
 else:

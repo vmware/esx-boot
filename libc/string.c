@@ -109,6 +109,33 @@ char *strrchr(const char *s, int c)
    return NULL;
 }
 
+/*-- strpbrk -------------------------------------------------------------------
+ *
+ *      Locate the first occurrence of one of the provided characters list in a
+ *      string.
+ *
+ * Parameters
+ *      IN s: pointer to the string to search in
+ *      IN b: the list of characters to locate
+ *
+ * Results
+ *      A pointer to the first occurrence of a char from 'b', or NULL if none of
+ *      the characters in 'b' are found.
+ *----------------------------------------------------------------------------*/
+char *strpbrk(const char *s, const char *b)
+{
+   do {
+      const char *p = b;
+      do {
+         if (*s == *p) {
+            return (char *)s;
+         }
+      } while (*p++ != '\0');
+   } while (*s++ != '\0');
+ 
+   return NULL;
+}
+ 
 /*-- strstr --------------------------------------------------------------------
  *
  *      locates the first occurrence of a string (excluding the terminating null

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc.
  * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
@@ -105,7 +105,7 @@ int elf_register(void *buffer, Elf_CommonAddr *entry);
 #define MBOOT_ID_SIZE   6
 #define TITLE_MAX_LEN   128
 
-static inline void PANIC(void)
+static inline void  __attribute__ ((noreturn)) PANIC(void)
 {
    for (;;) {
       HLT();
@@ -235,11 +235,6 @@ int append_kernel_options(const char *options);
 int measure_kernel_options(void);
 int parse_config(const char *filename);
 void config_clear(void);
-
-/*
- * fdt.c
- */
-int fdt_blacklist_memory(void *fdt);
 
 /*
  * cxl.c

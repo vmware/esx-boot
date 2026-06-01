@@ -57,6 +57,8 @@ makfile='#
 # Option: 0 to link crypto into mboot; 1 to use a separate module.
 export CRYPTO_MODULE := 1
 
+export EFIBOOT_VERSION := OSS.0.0
+
 include env/common.mk
 
 SUBDIRS := com32 uefi64 # uefiarm64

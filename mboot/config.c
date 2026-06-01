@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -223,7 +223,7 @@ static int parse_filelist(char *list, const char *prefix_dir, void *context,
                           void (*clearitem)(void *, unsigned int))
 {
    char *delim, *p, *parameter, *filename, *options;
-   unsigned int i;
+   int i;
    int status;
    char c;
 
@@ -642,6 +642,19 @@ static int locate_config_file(const char *filename, char **path)
    return ERR_SUCCESS;
 }
 
+/*-- log_cb --------------------------------------------------------------------
+ *
+ *      Callback from parse_config_file to log each line parsed.
+ *
+ * Parameters:
+ *      IN line: line of text to log
+ *
+ *----------------------------------------------------------------------------*/
+void log_cb(const char *line)
+{
+   Log(LOG_DEBUG, "| %s", line);
+}
+
 /*-- parse_config --------------------------------------------------------------
  *
  *      Parse the bootloader configuration file.
@@ -668,7 +681,7 @@ int parse_config(const char *filename)
 
    Log(LOG_INFO, "Loading %s", path);
 
-   status = parse_config_file(boot.volid, path, mboot_options);
+   status = parse_config_file(boot.volid, path, mboot_options, log_cb);
    if (status != ERR_SUCCESS) {
       Log(LOG_ERR, "Configuration error while parsing %s", path);
       free(path);

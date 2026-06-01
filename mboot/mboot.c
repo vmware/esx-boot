@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -152,10 +152,6 @@ static int mboot_init(int argc, char **argv)
       return status;
    }
 
-   if (argc < 1) {
-      Log(LOG_DEBUG, "Command line is empty.");
-   }
-
    optind = 1;
 
    do {
@@ -286,6 +282,14 @@ static int mboot_init(int argc, char **argv)
    if (boot.serial) {
       status = serial_log_init(serial_com, serial_speed);
       boot.serial = (status == ERR_SUCCESS);
+   }
+
+   if (argc < 1) {
+      Log(LOG_DEBUG, "Command line is empty.");
+   } else {
+      for (int i = 0; i < argc; i++) {
+         Log(LOG_DEBUG, "argv[%d] = '%s'", i, argv[i]);
+      }
    }
 
    argc -= optind;
@@ -451,22 +455,24 @@ static int start_runtimewd(void)
  *      Appends additional modules passed via command line option(s).
  *
  * Parameters
- *      IN additional_modules_nr:   Number of additional modules.
- *      IN additional_module_names: Array of character pointers pointing to the
- *                                  names of the modules in the argv[] array.
+ *      IN local_additional_modules_nr:   Number of additional modules.
+ *      IN local_additional_module_names: Array of character pointers pointing
+ *                                        to the names of the modules in the
+ *                                        argv[] array.
  *
  * Results
  *      ERR_SUCCESS, or a generic error status.
  *----------------------------------------------------------------------------*/
 static int append_additional_modules(
-   int additional_modules_nr,
-   char** additional_module_names)
+   int local_additional_modules_nr,
+   char** local_additional_module_names)
 {
    int status;
    module_t* tmp;
-   unsigned int total_modules_nr = boot.modules_nr + additional_modules_nr;
+   unsigned int total_modules_nr =
+      boot.modules_nr + local_additional_modules_nr;
 
-   if (additional_module_names == NULL) {
+   if (local_additional_module_names == NULL) {
       return ERR_SUCCESS;
    }
 
@@ -475,18 +481,18 @@ static int append_additional_modules(
       boot.modules_nr * sizeof (module_t),
       total_modules_nr * sizeof (module_t));
    if (tmp == NULL) {
-      /* the function clear called in the main function will cleanup the modules */
+      /* clear(...) called in the main(...) function will cleanup the modules */
       return ERR_OUT_OF_RESOURCES;
    }
    boot.modules = tmp;
    memset(
       &boot.modules[boot.modules_nr], 0,
-      additional_modules_nr * sizeof (module_t));
+      local_additional_modules_nr * sizeof (module_t));
 
    for (int i = 0; boot.modules_nr < total_modules_nr; boot.modules_nr++, i++) {
       module_t *module = &boot.modules[boot.modules_nr];
       status = make_path(
-         boot.prefix, additional_module_names[i], &module->filename);
+         boot.prefix, local_additional_module_names[i], &module->filename);
       if (status != ERR_SUCCESS) {
          return status;
       }

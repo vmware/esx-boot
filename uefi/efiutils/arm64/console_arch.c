@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <io.h>
-#include <fdt_vmware.h>
 #include "efi_private.h"
 
 /*
@@ -69,74 +68,6 @@ static int get_nvidia_rshim_console_port(UNUSED_PARAM(int com), serial_type_t *t
    *type = SERIAL_TMFIFO;
 
    return ERR_SUCCESS;
-}
-
-
-/*-- get_fdt_serial_port -------------------------------------------------------
- *
- *      Attempt to get serial port configuration via FDT.
- *
- * Parameters
- *      IN  com:  unused
- *      OUT type: serial port type
- *      OUT io:   serial port base address
- *      OUT original_baudrate: current baudrate from FDT
- *
- * Results
- *      A generic error status.
- *----------------------------------------------------------------------------*/
-static int get_fdt_serial_port(UNUSED_PARAM(int com), serial_type_t *type,
-                               io_channel_t *io, uint32_t *original_baudrate)
-{
-   void *fdt;
-   int node;
-   int status;
-   const char *baud = NULL;
-   static fdt_serial_id_t const match_ids[] = {
-      { "AAPL,s5l-uart", SERIAL_AAPL_S5L },
-      { "apple,s5l-uart", SERIAL_AAPL_S5L },
-      { "apple,uart", SERIAL_AAPL_S5L },
-      { NULL, 0 },
-   };
-
-   status = get_fdt(&fdt);
-   if (status != ERR_SUCCESS) {
-      return status;
-   }
-
-   if (fdt_check_header(fdt) != 0) {
-      return ERR_UNSUPPORTED;
-   }
-
-   if (fdt_match_serial_port(fdt, "/chosen", "stdout-path", match_ids,
-                             &node, type, &baud) != 0) {
-     /*
-      * Best effort at this point. The Asahi/OpenBSD U-Boot on M1 Macs under some
-      * circumstances sets stdout-path to the framebuffer.
-      */
-      if (fdt_match_serial_port(fdt, "/aliases", "serial0", match_ids,
-                                &node, type, &baud) != 0) {
-         return ERR_NOT_FOUND;
-      }
-   }
-
-
-   if (*type == SERIAL_AAPL_S5L) {
-      if (fdt_get_reg(fdt, node, "reg", &io->channel.addr) < 0) {
-         return ERR_UNSUPPORTED;
-      }
-      io->type = IO_MEMORY_MAPPED;
-      io->offset_scaling = 1;
-      io->access = IO_ACCESS_32;
-      if (baud != NULL) {
-         *original_baudrate = strtol(baud, NULL, 0);
-      } else {
-         *original_baudrate = SERIAL_BAUDRATE_UNKNOWN;
-      }
-      return ERR_SUCCESS;
-   }
-
-   return ERR_UNSUPPORTED;
 }
 
 
@@ -266,11 +197,6 @@ int get_serial_port(int com, serial_type_t *type , io_channel_t *io,
    }
 
    status = get_spcr_serial_port(com, type, io, original_baudrate);
-   if (status == ERR_SUCCESS) {
-      return status;
-   }
-
-   status = get_fdt_serial_port(com, type, io, original_baudrate);
    if (status == ERR_SUCCESS) {
       return status;
    }

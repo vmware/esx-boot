@@ -74,7 +74,6 @@ int install_acpi_tables(void)
    unsigned int i;
    int status;
 
-#ifdef SECURE_BOOT
    /*
     * Installing ACPI tables with secure boot enabled is not currently
     * supported. If we ever need to support secure boot on a system where
@@ -85,7 +84,6 @@ int install_acpi_tables(void)
    if (boot.efi_info.secure_boot && boot.acpitab_nr > 0) {
       return ERR_SECURITY_VIOLATION;
    }
-#endif
 
    for (i = 0; i < boot.acpitab_nr; i++) {
       status = install_acpitab(i);

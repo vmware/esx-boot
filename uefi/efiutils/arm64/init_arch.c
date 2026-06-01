@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018-2021 Broadcom. All Rights Reserved.
+ * Copyright (c) 2018-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -135,13 +135,16 @@ int sanitize_page_tables(void)
 
    /*
     * Because we're changing the page table walker configuration, disable
-    * the MMU. Esp. in a virtualized environment, we can easily find ourselves
-    * with a new TCR, the old page tables and a TLB miss.
+    * interrupts and the MMU. Esp. in a virtualized environment, we can easily
+    * find ourselves with a new TCR, the old page tables and an interrupt or
+    * TLB miss.
     */
+   CLI();
    paging_disable();
    set_tcr(tcr);
    set_page_table_reg(&pdbr);
    paging_enable();
+   STI();
 
    return ERR_SUCCESS;
 }

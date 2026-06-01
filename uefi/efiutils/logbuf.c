@@ -33,12 +33,12 @@ static VMW_LOGBUFFER_PROTOCOL LogBufProto = {
  *----------------------------------------------------------------------------*/
 int logbuf_proto_init(struct syslogbuffer *syslogbuf)
 {
-   EFI_HANDLE ImageHandle = NULL;
+   EFI_HANDLE LocalImageHandle = NULL;
    EFI_GUID LogBufProtoID = EFI_LOG_PROTOCOL_GUID;
    EFI_STATUS Status;
 
    LogBufProto.syslogbuf = syslogbuf;
-   Status = bs->InstallProtocolInterface(&ImageHandle,
+   Status = bs->InstallProtocolInterface(&LocalImageHandle,
                                          &LogBufProtoID,
                                          EFI_NATIVE_INTERFACE,
                                          &LogBufProto);

@@ -42,8 +42,34 @@
  *                        used each time a file is retrieved over HTTP(S).
  *                        This option may be provided multiple times to add
  *                        multiple parameters to the query string.
- *         -C             Collect SMBIOS data and add it to the query string.
- *                        By default this is disabled.
+ *         -C             Toggle the SMBIOS data collection policy state. This
+ *                        policy defines if SMBIOS data is collected and added
+ *                        to the query string when files are requested using the
+ *                        HTTP protocol.
+ *                        This policy default value depends on the name of the
+ *                        binary (see below).
+ *         -r             Toggle the reboot on error policy state. This policy
+ *                        defines if the system is rebooted when the return
+ *                        statement in the main(...) function is reached and
+ *                        the current status is different from ERR_SUCCESS and
+ *                        ERR_ABORT. The latter are used to exit to firmware or
+ *                        to continue the boot sequence respectively and are not
+ *                        considered an error case. This policy may be useful to
+ *                        guarantee that the boot process never ends up in an
+ *                        infinite interactive prompt when this bootloader exits
+ *                        with an error which may happen if the firmware is not
+ *                        configured to retry the boot sequence.
+ *                        This policy default value depends on the name of the
+ *                        binary (see below).
+ *
+ *      Note: Command line options -C and -r are toggling the states of the
+ *            corresponding policies where the dafault values for these policies
+ *            depend on the name of the binary where if the binary name starts
+ *            with VBM_FILENAME_PREFIX (case insensitive) both policies are
+ *            enabled by default. The command line options are toggling the
+ *            policy values so to be possible to disable the corresponding
+ *            policy if it is enabled by default because of the name of the
+ *            binary.
  *
  *      If no menufile argument is provided, the menu is searched for in the
  *      following locations:
@@ -110,6 +136,7 @@
  *      EFI NOHTTP s      - Evaluate s if HTTP loading is not available.
  *      EFI TFTPBLKSIZE n - Set the TFTP blksize option, as with -b.
  *      EFI ERRTIMEOUT n  - Set the error timeout, as with -E.
+ *      EFI REBOOTONERR n - Set the reboot on error policy (n != 0), as with -r.
  *      EFI ARCH w s      - Evaluate s if the current architecture is w;
  *                          either arm64, riscv64, x86 (64-bit), or x86_32.
  *      EFI NOARCH w s    - Evaluate s if the current architecture is not w.
@@ -171,6 +198,8 @@
 #include <unistd.h>
 #include <compat.h>
 #include <md.h>
+
+#define VBM_FILENAME_PREFIX "vbm"
 
 /*
  * Hash computed by elf2efi.  (This feature was designed for the
@@ -237,7 +266,7 @@ typedef struct {
    size_t remaining;
 } Menu;
 
-int volid = 0;
+int menu_volid = 0;
 char *homedir;
 char *menuefi_d;
 char *pxelinux_cfg;
@@ -257,34 +286,37 @@ int err_timeout = 30; //seconds
 unsigned debug = 0;
 bool verbose = false;
 
-const char bios_version_name[] = "bios-version";
-const char* bios_version = NULL;
-
-const char vendor_name[] = "vendor";
-const char *vendor = NULL;
-
-const char model_name[] = "model";
-const char *model = NULL;
-
-const char family_name[] = "family";
+const char *firmware_version = NULL;
+const char *smbios_version = NULL;
+const char *manufacturer = NULL;
+const char *product = NULL;
 const char *family = NULL;
+const char *serial = NULL;
+const uuid_t *uuid = NULL;
+char *uuid_str = NULL;
+oem_strings_t oem_strings = {0, NULL};
+const char *asset = NULL;
 
-const char serial_number_name[] = "serial-number";
-const char *serial_number = NULL;
+const char *hostname = NULL;
+const char *domain = NULL;
+const char *bootfile = NULL;
 
-const char system_uuid_name[] = "system-uuid";
-const uint8_t *system_uuid = NULL;
-char *system_uuid_str = NULL;
+const char *efiboot_version_str = NULL;
+const char *params_version_str = NULL;
+const char *mtsn_str = NULL;
+const char *architecture_str = NULL;
+const char *vlan_id_str = NULL;
+const char *ipv4_str = NULL;
+const char *ipv6_str = NULL;
+const char *prefix_str = NULL;
+const char *netmask_str = NULL;
+const char *gatewayv4_str = NULL;
+const char *gatewayv6_str = NULL;
+dns_servers_t dns_servers = {0, NULL};
+const char* mac_str = NULL;
 
-const char mac_name[] = "boot-ift-mac";
-const char *mac_str = NULL;
-
-int smbios_version_major = 0;
-int smbios_version_minor = 0;
-int simbios_version_doc_rev = 0;
-
-oem_strings_t oem_strings;
-bool collect_and_use_smbios_data = false;
+bool collect_and_use_smbios_and_device_path_data = false;
+bool reboot_on_error = false;
 
 int do_menu(const char *filename);
 int do_item(Menu *menu, MenuItem *item);
@@ -408,7 +440,8 @@ void skip_white(Menu *menu)
  *----------------------------------------------------------------------------*/
 void skip_line(Menu *menu)
 {
-   while (menu->remaining > 0 && *menu->parse != '\n') {
+   while (menu->remaining > 0 &&
+          *menu->parse != '\r' && *menu->parse != '\n') {
       menu->remaining--;
       menu->parse++;
    }
@@ -462,8 +495,10 @@ int parse_int(Menu *menu)
    char *endp;
 
    /*
-    * Sloppy; could read beyond end of buffer if it ends in the
-    * middle of a number.
+    * strtol needs a buffer that's terminated by some character that
+    * can't be in a number; otherwise it could read beyond the end of
+    * the buffer.  parse_menu avoids this pitfall by requiring the
+    * menu file to end with a newline.
     */
    ret = strtol(menu->parse, &endp, 0);
    if (endp != menu->parse) {
@@ -699,6 +734,9 @@ bool parse_efi_subcommand(Menu *menu)
    } else if (match_token(menu, "ERRTIMEOUT")) {
       err_timeout = parse_int(menu);
 
+   } else if (match_token(menu, "REBOOTONERR")) {
+      reboot_on_error = parse_int(menu) != 0;
+
    } else if (match_token(menu, "ARCH")) {
       if (strcasecmp(parse_word(menu), arch_name) == 0) {
          return false;
@@ -753,6 +791,13 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
    menu->filename = filename;
    menu->parse = menu->buffer = buffer;
    menu->remaining = menu->bufsize = bufsize;
+
+   if (menu->remaining == 0 ||
+       (menu->buffer[menu->remaining - 1] != '\r' &&
+        menu->buffer[menu->remaining - 1] != '\n')) {
+      log_syntax_error(menu, "menu does not end with a newline", "");
+      return ERR_SYNTAX;
+   }
 
    for (;;) {
       skip_white(menu);
@@ -941,7 +986,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       }
       filename = absname;
    }
-   status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
+   status = file_load_wrapper(menu_volid, filename, NULL, bufOut, sizeOut);
 
    /*
     * If file is not found, try its basename relative to the
@@ -967,7 +1012,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
          return status;
       }
       filename = absname;
-      status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
+      status = file_load_wrapper(menu_volid, filename, NULL, bufOut, sizeOut);
    }
 
    if (status != ERR_SUCCESS) {
@@ -979,7 +1024,7 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
          return status;
       }
       filename = absname;
-      status = file_load_wrapper(volid, filename, NULL, bufOut, sizeOut);
+      status = file_load_wrapper(menu_volid, filename, NULL, bufOut, sizeOut);
    }
 
    if (status != ERR_SUCCESS) {
@@ -993,49 +1038,6 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
       *fOut = filename;
    }
    return status;
-}
-
-/*-- get_uuid_str --------------------------------------------------------------
- *
- *      Convert a UUID to a human readable string where each byte in
- *      the UUID is seen as an unsigned char and represented by a 0-prefixed,
- *      2-characters, lower case hexadecimal string. The output string is
- *      allocated with malloc() and can be freed with free().
- *
- * Parameters
- *      IN uuid: pointer to the UUID
- *      OUT uuid_str:  pointer to the freshly allocated output string
- *
- * Results
- *      ERR_SUCCESS, or a generic error status.
- *----------------------------------------------------------------------------*/
-int get_uuid_str(const uint8_t uuid[16], char **uuid_str)
-{
-   int major = smbios_version_major;
-   int minor = smbios_version_minor;
-
-   /* if version < 2.6 , use big endian for all the fields, see PR 3347702 */
-   if (major < 2 || (major == 2 && minor < 6) ) {
-      return asprintf(
-         uuid_str,
-         "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-         uuid[0], uuid[1], uuid[2], uuid[3],
-         uuid[4], uuid[5],
-         uuid[6], uuid[7],
-         uuid[8], uuid[9],
-         uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]) < 0
-            ? EFI_INVALID_PARAMETER : EFI_SUCCESS;
-   } else {
-      return asprintf(
-         uuid_str,
-         "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-         uuid[3], uuid[2], uuid[1], uuid[0],
-         uuid[5], uuid[4],
-         uuid[7], uuid[6],
-         uuid[8], uuid[9],
-         uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]) < 0
-            ? EFI_INVALID_PARAMETER : EFI_SUCCESS;
-   }
 }
 
 /*-- run_menu ------------------------------------------------------------------
@@ -1315,7 +1317,7 @@ int do_item(Menu *menu, MenuItem *item)
        */
       char *p = malloc(len + 3);
       memcpy(p, program, len - 2);
-      strcpy(p + len, ".efi");
+      strcpy(p + (len - 2), ".efi");
       program = p;
    }
 
@@ -1353,6 +1355,8 @@ int chain_to(const char *program, const char *arguments)
 
    status = firmware_image_load(program, arguments, image, imgsize,
                                 &ChildHandle);
+   free(image);
+
    if (status != ERR_SUCCESS) {
       return status;
    }
@@ -1451,6 +1455,39 @@ void set_verbose(bool state)
    log_subscribe(firmware_print, verbose ? LOG_DEBUG : LOG_INFO);
 }
 
+/*-- add_pxe_boot_query_string_parameters --------------------------------------
+ *
+ *      Take the globally stored PXE Boot key=value pairs and add these to the
+ *      query string, as if -q was passed for each of them. If some of these
+ *      fields are not available then the values for these can be NULL or "".
+ *      If a value in a key-value pair is NULL or "" it will be represented as
+ *      an empty string within the query string e.g. if "hostname" value is NULL
+ *      "hostname=" will be appened to the query string.
+ *
+ * Parameters
+ *
+ * Results
+ *      ERR_SUCCESS on success or a generic error status
+ *----------------------------------------------------------------------------*/
+int add_pxe_boot_query_string_parameters(void)
+{
+   int result = ERR_SUCCESS;
+
+   key_value_t pxe_boot_query_string_parameters[] = {
+      { "hostname",  hostname },
+      { "domain",    domain },
+      { "filename",  bootfile },
+   };
+
+   if ((result = query_string_add_parameters(
+         ARRAYSIZE(pxe_boot_query_string_parameters),
+         pxe_boot_query_string_parameters)) != ERR_SUCCESS) {
+      return result;
+   }
+
+   return result;
+}
+
 /*-- add_smbios_query_string_parameters ----------------------------------------
  *
  *      Take the globally saved smbios values and add them to the query
@@ -1468,13 +1505,14 @@ int add_smbios_query_string_parameters(void)
    int result = ERR_SUCCESS;
 
    key_value_t smbios_query_string_parameters[] = {
-      { bios_version_name,  bios_version    },
-      { vendor_name,        vendor          },
-      { model_name,         model           },
-      { family_name,        family          },
-      { serial_number_name, serial_number   },
-      { system_uuid_name,   system_uuid_str },
-      { mac_name,           mac_str         },
+      { "firmware-version",  firmware_version },
+      { "smbios-version",    smbios_version   },
+      { "manufacturer",      manufacturer     },
+      { "product",           product          },
+      { "family",            family           },
+      { "serial",            serial           },
+      { "uuid",              uuid_str         },
+      { "asset",             asset            },
    };
 
    if ((result = query_string_add_parameters(
@@ -1492,7 +1530,46 @@ int add_smbios_query_string_parameters(void)
    return result;
 }
 
-/*-- process_query_string ------------------------------------------------------
+int add_device_path_query_string_parameters(void)
+{
+   int result = EFI_SUCCESS;
+   const char* local_dns_str =
+      dns_servers.length > 0 ?
+      dns_servers.entries[0].value :
+      NULL;
+
+   key_value_t device_path_query_string_parameters[] = {
+      { "efiboot_version", efiboot_version_str },
+      { "params_version",  params_version_str  },
+      { "mtsn",            mtsn_str            },
+      { "arch",            architecture_str    },
+      { "vlan_id",         vlan_id_str         },
+      { "ipv4",            ipv4_str            },
+      { "ipv6",            ipv6_str            },
+      { "prefix",          prefix_str          },
+      { "netmask",         netmask_str         },
+      { "gatewayv4",       gatewayv4_str       },
+      { "gatewayv6",       gatewayv6_str       },
+      { "dns",             local_dns_str       },
+      { "mac",             mac_str             }
+   };
+
+   if ((result = query_string_add_parameters(
+         ARRAYSIZE(device_path_query_string_parameters),
+         device_path_query_string_parameters)) != ERR_SUCCESS) {
+      return result;
+   }
+
+   if ((result = query_string_add_parameters(
+         dns_servers.length,
+         dns_servers.entries)) != ERR_SUCCESS) {
+      return result;
+   }
+
+   return result;
+}
+
+/*-- process_command_line_query_string_parameters ------------------------------
  *
  *      Take the global query string arguments from menu.c and transfer them
  *      to the global values in uri.c to make the query strings usable in
@@ -1503,7 +1580,7 @@ int add_smbios_query_string_parameters(void)
  * Results
  *      ERR_SUCCESS on success or a generic error status
  *----------------------------------------------------------------------------*/
-int process_query_string(void)
+int process_command_line_query_string_parameters(void)
 {
    int status = ERR_SUCCESS;
 
@@ -1556,50 +1633,267 @@ int process_query_string(void)
  *----------------------------------------------------------------------------*/
 int fetch_smbios_data(void)
 {
-   int status;
-   if ((status = smbios_get_system_info(
-        &vendor, &model, NULL, &serial_number, &system_uuid, NULL, &family))
-         != ERR_SUCCESS) {
+   int status = ERR_SUCCESS;
+
+   if ((status = smbios_get_system_info(&manufacturer, &product, NULL, &serial,
+        &uuid, NULL, NULL, &family)) != ERR_SUCCESS) {
       Log(LOG_ERR, "Failed to obtain SMBIOS type 1 data");
-      goto out;
+      return status;
    }
 
-   status = smbios_get_version(
-      &smbios_version_major,
-      &smbios_version_minor,
-      &simbios_version_doc_rev
-   );
-
-   if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Failed to obtain SMBIOS version");
-      goto out;
+   if ((status = smbios_get_chassis_info(
+       NULL, NULL, NULL, NULL, &asset, NULL, NULL, NULL, NULL, NULL, NULL,
+       NULL, NULL, NULL, NULL, NULL)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain SMBIOS type 1 data");
+      return status;
    }
 
    if ((status = smbios_get_oem_strings(&oem_strings)) != ERR_SUCCESS) {
       Log(LOG_ERR, "Failed to obtain OEM strings");
-      goto out;
+      return status;
    }
 
-   if ((status = get_uuid_str(system_uuid, &system_uuid_str)) != ERR_SUCCESS) {
-      Log(LOG_ERR, "Failed to store UUID, error code");
-      goto out;
+   if (uuid == NULL ||
+       (status = get_smbios_uuid_str(*uuid, &uuid_str)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to store UUID string.");
+      return status;
    }
 
-   if ((status = smbios_get_firmware_info(&bios_version, NULL))
-         != ERR_SUCCESS) {
-      Log(LOG_ERR, "Failed to obtain Bios Version");
-      goto out;
+   if ((status = smbios_get_firmware_info(
+         &firmware_version, NULL, &smbios_version)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to obtain Firmware and SMBIOS versions.");
+      return status;
    }
 
-   if ((status = get_mac_address(&mac_str)) != ERR_SUCCESS) {
-      Log(LOG_ERR, "Failed to obtain MAC address");
-      goto out;
-   }
-
-
-
-   out:
    return status;
+}
+
+/*-- fetch_devpath_parameters --------------------------------------------------
+ *
+ *      This function extracts data from some of the existing Device Path nodes
+ *      and places the results in the global variables called:
+ *
+ *      Volume
+ *      efiboot_version_str
+ *      params_version_str
+ *      mtsn_str
+ *      architecture_str
+ *      vlan_id_str
+ *      ipv4_str
+ *      ipv6_str
+ *      netmask_str
+ *      prefix_str
+ *      gatewayv4_str
+ *      gatewayv6_str
+ *      dns_servers
+ *      mac_str
+ *
+ *      This function assumes that the Device Path contains valid nodes with
+ *      valid data. If this assumption is not true then the behavior is
+ *      unspecified.
+ *
+ *      This function requires that all of the global variables mentioned above
+ *      which are pointers are set to NULL and that the global variable
+ *      dns_servers is set to {.length = 0, .entries = NULL}
+ *
+ * Parameters
+ *
+ * Results
+ *      EFI_SUCCESS or a generic error status on failure. On success the
+ *      variables from above are filled.
+ *
+ *      Regardless of the returned value, the caller is responsible for
+ *      cleaning up the following global variables:
+ *
+ *      efiboot_version_str
+ *      vlan_id_str
+ *      ipv4_str
+ *      ipv6_str
+ *      netmask_str
+ *      prefix_str
+ *      gatewayv4_str
+ *      gatewayv6_str
+ *      dns_servers
+ *      mac_str
+ *
+ *      The remaining global variables:
+ *
+ *      params_version_str
+ *      mtsn_str
+ *      architecture_str
+ *
+ *      are using C-string literals and do not need cleanup.
+ *
+ *----------------------------------------------------------------------------*/
+int fetch_devpath_parameters(void)
+{
+   EFI_STATUS Status = EFI_SUCCESS;
+   EFI_DEVICE_PATH *VolumePath;
+   EFI_DEVICE_PATH *node;
+
+   UINT8 Type;
+   UINT8 SubType;
+
+   if (efiboot_version_str != NULL ||
+       params_version_str != NULL ||
+       mtsn_str != NULL ||
+       architecture_str != NULL ||
+       vlan_id_str != NULL ||
+       ipv4_str != NULL ||
+       ipv6_str != NULL ||
+       netmask_str != NULL ||
+       prefix_str != NULL ||
+       gatewayv4_str != NULL ||
+       gatewayv6_str != NULL ||
+       dns_servers.length > 0 ||
+       dns_servers.entries != NULL ||
+       mac_str != NULL) {
+      Status = ERR_INVALID_PARAMETER;
+      goto out;
+   }
+
+   Status = get_boot_volume(&Volume);
+   if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "EFI error getting boot volume: %zx", Status);
+      goto out;
+   }
+
+   Status = devpath_get(Volume, &VolumePath);
+   if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "Error getting boot volume devpath: %zx", Status);
+      goto out;
+   }
+
+   Status = extract_efiboot_version(
+      _expected_hash, (char**)&efiboot_version_str);
+   if (EFI_ERROR(Status)) {
+      Log(LOG_ERR, "Failed to extract efiboot_version");
+      goto out;
+   }
+
+   /*
+    * This version must be changed by hand whenever calls to the function
+    * query_string_add_parameters are added, edited or removed and when the
+    * function fetch_devpath_parameters including all of the functions called
+    * by it recursively are changed.
+    */
+
+   params_version_str = EFIBOOT_PARAMS_VERSION;
+
+   mtsn_str = EFIBOOT_MTSN;
+
+   architecture_str = AUTO_DEPLOY_ARCH;
+
+   FOREACH_DEVPATH_NODE(VolumePath, node) {
+      Type = node->Type;
+      SubType = node->SubType;
+
+      if (Type == MESSAGING_DEVICE_PATH && SubType == MSG_VLAN_DP) {
+         if (vlan_id_str == NULL) {
+            Status = extract_vlan_id(
+               (VLAN_DEVICE_PATH*)node, (char**)&vlan_id_str);
+            if (EFI_ERROR(Status)) {
+               Log(LOG_ERR, "Failed to extract VLAN from Device Path");
+               goto out;
+            }
+         } else {
+            Log(LOG_DEBUG,"Found unexpected VLAN Device Path node, skipping.");
+         }
+      } else if (Type == MESSAGING_DEVICE_PATH && SubType == MSG_IPv4_DP) {
+         if (ipv4_str == NULL && netmask_str == NULL && gatewayv4_str == NULL) {
+            Status = extract_ipv4_data(
+               (IPv4_DEVICE_PATH*)node,
+               (char**)&ipv4_str,
+               (char**)&netmask_str,
+               (char**)&gatewayv4_str
+            );
+
+            if (EFI_ERROR(Status)) {
+               Log(LOG_ERR,
+                  "Failed to extract ipv4-related data from Device Path");
+               goto out;
+            }
+         } else {
+            Log(LOG_DEBUG, "Found unexpected IPv4 Device Path node, skipping.");
+         }
+      } else if (Type == MESSAGING_DEVICE_PATH && SubType == MSG_IPv6_DP) {
+         if (ipv6_str == NULL && prefix_str == NULL && gatewayv6_str == NULL) {
+            Status = extract_ipv6_data(
+               (IPv6_DEVICE_PATH*)node,
+               (char**)&ipv6_str,
+               (char**)&prefix_str,
+               (char**)&gatewayv6_str
+            );
+
+            if (EFI_ERROR(Status)) {
+               Log(LOG_ERR,
+                  "Failed to extract ipv6-related data from Device Path");
+               goto out;
+            }
+         } else {
+            Log(LOG_DEBUG, "Found unexpected IPv6 Device Path node, skipping.");
+         }
+      } else if (Type == MESSAGING_DEVICE_PATH && SubType == MSG_DNS_DP) {
+         if (dns_servers.length == 0 && dns_servers.entries == NULL) {
+            Status = extract_dns_data(
+               (DNS_DEVICE_PATH*)node,
+               &dns_servers
+            );
+
+            if (EFI_ERROR(Status)) {
+               Log(LOG_ERR, "Failed to extract DNS data from Device Path");
+               goto out;
+            }
+         } else {
+            Log(LOG_DEBUG, "Found unexpected DNS Device Path node, skipping.");
+         }
+      } else if (Type == MESSAGING_DEVICE_PATH && SubType == MSG_MAC_ADDR_DP) {
+         if (mac_str == NULL) {
+            Status = extract_mac(
+               (MAC_ADDR_DEVICE_PATH*)node,
+               (char**)&mac_str
+            );
+
+            if (EFI_ERROR(Status)) {
+               Log(LOG_ERR, "Failed to extract mac from Device Path");
+               goto out;
+            }
+         } else {
+            Log(LOG_DEBUG,
+               "Found unexpected MAC Address Device Path node, skipping.");
+         }
+      }
+   }
+
+out:
+
+   return error_efi_to_generic(Status);
+}
+
+/*-- fetch_pxe_boot_data -------------------------------------------------------
+ *
+ *      Extract PXE Boot data and store it globally. Calling this function more
+ *      than once without resetting the corresponding global variables to NULL
+ *      will result in an error.
+ *
+ * Parameters
+ *
+ * Results
+ *      ERR_SUCCESS on success or a generic error status
+ *----------------------------------------------------------------------------*/
+int fetch_pxe_boot_data(void)
+{
+   EFI_PXE_BASE_CODE *pxe = NULL;
+   EFI_STATUS Status = EFI_SUCCESS;
+
+   if (is_pxe_boot(&pxe)) {
+      if ((Status = get_pxe_boot_hostname_and_domain(pxe, &hostname, &domain))
+            != EFI_SUCCESS) {
+         Log(LOG_ERR, "Failed to obtain PXE Boot Hostname and Domain.");
+      }
+   }
+
+   return error_efi_to_generic(Status);
 }
 
 /*-- main ----------------------------------------------------------------------
@@ -1618,13 +1912,12 @@ int fetch_smbios_data(void)
 int main(int argc, char **argv)
 {
    int status;
-   char *bootfile;
    key_code_t key;
-   bool serial = false;
+   bool serial_log = false;
    int port = DEFAULT_SERIAL_COM;
    int baud = DEFAULT_SERIAL_BAUDRATE;
-   int i;
-   EFI_STATUS Status;
+   const char* boot_ift_mac = NULL;
+
    const char* query_string;
 
 #ifdef DEBUG
@@ -1633,7 +1926,7 @@ int main(int argc, char **argv)
    * to option parsing or when options can't be given.
    */
    verbose = true;
-   serial = true;
+   serial_log = true;
 #endif /* DEBUG */
 
    status = log_init(verbose);
@@ -1641,16 +1934,12 @@ int main(int argc, char **argv)
       goto out;
    }
 
-    for (i = 0; i < argc; i++) {
-       Log(LOG_DEBUG, "argv[%d]=%s", i, argv[i]);
-    }
-
    if (argc > 0) {
       int opt;
 
       optind = 1;
       do {
-         opt = getopt(argc, argv, ":D:S:s:VhH:b:E:q:C");
+         opt = getopt(argc, argv, ":D:S:s:VhH:b:E:q:Cr");
          switch (opt) {
          case -1:
             break;
@@ -1658,11 +1947,11 @@ int main(int argc, char **argv)
             debug = atoi(optarg);
             break;
          case 'S': /* serial port */
-            serial = true;
+            serial_log = true;
             port = atoi(optarg);
             break;
          case 's': /* serial bit rate */
-            serial = true;
+            serial_log = true;
             baud = atoi(optarg);
             break;
          case 'V': /* verbose */
@@ -1700,7 +1989,10 @@ int main(int argc, char **argv)
             }
             break;
          case 'C':
-            collect_and_use_smbios_data = true;
+            collect_and_use_smbios_and_device_path_data = true;
+            break;
+         case 'r':
+            reboot_on_error = !reboot_on_error;
             break;
          case ':': /* missing option argument */
             Log(LOG_CRIT, "Missing argument to -%c", optopt);
@@ -1722,7 +2014,7 @@ int main(int argc, char **argv)
    if (status != ERR_SUCCESS) {
       goto out;
    }
-   if (serial) {
+   if (serial_log) {
       serial_log_init(port, baud);
    }
 
@@ -1733,10 +2025,52 @@ int main(int argc, char **argv)
     * because of HEADERS_SIZE is uefi/uefi.lds.  Check the symbol
     * table in the .elf binary to be sure.
     */
-   Log(LOG_DEBUG, "menu.efi __executable_start is at %p",
-       __executable_start);
+   Log(LOG_DEBUG, "menu.efi __executable_start is at %p", __executable_start);
+
+   /*
+    * Toggle the state of the policies corresponding to "-C" and "-r" command
+    * line options so to be enabled by default when the binary name starts with
+    * VBM_FILENAME_PREFIX. These are toggled so to be possible to revert the
+    * state of any one of these by providing the same command line option e.g.
+    * if "-r" is passed to this bootloader when its name starts with
+    * VBM_FILENAME_PREFIX the result will be that the reboot on error policy
+    * will be reverted to disabled state.
+    */
+   if (argc > 0 &&
+       strncasecmp(argv[0],
+                   VBM_FILENAME_PREFIX,
+                   ARRAY_SIZE(VBM_FILENAME_PREFIX) - 1) == 0) {
+      Log(LOG_DEBUG,
+          "Toggle -C and -r options because argv[0] starts with '%s'",
+          VBM_FILENAME_PREFIX);
+
+      collect_and_use_smbios_and_device_path_data =
+         !collect_and_use_smbios_and_device_path_data;
+      reboot_on_error = !reboot_on_error;
+   }
+
+   if ((status = get_boot_file((char **)&bootfile)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to retrieve boot file name.");
+      goto out;
+   }
+
+   if ((status = fetch_devpath_parameters()) != EFI_SUCCESS) {
+      Log(LOG_ERR, "Failed to retrieve Device Path data.");
+      goto out;
+   }
 
    if ((status = fetch_smbios_data()) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to retrieve SMBIOS data.");
+      goto out;
+   }
+
+   if ((status = fetch_pxe_boot_data()) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to retrieve PXE Boot data.");
+      goto out;
+   }
+
+   if ((status = get_mac_address(&boot_ift_mac)) != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to retrieve MAC address with Interface Type.");
       goto out;
    }
 
@@ -1745,16 +2079,28 @@ int main(int argc, char **argv)
     * in the welcome message.
     */
    snprintf(welcome, sizeof(welcome), "vSphere Boot Manager %08x, MAC %s",
-            *(uint32_t *)_expected_hash, mac_str);
+            get_hash_id(_expected_hash), boot_ift_mac);
    Log(LOG_DEBUG, "%s", welcome);
 
-   if ((status = process_query_string()) != ERR_SUCCESS) {
+   if ((status = process_command_line_query_string_parameters())
+         != ERR_SUCCESS) {
+      Log(LOG_ERR, "Failed to process command line query string parameters");
       goto out;
    }
 
-   if (collect_and_use_smbios_data) {
+   if (collect_and_use_smbios_and_device_path_data) {
+      if ((status = add_device_path_query_string_parameters()) != ERR_SUCCESS) {
+         Log(LOG_ERR, "Failed to add Device Path query string parameters");
+         goto out;
+      }
+
       if ((status = add_smbios_query_string_parameters()) != ERR_SUCCESS) {
-         Log(LOG_ERR, "Failed to add smbios query string parameters");
+         Log(LOG_ERR, "Failed to add SMBIOS query string parameters");
+         goto out;
+      }
+
+      if ((status = add_pxe_boot_query_string_parameters()) != ERR_SUCCESS) {
+         Log(LOG_ERR, "Failed to add PXE Boot query string parameters");
          goto out;
       }
    }
@@ -1766,11 +2112,6 @@ int main(int argc, char **argv)
 
    if (query_string != NULL) {
       Log(LOG_DEBUG, "Generated query_string %s", query_string);
-   }
-
-   status = get_boot_file(&bootfile);
-   if (status != ERR_SUCCESS) {
-      goto out;
    }
 
    if (homedir == NULL) {
@@ -1787,17 +2128,13 @@ int main(int argc, char **argv)
       free(bootdir);
    }
 
-   Status = get_boot_volume(&Volume);
-   if (EFI_ERROR(Status)) {
-      return error_efi_to_generic(Status);
-   }
-
    Log(LOG_DEBUG, "main bootfile=%s homedir=%s argc=%d",
        bootfile, homedir, argc);
 
    status = do_menu(optind < argc ? argv[optind] : NULL);
 
- out:
+out:
+
    if (status == ERR_SUCCESS || status == ERR_ABORTED) {
       Log(LOG_DEBUG, "Returning %d (%s)", status, error_str[status]);
    } else if (status != ERR_SUCCESS) {
@@ -1807,6 +2144,58 @@ int main(int argc, char **argv)
           status, error_str[status]);
       kbd_waitkey_timeout(&key, err_timeout);
    }
+
    query_string_cleanup();
+
+   /* oem_strings cleanup */
+
+   free(oem_strings.entries);
+   oem_strings.entries = NULL;
+
+   oem_strings.length = 0;
+
+   free((char*)efiboot_version_str);
+   efiboot_version_str = NULL;
+
+   free((char*)vlan_id_str);
+   vlan_id_str = NULL;
+
+   free((char*)ipv4_str);
+   ipv4_str = NULL;
+
+   free((char*)ipv6_str);
+   ipv6_str = NULL;
+
+   free((char*)netmask_str);
+   netmask_str = NULL;
+
+   free((char*)prefix_str);
+   prefix_str = NULL;
+
+   free((char*)gatewayv4_str);
+   gatewayv4_str = NULL;
+
+   free((char*)gatewayv6_str);
+   gatewayv6_str = NULL;
+
+   for (size_t index = 0; index < dns_servers.length; ++index) {
+      free((char*)(dns_servers.entries[index].key));
+      free((char*)(dns_servers.entries[index].value));
+   }
+   free((char*)(dns_servers.entries));
+   dns_servers.entries = NULL;
+   dns_servers.length = 0;
+
+   free((char*)mac_str);
+   mac_str = NULL;
+
+   free((char*)smbios_version);
+   smbios_version = NULL;
+
+   if (reboot_on_error &&
+       (status != ERR_SUCCESS && status != ERR_ABORTED)) {
+      rs->ResetSystem(EfiResetCold, status, 0, NULL);
+   }
+
    return status;
 }

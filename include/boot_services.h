@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc.
  * and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
@@ -69,7 +69,6 @@ EXTERN int blacklist_specific_purpose_memory(efi_info_t *efi_info);
 EXTERN int get_acpi_rsdp(void **rsdp);
 EXTERN int get_smbios_eps(void **eps_start);
 EXTERN int get_smbios_v3_eps(void **eps_start);
-EXTERN int get_fdt(void **fdt_start);
 EXTERN int get_tcg2_final_events(void **final_events_start);
 
 /*

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2019 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -207,22 +207,6 @@ int get_smbios_v3_eps(void **eps_start)
  *      on x86 systems.
  *----------------------------------------------------------------------------*/
 int get_acpi_rsdp(UNUSED_PARAM(void **rsdp))
-{
-   return ERR_UNSUPPORTED;
-}
-
-
-/*-- get_fdt ---------------------------------------------------------
- *
- *      Get the Flattened Device Tree blob.
- *
- * Parameters
- *      OUT fdt_start: pointer to starting address of the FDT.
- *
- * Results
- *      ERR_UNSUPPORTED, as the FDT isn't used on BIOS or x86 systems.
- *----------------------------------------------------------------------------*/
-int get_fdt(UNUSED_PARAM(void **fdt_start))
 {
    return ERR_UNSUPPORTED;
 }

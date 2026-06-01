@@ -147,7 +147,7 @@ size_t uriencode(
  *----------------------------------------------------------------------------*/
 size_t generate_query_string(const size_t length, char* string)
 {
-   size_t query_string_length = 0;
+   size_t local_query_string_length = 0;
 
    const char* EQUALS_STRING = "=";
    const char* AND_STRING = "&";
@@ -164,67 +164,67 @@ size_t generate_query_string(const size_t length, char* string)
 
    if (query_string_parameters.length > 0 ) {
       /* key_str=value_str for the first */
-      query_string_length += uriencode(
+      local_query_string_length += uriencode(
          query_string_parameters.parameters[0].key,
          length,
          string,
-         query_string_length,
+         local_query_string_length,
          false
       );
 
-      query_string_length += uriencode(
+      local_query_string_length += uriencode(
          EQUALS_STRING,
          length,
          string,
-         query_string_length,
+         local_query_string_length,
          true
       );
 
-      query_string_length += uriencode(
+      local_query_string_length += uriencode(
          query_string_parameters.parameters[0].value,
          length,
          string,
-         query_string_length,
+         local_query_string_length,
          false
       );
 
       /* &key_str=value_str for the rest */
       for (size_t i = 1; i < query_string_parameters.length; ++i) {
-         query_string_length += uriencode(
+         local_query_string_length += uriencode(
             AND_STRING,
             length,
             string,
-            query_string_length,
+            local_query_string_length,
             true
          );
 
-         query_string_length += uriencode(
+         local_query_string_length += uriencode(
             query_string_parameters.parameters[i].key,
             length,
             string,
-            query_string_length,
+            local_query_string_length,
             false
          );
 
-         query_string_length += uriencode(
+         local_query_string_length += uriencode(
             EQUALS_STRING,
             length,
             string,
-            query_string_length,
+            local_query_string_length,
             true
          );
 
-         query_string_length += uriencode(
+         local_query_string_length += uriencode(
             query_string_parameters.parameters[i].value,
             length,
             string,
-            query_string_length,
+            local_query_string_length,
             false
          );
       }
    }
 
-   return query_string_length;
+   return local_query_string_length;
 }
 
 /*-- regenerate_query_string ---------------------------------------------------
