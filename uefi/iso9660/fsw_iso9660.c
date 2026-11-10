@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2011 Broadcom. All Rights Reserved.
+ * Copyright (c) 2010-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -391,6 +391,7 @@ static fsw_status_t fsw_iso9660_read_dirrec(struct fsw_shandle *shand, struct is
     fsw_u32         buffer_size, remaining_size, name_len;
     int             i;
     struct iso9660_dirrec *dirrec = &dirrec_buffer->dirrec;
+    fsw_u64         oldPos;
 
     dirrec_buffer->ino = (ISOINT(((struct fsw_iso9660_dnode *)shand->dnode)->dirrec.extent_location)
                           << ISO9660_BLOCKSIZE_BITS)
@@ -399,6 +400,7 @@ static fsw_status_t fsw_iso9660_read_dirrec(struct fsw_shandle *shand, struct is
 again:
     // read fixed size part of directory record
     buffer_size = 33;
+    oldPos = shand->pos;
     status = fsw_shandle_read(shand, &buffer_size, dirrec);
     if (status)
         return status;
@@ -411,7 +413,10 @@ again:
 
     if (dirrec->dirrec_length == 0) {
        // end of logical block reached, seek forward to the next logical block
-       shand->pos = roundup64(shand->pos - buffer_size, ISO9660_BLOCKSIZE);
+       shand->pos = roundup64((shand->pos - buffer_size) + 1, ISO9660_BLOCKSIZE);
+       if (shand->pos <= oldPos) {
+          return FSW_VOLUME_CORRUPTED;
+       }
        goto again;
     }
 

@@ -304,6 +304,7 @@ int argv_to_str(int argc, char **argv, char **s)
 /*-- file_sanitize_path --------------------------------------------------------
  *
  *      Sanitize a UNIX-style or URL-style path
+ *        - \ is changed to / throughout
  *        - the first :// sequence, if any, keeps its //
  *        - other multiple-separator / occurrences are merged
  *        - whitespace characters are removed (XXX why?)

@@ -104,6 +104,11 @@ int smbios_get_struct(smbios_entry ptr,
                       smbios_entry *entry)
 {
    while (ptr.raw_bytes < end.raw_bytes) {
+      if (ptr.raw_bytes + ptr.header->length > end.raw_bytes ||
+          ptr.header->length < sizeof(smbios_header)) {
+         return ERR_NOT_FOUND;
+      }
+
       if (ptr.header->type == type) {
          *entry = ptr;
          return ERR_SUCCESS;
@@ -117,6 +122,9 @@ int smbios_get_struct(smbios_entry ptr,
             ptr.raw_bytes += 2;
             break;
          }
+      }
+      if (ptr.raw_bytes >= end.raw_bytes - 1) {
+         break;
       }
    }
 
@@ -146,6 +154,11 @@ char *smbios_get_string(smbios_entry ptr,
    for (ptr.raw_bytes += ptr.header->length;
         ptr.raw_bytes < end.raw_bytes - 1;
         ptr.raw_bytes++) {
+      if (ptr.raw_bytes + ptr.header->length > end.raw_bytes ||
+          ptr.header->length < sizeof(smbios_header)) {
+         return NULL;
+      }
+
       if (current == index) {
          return (char *) ptr.raw_bytes;
       }
@@ -631,9 +644,14 @@ int smbios_get_chassis_info (
 
             if (version_major > 2 ||
                 (version_major == 2 && version_minor >= 7)) {
-               if (sku != NULL) {
-                  smbios_string_id id = type3.type3->elements_data[
-                     type3.type3->element_count * type3.type3->element_length];
+               uint16_t elements_data_off =
+                  offsetof(smbios_type3, elements_data);
+               uint16_t type3_elem_len =
+                  type3.type3->element_count * type3.type3->element_length;
+               if (sku != NULL &&
+                  (elements_data_off + type3_elem_len) < type3.header->length) {
+                  smbios_string_id id =
+                     type3.type3->elements_data[type3_elem_len];
                   *sku = smbios_get_string(type3, smbios_end, id);
                }
             }

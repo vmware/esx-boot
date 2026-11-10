@@ -115,7 +115,7 @@ size_t uriencode(
          }
          current_output_length++;
       } else {
-         const char elems[] = { '%', hexDigits[input[i] >> 4],
+         const char elems[] = { '%', hexDigits[(unsigned char)input[i] >> 4],
             hexDigits[input[i] & 0x0F] };
          for (size_t j = 0; j < sizeof(elems); ++j) {
             if (output_buffer && offset + current_output_length <

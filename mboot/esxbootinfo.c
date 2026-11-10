@@ -222,6 +222,7 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
    int status;
    size_t i;
    Elf_CommonAddr base;
+   size_t off;
 
    if (kbuf == NULL || ksize == 0) {
       return ERR_INVALID_PARAMETER;
@@ -233,11 +234,16 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
    }
 
    status = elf_check_headers(kbuf, ksize, &base);
-   if (IS_WARNING(status)) {
-      Log(LOG_WARNING, "Funny-looking ELF\n");
-   } else if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Invalid ELF binary.\n");
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Invalid ELF binary: %d (%s).\n",
+          status, error_str[status]);
       return status;
+   }
+
+   off = base - (uintptr_t)kbuf;
+   if (off >= ksize) {
+      Log(LOG_ERR, "Invalid offset.\n");
+      return ERR_BAD_TYPE;
    }
 
    /*
@@ -248,7 +254,7 @@ int check_esxbootinfo_kernel(void *kbuf, size_t ksize)
     */
    for (i = 0; i < ESXBOOTINFO_ALIGNMENT; i++) {
       mbh = esxbootinfo_scan((char *) (uintptr_t) base + i,
-                          ksize - i - (base - (uintptr_t) kbuf));
+                          (off + i < ksize) ? ksize - off - i : 0);
       if (mbh != NULL) {
          break;
       }

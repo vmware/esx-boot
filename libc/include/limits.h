@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2022 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -30,6 +30,7 @@
 #define ULONG_MAX   (4294967295UL)
 #endif
 
+#define SIZE_MAX    ULONG_MAX
 #define SSIZE_MAX   LONG_MAX
 
 #endif /* !_LIMITS_H */

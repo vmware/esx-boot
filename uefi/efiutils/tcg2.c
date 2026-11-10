@@ -347,8 +347,20 @@ EFI_STATUS tcg2_log_extend_event(uint32_t pcrIndex,
                                  uint64_t eventSize)
 {
    EFI_TCG2_EVENT *tcg2Event;
-   const uint32_t tcg2EventSize = offsetof(EFI_TCG2_EVENT, Event) + eventSize;
+   const uint64_t tcg2EventSize = offsetof(EFI_TCG2_EVENT, Event) + eventSize;
    EFI_STATUS Status;
+
+   /*
+    * Cap the calculated tcg2EventSize to UINT32_MAX for safe assignment
+    * to the tcg2Event->Size field, which is of type UINT32.
+    *
+    * The check must target the input eventSize to prevent 64-bit overflow,
+    * which could otherwise cause tcg2EventSize to wrap and become a small,
+    * incorrect value, defeating a direct UINT32_MAX check.
+    */
+   if (eventSize > (UINT32_MAX - offsetof(EFI_TCG2_EVENT, Event))) {
+      return EFI_INVALID_PARAMETER;
+   }
 
    if (tcg2 == NULL) {
       return EFI_NOT_STARTED;

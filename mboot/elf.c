@@ -104,18 +104,19 @@ static int is_valid_elf(void *buffer, size_t buflen)
       return ERR_BAD_HEADER;
    }
 
-   if ((size_t)Elf_CommonEhdrGetPhNum(ehdr) * Elf_CommonPhdrSize(is64)
-       + Elf_CommonEhdrGetPhOff(ehdr) > buflen) {
+   if (Elf_CommonEhdrGetPhOff(ehdr) > buflen ||
+      (size_t)Elf_CommonEhdrGetPhNum(ehdr) * Elf_CommonPhdrSize(is64) >
+      buflen - Elf_CommonEhdrGetPhOff(ehdr)) {
       return ERR_UNEXPECTED_EOF;
    }
 
    if (ehdr->e_ident[EI_VERSION] != EV_CURRENT ||
        Elf_CommonEhdrGetVersion(ehdr) != EV_CURRENT) {
-      return WARNING(ERR_INCOMPATIBLE_VERSION);
+      return ERR_INCOMPATIBLE_VERSION;
    }
 
    if (Elf_CommonEhdrGetPhEntSize(ehdr) != Elf_CommonPhdrSize(is64)) {
-      return WARNING(ERR_BAD_HEADER);
+      return ERR_BAD_HEADER;
    }
 
    return ERR_SUCCESS;
@@ -144,7 +145,7 @@ int elf_check_headers(void *buffer, size_t buflen, Elf_CommonAddr *base)
    int status;
 
    status = is_valid_elf(buffer, buflen);
-   if (status != ERR_SUCCESS && !IS_WARNING(status)) {
+   if (status != ERR_SUCCESS) {
       return status;
    }
 
@@ -155,6 +156,11 @@ int elf_check_headers(void *buffer, size_t buflen, Elf_CommonAddr *base)
       ph = Elf_CommonEhdrGetPhdr(ehdr, phdr, i);
 
       if (Elf_CommonPhdrGetType(ehdr, ph) == PT_LOAD) {
+         if (Elf_CommonPhdrGetOffset(ehdr, ph) > buflen ||
+             Elf_CommonPhdrGetFilesz(ehdr, ph) >
+               buflen - Elf_CommonPhdrGetOffset(ehdr, ph)) {
+               return ERR_UNEXPECTED_EOF;
+         }
          load_addr = (char *)buffer + Elf_CommonPhdrGetOffset(ehdr, ph);
          load_size = Elf_CommonPhdrGetFilesz(ehdr, ph);
 

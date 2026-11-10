@@ -134,8 +134,8 @@ int tpm_get_event_log(tpm_event_log_t *log)
 static int tpm_extend_tagged_event(const tpm_event_t *event)
 {
    TCG_PCClientTaggedEvent *tEvent;
-   uint32_t tEventHeaderSize;
-   uint32_t tEventSize;
+   uint64_t tEventHeaderSize;
+   uint64_t tEventSize;
    uint8_t *tEventData;
    EFI_STATUS status;
 
@@ -144,6 +144,17 @@ static int tpm_extend_tagged_event(const tpm_event_t *event)
    tEventHeaderSize = sizeof(tEvent->taggedEventID) +
                       sizeof(tEvent->taggedEventDataSize);
    tEventSize = tEventHeaderSize + event->eventDataSize;
+
+   /*
+    * In case there is a 64-bit integer overflow, which causes tEventSize to
+    * wrap and become a small, incorrect value.
+    *
+    * Even worse, it will cause a buffer overrun in the following memcpy().
+    */
+   if (tEventSize < event->eventDataSize) {
+      return ERR_INVALID_PARAMETER;
+   }
+
    tEvent = malloc(tEventSize);
    if (tEvent == NULL) {
       return ERR_OUT_OF_RESOURCES;
@@ -198,26 +209,85 @@ static int get_module_version_section(const void *buffer, size_t buflen,
    // Need to drop constness for ELF helpers, unfortunately.
    Elf_CommonEhdr *ehdr = (Elf_CommonEhdr *)buffer;
    uint16_t numSections;
+   uint16_t eshstrNdx;
+   uint64_t shstrOff;
+   uint64_t shstrSize;
+   uint64_t shoff;
+   uint16_t shentsize;
+
    int i;
 
    // All modules should be 64-bit ELF, and 64-bit is bigger anyway.
    if (buflen < Elf_CommonEhdrSize(TRUE) || !IS_ELF(*ehdr)) {
       return ERR_NOT_FOUND;
    }
+
+   /*
+    * Ensure the overall buffer length does not exceed the maximum positive
+    * value of a signed size type (ssize_t) to prevent overflow during
+    * offset arithmetic.
+    */
    if (buflen > SSIZE_MAX) {
       return ERR_INVALID_PARAMETER;
    }
 
+   /*
+    * Verify the section header string table index actually points to a
+    * valid entry within the number of defined sections.
+    */
    numSections = Elf_CommonEhdrGetShNum(ehdr);
+   eshstrNdx = Elf_CommonEhdrGetShStrNdx(ehdr);
+   if (eshstrNdx >= numSections) {
+      return ERR_INVALID_PARAMETER; // e_shstrndx < e_shnum
+   }
+
+   /*
+    * Verify that the entire section header table (from its start offset through
+    * all of its entries) fits completely within the provided file buffer.
+    */
+   shoff = Elf_CommonEhdrGetShOff(ehdr);
+   shentsize = Elf_CommonEhdrGetShEntSize(ehdr);
+   if (shoff > buflen || ((size_t)numSections * shentsize) > buflen - shoff) {
+      return ERR_INVALID_PARAMETER;
+   }
+
+   /*
+    * Verify that the actual string data block for the section header
+    * string table fits completely within the file buffer.
+    */
+   shstrOff = Elf_CommonShdrGetOff(ehdr, eshstrNdx);
+   shstrSize = Elf_CommonShdrGetSize(ehdr, eshstrNdx);
+   if (shstrOff > buflen || shstrSize > buflen - shstrOff) {
+      // Bad ELF
+      return ERR_INVALID_PARAMETER;
+   }
 
    for (i = 0; i < numSections; i++) {
       const Elf_CommonShdr *shdr = Elf_CommonShdrGet(ehdr, i);
       ssize_t shdrEndOff;
+      uint64_t shdrOff;
+      uint64_t shdrSize;
 
+      /*
+       * Ensure the memory footprint of this specific section header structure
+       * does not underflow or overflow the file buffer.
+       */
       shdrEndOff = (const uint8_t *)shdr + sizeof(Elf_CommonShdr) -
                    (const uint8_t *)buffer;
       if ((const uint8_t *)shdr < (const uint8_t *)buffer ||
           shdrEndOff > (ssize_t)buflen) {
+         // Bad ELF
+         return ERR_INVALID_PARAMETER;
+      }
+
+      /*
+       * Verify that this section's data payload fits within the file buffer,
+       * and that its name index does not point past the end of the string table.
+       */
+      shdrOff = Elf_CommonShdrGetOff(ehdr, i);
+      shdrSize = Elf_CommonShdrGetSize(ehdr, i);
+      if (shdrOff > buflen || shdrSize > buflen - shdrOff ||
+            Elf_CommonShdrGetName(ehdr, i) >= shstrSize) {
          // Bad ELF
          return ERR_INVALID_PARAMETER;
       }
@@ -227,6 +297,10 @@ static int get_module_version_section(const void *buffer, size_t buflen,
          size_t secSize = Elf_CommonShdrGetSize(ehdr, i);
          ssize_t secEndOff;
 
+         /*
+          * Guarantee that the exact memory region containing the target
+          * ".version" contents is fully within the buffer before returning it.
+          */
          secEndOff = secAddr + secSize - (const uint8_t*)buffer;
          if (secAddr < (const uint8_t *)buffer || secEndOff > (ssize_t)buflen) {
             // Bad ELF

@@ -262,7 +262,7 @@ static int fat_file_load(int volid, const char *filename,
                          size_t *bufsize)
 {
    struct libfat_filesystem *fs;
-   size_t count, len, n, size;
+   size_t count, len, n, size, data_buf_size;
    libfat_sector_t sector;
    int status;
    void *data;
@@ -281,7 +281,20 @@ static int fat_file_load(int volid, const char *filename,
 
    count = ceil(size, disk.bytes_per_sector);
 
-   data = malloc(count * disk.bytes_per_sector);
+   data_buf_size = count * disk.bytes_per_sector;
+   /*
+    * In case there is an integer overflow, which causes data_buf_size to wrap
+    * and become a small, incorrect value.
+    *
+    * As a result, the following for-loop will issue fat_fread_sectors() for
+    * `count` sectors into the undersized data buffer.
+    */
+   if (data_buf_size < size) {
+      libfat_close(fs);
+      return ERR_OUT_OF_RESOURCES;
+   }
+
+   data = malloc(data_buf_size);
    if (data == NULL) {
       libfat_close(fs);
       return ERR_OUT_OF_RESOURCES;

@@ -76,6 +76,8 @@ D(ERR_CONNECTION_FIN,       EFI_CONNECTION_FIN,       "Connection closed")    \
 D(ERR_CONNECTION_RESET,     EFI_CONNECTION_RESET,     "Connection reset")     \
 D(ERR_CONNECTION_REFUSED,   EFI_CONNECTION_REFUSED,   "Connection refused")   \
 D(ERR_TEST_FAILURE,         EFI_UNDEFINED_ERROR,      "Test error")           \
+D(ERR_RESTART,              EFI_UNDEFINED_ERROR,      "Restart requested")    \
+D(ERR_RECURSION,            EFI_UNDEFINED_ERROR,      "Recursion too deep")   \
 
 #define D(symbol, efi_symbol, string) symbol,
 enum {
@@ -83,8 +85,5 @@ enum {
    ERROR_NUMBER
 };
 #undef D
-
-#define WARNING(_status_)     ((_status_) | 0x80000000)
-#define IS_WARNING(_status_)  ((_status_) & 0x80000000)
 
 #endif /* ERROR_H_ */

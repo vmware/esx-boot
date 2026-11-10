@@ -1,7 +1,7 @@
 #! /usr/bin/python
 
 #*******************************************************************************
-# Copyright (c) 2020-2022 Broadcom. All Rights Reserved.
+# Copyright (c) 2020-2026 Broadcom. All Rights Reserved.
 # The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: GPL-2.0
 #*******************************************************************************
@@ -9,11 +9,24 @@
 # Extract public key from an authenticode certificate to C source.
 # Usage: getkeys.py < input_file.json > output_file.c
 #
-# Input json file has format:
+# Input json file has the format:
 # {
-#    "test": ["key1", "key2", ...],
-#    "official": ["key1", "key2", ...]
+#    "label1": ["key1", "key2", ...],
+#    "label2": ["key3", "key4", ...]
 # }
+
+# In the above, the keys in the "label1" list are included in the
+# output file inside #if defined(label1) ... #endif brackets, etc.
+#
+# An empty string is also allowed as the label; in that case the keys
+# are included unconditionally -- no "#if ... #endif".
+#
+# The way this is used currently is with "test" to label test keys and
+# "" to label official keys, so that mboot-test trusts both official
+# keys and test keys, while mboot-official trusts only official keys.
+# It would be possible to use "official" as a label too (and that was
+# done in the past), but we no longer want to have any keys that are
+# trusted by mboot-official but not by mboot-test.  See bug 3705511.
 
 import base64
 import json

@@ -228,7 +228,8 @@ const uint8_t _hmac_key[HASH_SIZE] = {
 static char welcome[100];
 
 #define LOCALBOOT_NONE 0xb0091e
-#define TIMEOUT_INFINITE 30000
+#define TIMEOUT_LONG 30000 // seconds
+#define MAX_DEPTH 16
 
 typedef struct MenuItem {
    struct MenuItem *next;
@@ -270,7 +271,6 @@ int menu_volid = 0;
 char *homedir;
 char *menuefi_d;
 char *pxelinux_cfg;
-Menu *rootmenu;
 EFI_HANDLE Volume;
 int err_timeout = 30; //seconds
 
@@ -318,8 +318,8 @@ const char* mac_str = NULL;
 bool collect_and_use_smbios_and_device_path_data = false;
 bool reboot_on_error = false;
 
-int do_menu(const char *filename);
-int do_item(Menu *menu, MenuItem *item);
+int do_menu(const char *filename, int depth);
+int do_item(Menu *menu, MenuItem *item, int depth);
 int chain_to(const char *program, const char *arguments);
 void set_verbose(bool verbose);
 
@@ -713,6 +713,7 @@ bool parse_efi_subcommand(Menu *menu)
          Log(LOG_WARNING, "Cannot set homedir to %s: %s",
              str, error_str[status]);
       }
+      free(str);
 
    } else if (match_token(menu, "HTTP")) {
       if (has_gpxe_download_proto(Volume) || has_http(Volume)) {
@@ -864,7 +865,7 @@ int parse_menu(const char *filename, char *buffer, size_t bufsize,
          menu->last->recurse = true;
          menu->last->kernel = parse_str(menu);
 
-      } else if (match_token(menu, "TEXT")) {
+      } else if (menu->last && match_token(menu, "TEXT")) {
          status = parse_text_subcommand(menu, &menu->last->help);
          if (status != ERR_SUCCESS) {
             return status;
@@ -1047,15 +1048,17 @@ int read_file(const char *f, const char **fOut, void **bufOut, size_t *sizeOut)
  *      selected item.
  *
  * Parameters
- *      IN menu: current menu.
+ *      IN menu:  current menu.
+ *      IN depth: current recursion depth of do_item
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
+ *      ERR_RESTART if the user hit ESC to restart from the root menu.
  *      Generic error status on error.
  *----------------------------------------------------------------------------*/
-int run_menu(Menu *menu)
+int run_menu(Menu *menu, int depth)
 {
    key_code_t key;
    MenuItem *item;
@@ -1114,7 +1117,7 @@ int run_menu(Menu *menu)
 
    for (;;) {
       kbd_waitkey_timeout(&key, timeout);
-      timeout = TIMEOUT_INFINITE;
+      timeout = TIMEOUT_LONG;
 
       if (key.sym == KEYSYM_NONE) {
          // Timeout occurred
@@ -1158,7 +1161,7 @@ int run_menu(Menu *menu)
 
       } else if (key.sym == KEYSYM_ASCII &&
                  key.ascii == '\033' /*ESC*/) {
-         return run_menu(rootmenu);
+         return ERR_RESTART;
 
       } else if (key.sym == KEYSYM_ASCII) {
          num = tolower(key.ascii) - 'a';
@@ -1178,7 +1181,7 @@ int run_menu(Menu *menu)
          continue;
       }
 
-      return do_item(menu, item);
+      return do_item(menu, item, depth);
    }
 }
 
@@ -1188,22 +1191,29 @@ int run_menu(Menu *menu)
  *      chainloads the item.
  *
  * Parameters
- *      IN menu: current menu.
- *      IN item: selected item.
+ *      IN menu:  current menu.
+ *      IN item:  selected item.
+ *      IN depth: current recursion depth of do_item
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
+ *      ERR_RESTART if the user hit ESC to restart from the root menu.
+ *      ERR_RECURSION on excessive recursion depth.
  *      Generic error status on error.
  *----------------------------------------------------------------------------*/
-int do_item(Menu *menu, MenuItem *item)
+int do_item(Menu *menu, MenuItem *item, int depth)
 {
    char *program, *arguments, *bn;
-   int len;
+   int len, status;
 
-   Log(LOG_DEBUG, "do_item label=%s display=%s kernel=%s append=%s",
-       item->label, item->display, item->kernel, item->append);
+   if (++depth >= MAX_DEPTH) {
+      return ERR_RECURSION;
+   }
+
+   Log(LOG_DEBUG, "do_item label=%s display=%s kernel=%s append=%s depth=%d",
+       item->label, item->display, item->kernel, item->append, depth);
 
    if (item->localboot == -2) {
       return ERR_SUCCESS;
@@ -1212,7 +1222,7 @@ int do_item(Menu *menu, MenuItem *item)
       return ERR_ABORTED;
 
    } else if (item->recurse) {
-      return do_menu(item->kernel);
+      return do_menu(item->kernel, depth);
 
    } else if (!item->kernel) {
       /*
@@ -1291,7 +1301,10 @@ int do_item(Menu *menu, MenuItem *item)
          item2->localboot = LOCALBOOT_NONE;
          item2->kernel = arguments;
       }
-      return do_item(menu, item2);
+      status = do_item(menu, item2, depth);
+      free(program);
+      free(item2);
+      return status;
    }
 
    /*
@@ -1301,7 +1314,9 @@ int do_item(Menu *menu, MenuItem *item)
     */
    if ((strcmp(bn, "menu.efi") == 0 ||
         strcmp(bn, "menu.c32") == 0) && arguments[0] != '-') {
-      return do_menu(arguments);
+      status = do_menu(arguments, depth);
+      free(program);
+      return status;
    }
 
    len = strlen(program);
@@ -1321,7 +1336,9 @@ int do_item(Menu *menu, MenuItem *item)
       program = p;
    }
 
-   return chain_to(program, arguments);
+   status = chain_to(program, arguments);
+   free(program);
+   return status;
 }
 
 /*-- chain_to ------------------------------------------------------------------
@@ -1384,14 +1401,16 @@ int chain_to(const char *program, const char *arguments)
  * Parameters
  *      IN filename: name of file requested to be read.
  *                   Use default filename if NULL.
+ *      IN depth:    current recursion depth of do_item
  *
  * Results
  *      Does not return if an item was successfully chainloaded.
  *      ERR_SUCCESS on LOCALBOOT -2 or backspace.
  *      ERR_ABORTED on LOCALBOOT -1.
+ *      ERR_RESTART if the user hit ESC to restart from the root menu.
  *      Generic error status on error.
  *----------------------------------------------------------------------------*/
-int do_menu(const char *filename)
+int do_menu(const char *filename, int depth)
 {
    int status;
    Menu *menu;
@@ -1432,11 +1451,8 @@ int do_menu(const char *filename)
    }
    free(buffer);
    menu->buffer = NULL;
-   if (rootmenu == NULL) {
-      rootmenu = menu;
-   }
 
-   status = run_menu(menu);
+   status = run_menu(menu, depth);
    return status;
 }
 
@@ -2131,7 +2147,9 @@ int main(int argc, char **argv)
    Log(LOG_DEBUG, "main bootfile=%s homedir=%s argc=%d",
        bootfile, homedir, argc);
 
-   status = do_menu(optind < argc ? argv[optind] : NULL);
+   do {
+      status = do_menu(optind < argc ? argv[optind] : NULL, 0);
+   } while (status == ERR_RESTART);
 
 out:
 

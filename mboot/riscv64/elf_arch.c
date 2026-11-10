@@ -39,7 +39,7 @@ int elf_arch_supported(void *buffer)
 
    if (Elf_CommonEhdrGetType(ehdr) != ET_EXEC &&
        Elf_CommonEhdrGetType(ehdr) != ET_DYN) {
-      return WARNING(ERR_NOT_EXECUTABLE);
+      return ERR_NOT_EXECUTABLE;
    }
 
    return ERR_SUCCESS;

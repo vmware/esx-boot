@@ -116,6 +116,175 @@
 
 static bool isIPv6 = false;
 
+/*-- get_dhcpv4_option ---------------------------------------------------------
+ *
+ *      Generic helper to iterate over DHCPv4 options to retrieve a specific
+ *      option. If buffer is provided and large enough, copies the option data.
+ *      Returns EFI_BUFFER_TOO_SMALL if buffer is NULL or bufferSize is too
+ *      small.  If allowMultiple is true, the values of all instances of the
+ *      option are concatenated per RFC 3396; if not, only the first instance's
+ *      value is returned.
+ *
+ * Parameters
+ *      IN Packet:          pointer to a PXE BC packet
+ *      IN targetOptCode:   the option code to search for
+ *      OUT buffer:         buffer where to copy the option data (can be NULL)
+ *      IN/OUT bufferSize:  pointer to the buffer size
+ *      IN allowMultiple:   concatenate multiple instances
+ *
+ * Results
+ *      EFI_SUCCESS, EFI_BUFFER_TOO_SMALL, or an UEFI error status.
+ *----------------------------------------------------------------------------*/
+static EFI_STATUS get_dhcpv4_option(const EFI_PXE_BASE_CODE_PACKET *Packet,
+                                    uint8_t targetOptCode,
+                                    uint8_t *buffer,
+                                    UINTN *bufferSize,
+                                    bool allowMultiple)
+{
+   const uint8_t *p;
+   const uint8_t *optEnd;
+   uint8_t optCode, optLen;
+   UINTN totalLen = 0;
+   UINTN origSize;
+   bool found = false;
+
+   if (Packet == NULL || bufferSize == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   origSize = *bufferSize;
+   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
+   optEnd = (uint8_t *)Packet + sizeof(EFI_PXE_BASE_CODE_PACKET);
+
+   while (p < optEnd) {
+      optCode = *p++;
+
+      if (optCode == OPT4_PAD) {
+         continue;
+      }
+      if (optCode == OPT4_END) {
+         break;
+      }
+
+      if (p >= optEnd) {
+         break;
+      }
+      optLen = *p++;
+
+      // Protect from bogus/malicious length in DHCP option packets
+      if ((size_t)(optEnd - p) < optLen) {
+         break;
+      }
+
+      if (optCode == targetOptCode) {
+         if (found && !allowMultiple) {
+            return EFI_INVALID_PARAMETER;
+         }
+         found = true;
+         if (buffer != NULL &&
+             origSize >= totalLen && origSize - totalLen >= optLen) {
+            memcpy(buffer + totalLen, p, optLen);
+         }
+         totalLen += optLen;
+      }
+
+      p += optLen;
+   }
+
+   if (found) {
+      if (buffer == NULL || origSize < totalLen) {
+         *bufferSize = totalLen;
+         return EFI_BUFFER_TOO_SMALL;
+      }
+      *bufferSize = totalLen;
+      return EFI_SUCCESS;
+   }
+
+   return EFI_NOT_FOUND;
+}
+
+/*-- get_dhcpv6_option ---------------------------------------------------------
+ *
+ *      Generic helper to iterate over DHCPv6 options to retrieve a specific
+ *      option. If buffer is provided and large enough, copies the option data.
+ *      Returns EFI_BUFFER_TOO_SMALL if buffer is NULL or bufferSize is too
+ *      small.  If allowMultiple is true, the values of all instances of the
+ *      option are concatenated per RFC 3396; if not, only the first instance's
+ *      value is returned.
+ *
+ * Parameters
+ *      IN Packet:          pointer to a PXE BC packet
+ *      IN targetOptCode:   the option code to search for
+ *      OUT buffer:         buffer where to copy the option data (can be NULL)
+ *      IN/OUT bufferSize:  pointer to the buffer size
+ *      IN allowMultiple:   concatenate multiple instances
+ *
+ * Results
+ *      EFI_SUCCESS, EFI_BUFFER_TOO_SMALL, or an UEFI error status.
+ *----------------------------------------------------------------------------*/
+static EFI_STATUS get_dhcpv6_option(const EFI_PXE_BASE_CODE_PACKET *Packet,
+                                    uint16_t targetOptCode,
+                                    uint8_t *buffer,
+                                    UINTN *bufferSize,
+                                    bool allowMultiple)
+{
+   const uint8_t *p;
+   const uint8_t *optEnd;
+   uint16_t optCode, optLen;
+   UINTN totalLen = 0;
+   UINTN origSize;
+   bool found = false;
+
+   if (Packet == NULL || bufferSize == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
+
+   origSize = *bufferSize;
+   p = (uint8_t *)Packet->Dhcpv6.DhcpOptions;
+   optEnd = (uint8_t *)Packet + sizeof(EFI_PXE_BASE_CODE_PACKET);
+
+   while (p < optEnd) {
+      if (p + sizeof(optCode) + sizeof(optLen) > optEnd) {
+         break;
+      }
+      optCode = ntohs(*(uint16_t *)p);
+      p += sizeof(optCode);
+
+      optLen = ntohs(*(uint16_t *)p);
+      p += sizeof(optLen);
+
+      // Protect from bogus/malicious length in DHCP option packets
+      if ((size_t)(optEnd - p) < optLen) {
+         break;
+      }
+
+      if (optCode == targetOptCode) {
+         if (found && !allowMultiple) {
+            return EFI_INVALID_PARAMETER;
+         }
+         found = true;
+         if (buffer != NULL &&
+             origSize >= totalLen && origSize - totalLen >= optLen) {
+            memcpy(buffer + totalLen, p, optLen);
+         }
+         totalLen += optLen;
+      }
+
+      p += optLen;
+   }
+
+   if (found) {
+      if (buffer == NULL || origSize < totalLen) {
+         *bufferSize = totalLen;
+         return EFI_BUFFER_TOO_SMALL;
+      }
+      *bufferSize = totalLen;
+      return EFI_SUCCESS;
+   }
+
+   return EFI_NOT_FOUND;
+}
+
 /*-- get_ipv6_boot_url ---------------------------------------------------------
  *
  *      Retrieve the IPv6 boot file URL from a PXE BC packet. The URL format is
@@ -133,32 +302,18 @@ static bool isIPv6 = false;
 static const char *get_ipv6_boot_url(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                      char urlBuf[URL_SIZE_MAX])
 {
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint16_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = URL_SIZE_MAX - 1;
 
-   p = (uint8_t *)Packet->Dhcpv6.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
+   if (Packet == NULL || urlBuf == NULL) {
+      return NULL;
+   }
 
-   while (p < optEnd) {
-      optCode = ntohs(*(uint16_t *)p);
-      p += sizeof(optCode);
-
-      optLen = ntohs(*(uint16_t *)p);
-      p += sizeof(optLen);
-
-      // Protect from bogus/malicious length in DHCP option packets
-      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-
-      if (optCode == OPT6_BOOTFILE_URL) {
-         // Per RFC3986, option string is not NUL-terminated.
-         optLen = MIN(optLen, URL_SIZE_MAX - 1);
-         memcpy(urlBuf, p, optLen);
-         urlBuf[optLen] = '\0';
-         return urlBuf;
-      }
-
-      p += optLen;
+   Status = get_dhcpv6_option(
+      Packet, OPT6_BOOTFILE_URL, (uint8_t *)urlBuf, &bufferSize, false);
+   if (!EFI_ERROR(Status)) {
+      urlBuf[bufferSize] = '\0';
+      return urlBuf;
    }
 
    return NULL;
@@ -256,36 +411,18 @@ static EFI_STATUS get_pxe_base_code_packet(EFI_PXE_BASE_CODE *Pxe,
 static const char *get_ipv4_boot_file(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                       char bootFile[BOOTFILE_SIZE_MAX])
 {
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint8_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = BOOTFILE_SIZE_MAX - 1;
 
-   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
+   if (Packet == NULL || bootFile == NULL) {
+      return NULL;
+   }
 
-   while (p < optEnd) {
-      optCode = *p++;
-
-      if (optCode == OPT4_PAD) {
-         continue;
-      }
-      if (optCode == OPT4_END) {
-         break;
-      }
-
-      optLen = *p++;
-
-      // Protect from bogus/malicious length in DHCP option packets
-      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-      if (optCode == OPT4_BOOTFILE_PATH) {
-         // Per RFC3986, option string is not NUL-terminated.
-         optLen = MIN(optLen, BOOTFILE_SIZE_MAX - 1);
-         memcpy(bootFile, p, optLen);
-         bootFile[optLen] = '\0';
-         return bootFile;
-      }
-
-      p += optLen;
+   Status = get_dhcpv4_option(
+      Packet, OPT4_BOOTFILE_PATH, (uint8_t *)bootFile, &bufferSize, true);
+   if (!EFI_ERROR(Status)) {
+      bootFile[bufferSize] = '\0';
+      return bootFile;
    }
 
    return NULL;
@@ -306,36 +443,17 @@ static const char *get_ipv4_boot_file(const EFI_PXE_BASE_CODE_PACKET *Packet,
 static EFI_STATUS get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                    EFI_IP_ADDRESS *ServerIp)
 {
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint8_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = sizeof(ServerIp->v4);
 
-   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
+   if (Packet == NULL || ServerIp == NULL) {
+      return EFI_INVALID_PARAMETER;
+   }
 
-   while (p < optEnd) {
-      optCode = *p++;
-
-      if (optCode == OPT4_PAD) {
-         continue;
-      }
-      if (optCode == OPT4_END) {
-         break;
-      }
-
-      optLen = *p++;
-
-      // Protect from bogus/malicious length in DHCP option packets
-      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-
-      if (optCode == OPT4_SERVER_IDENTIFIER &&
-          optLen == sizeof(ServerIp->v4)) {
-
-         memcpy(ServerIp, p, optLen);
-         return EFI_SUCCESS;
-      }
-
-      p += optLen;
+   Status = get_dhcpv4_option(Packet, OPT4_SERVER_IDENTIFIER,
+                              (uint8_t *)&ServerIp->v4, &bufferSize, false);
+   if (!EFI_ERROR(Status) && bufferSize == sizeof(ServerIp->v4)) {
+      return EFI_SUCCESS;
    }
 
    memset(ServerIp, 0, sizeof(*ServerIp));
@@ -363,50 +481,30 @@ static EFI_STATUS get_ipv4_dhcp_ip(const EFI_PXE_BASE_CODE_PACKET *Packet,
 static EFI_STATUS get_ipv4_hostname(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                     char **hostname)
 {
-   EFI_STATUS status = EFI_NOT_FOUND;
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint8_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = 0;
 
    if (Packet == NULL || hostname == NULL || *hostname != NULL) {
       return EFI_INVALID_PARAMETER;
    }
 
-   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
-
-   while (p < optEnd) {
-      optCode = *p++;
-
-      if (optCode == OPT4_PAD) {
-         continue;
-      }
-      if (optCode == OPT4_END) {
-         break;
-      }
-
-      optLen = *p++;
-
-      // Protect from bogus/malicious length in DHCP option packets
-      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-
-      if (optCode == OPT4_HOSTNAME) {
-         if ((status = str_alloc(optLen, hostname)) == EFI_SUCCESS) {
-            memcpy(*hostname, p, optLen);
-            (*hostname)[optLen] = '\0';
+   Status = get_dhcpv4_option(Packet, OPT4_HOSTNAME, NULL, &bufferSize, true);
+   if (Status == EFI_BUFFER_TOO_SMALL && bufferSize > 0) {
+      if ((Status = str_alloc(bufferSize, hostname)) == EFI_SUCCESS) {
+         Status = get_dhcpv4_option(
+            Packet, OPT4_HOSTNAME, (uint8_t *)*hostname, &bufferSize, true);
+         if (!EFI_ERROR(Status)) {
+            (*hostname)[bufferSize] = '\0';
          }
-         break;
       }
-
-      p += optLen;
    }
 
-   return status;
+   return Status;
 }
 
 /*-- get_ipv4_domain -----------------------------------------------------------
  *
- *      Retrieve the domian from the DHCP options cached in the PXE BC packet.
+ *      Retrieve the domain from the DHCP options cached in the PXE BC packet.
  *
  * Parameters
  *      IN Packet:  pointer to a PXE BC packet. An EFI_INVALID_PARAMETER will be
@@ -424,50 +522,31 @@ static EFI_STATUS get_ipv4_hostname(const EFI_PXE_BASE_CODE_PACKET *Packet,
 static EFI_STATUS get_ipv4_domain(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                   char **domain)
 {
-   EFI_STATUS status = EFI_NOT_FOUND;
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint8_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = 0;
 
    if (Packet == NULL || domain == NULL || *domain != NULL) {
       return EFI_INVALID_PARAMETER;
    }
 
-   p = (uint8_t *)Packet->Dhcpv4.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
-
-   while (p < optEnd) {
-      optCode = *p++;
-
-      if (optCode == OPT4_PAD) {
-         continue;
-      }
-      if (optCode == OPT4_END) {
-         break;
-      }
-
-      optLen = *p++;
-
-      // Protect from bogus/malicious length in DHCP option packets
-      optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-
-      if (optCode == OPT4_DOMAIN) {
-         if ((status = str_alloc(optLen, domain)) == EFI_SUCCESS) {
-            memcpy(*domain, p, optLen);
-            (*domain)[optLen] = '\0';
+   Status = get_dhcpv4_option(Packet, OPT4_DOMAIN, NULL, &bufferSize, true);
+   if (Status == EFI_BUFFER_TOO_SMALL && bufferSize > 0) {
+      if ((Status = str_alloc(bufferSize, domain)) == EFI_SUCCESS) {
+         Status = get_dhcpv4_option(
+            Packet, OPT4_DOMAIN, (uint8_t *)*domain, &bufferSize, true);
+         if (!EFI_ERROR(Status)) {
+            (*domain)[bufferSize] = '\0';
          }
-         break;
       }
-
-      p += optLen;
    }
 
-   return status;
+   return Status;
 }
 
-/*-- get_ipv6_client_fqdn -------------------------------------------------------------
+/*-- get_ipv6_client_fqdn ------------------------------------------------------
  *
- *      Retrieve the client FQDN from the DHCP options cached in the PXE BC packet.
+ *      Retrieve the client FQDN from the DHCP options cached in the PXE BC
+ *      packet.
  *
  * Parameters
  *      IN Packet:  pointer to a PXE BC packet. An EFI_INVALID_PARAMETER will be
@@ -485,44 +564,51 @@ static EFI_STATUS get_ipv4_domain(const EFI_PXE_BASE_CODE_PACKET *Packet,
 static EFI_STATUS get_ipv6_client_fqdn(const EFI_PXE_BASE_CODE_PACKET *Packet,
                                        char **fqdn)
 {
-   EFI_STATUS status = EFI_NOT_FOUND;
-   const uint8_t *p;
-   const uint8_t *optEnd;
-   uint16_t optCode, optLen;
+   EFI_STATUS Status;
+   UINTN bufferSize = 0;
 
    if (Packet == NULL || fqdn == NULL || *fqdn != NULL) {
       return EFI_INVALID_PARAMETER;
    }
 
-   p = (uint8_t *)Packet->Dhcpv6.DhcpOptions;
-   optEnd = (uint8_t *)Packet + sizeof (EFI_PXE_BASE_CODE_PACKET);
-
-   while (p < optEnd) {
-      optCode = ntohs(*(uint16_t *)p);
-      p += sizeof(optCode);
-
-      optLen = ntohs(*(uint16_t *)p);
-      p += sizeof(optLen);
-
-      if (optCode == OPT6_FQDN) {
-         // Skip 'flags' field
-         p++;
-
-         // Protect from bogus/malicious length in DHCP option packets
-         optLen = MIN(optLen, (uintptr_t)optEnd - (uintptr_t)p);
-
-         // Per RFC4704, option string is not NUL-terminated.
-         if ((status = str_alloc(optLen, fqdn)) == EFI_SUCCESS) {
-            memcpy(*fqdn, p, optLen);
-            (*fqdn)[optLen] = '\0';
-         }
-         break;
+   Status = get_dhcpv6_option(Packet, OPT6_FQDN, NULL, &bufferSize, false);
+   if (Status == EFI_BUFFER_TOO_SMALL && bufferSize > 1) {
+      uint8_t *tmpBuf = malloc(bufferSize);
+      if (tmpBuf == NULL) {
+         return ERR_OUT_OF_RESOURCES;
       }
 
-      p += optLen;
+      Status = get_dhcpv6_option(Packet, OPT6_FQDN, tmpBuf, &bufferSize, false);
+      if (!EFI_ERROR(Status)) {
+         if ((Status = str_alloc(bufferSize - 1, fqdn)) == EFI_SUCCESS) {
+            const uint8_t *src = tmpBuf + 1;
+            char *dst = *fqdn;
+            size_t srcLen = bufferSize - 1;
+            size_t i = 0;
+            size_t outLen = 0;
+
+            while (i < srcLen) {
+               uint8_t labelLen = src[i++];
+               if (labelLen == 0) {
+                  break;
+               }
+               if (i + labelLen > srcLen) {
+                  break;
+               }
+               if (outLen > 0) {
+                  dst[outLen++] = '.';
+               }
+               memcpy(dst + outLen, src + i, labelLen);
+               outLen += labelLen;
+               i += labelLen;
+            }
+            dst[outLen] = '\0';
+         }
+      }
+      free(tmpBuf);
    }
 
-   return status;
+   return Status;
 }
 
 /*-- get_pxe_info --------------------------------------------------------------

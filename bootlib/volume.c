@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -136,7 +136,7 @@ int volume_read(disk_t *disk, partition_t *partition,
    sector = partition->info.start_lba + start / disk->bytes_per_sector;
 
    if (bytes > size) {
-      buffer = malloc(size);
+      buffer = malloc(bytes);
       if (buffer == NULL) {
          return ERR_OUT_OF_RESOURCES;
       }
@@ -148,7 +148,7 @@ int volume_read(disk_t *disk, partition_t *partition,
 
    if (buffer != dest) {
       if (status == ERR_SUCCESS) {
-         memcpy(dest, buffer, size);
+         memcpy(dest, (char *)buffer + (size_t)(offset - start), size);
       }
       free(buffer);
    }

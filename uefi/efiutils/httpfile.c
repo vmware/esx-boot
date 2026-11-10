@@ -321,7 +321,7 @@ EFI_STATUS make_http_child_dh(EFI_HANDLE Volume, const char *url,
  *
  * Results
  *      EFI_SUCCESS if successful,
- *      EFI_INVALID_PARAMETER if not a URL,
+ *      EFI_INVALID_PARAMETER if not a valid URL,
  *      or an EFI error status.
  *----------------------------------------------------------------------------*/
 static EFI_STATUS get_url_hostname_with_port(const char *url, char **hostname)
@@ -332,14 +332,20 @@ static EFI_STATUS get_url_hostname_with_port(const char *url, char **hostname)
 
    p = url;
 
-   /* Strip scheme:// */
+   /* Advance p past scheme:// (must be present) */
    q = strstr(url, "://");
    if (q == NULL) {
       return EFI_INVALID_PARAMETER;
    }
    p = q + 3;
 
-   /* Strip path */
+   /* Advance p past userinfo@ (if present) */
+   q = strpbrk(p, "@/?#");
+   if (q != NULL && *q == '@') {
+      p = q + 1;
+   }
+
+   /* Find end of hostname[:port] */
    q = strpbrk(p, "/?#");
    if (q == NULL) {
       len = strlen(p);
@@ -347,10 +353,8 @@ static EFI_STATUS get_url_hostname_with_port(const char *url, char **hostname)
       len = q - p;
    }
 
-   /* Strip userinfo@ */
-   q = strchr(p, '@');
-   if (q != NULL) {
-      p = q + 1;
+   if (len == 0) {
+      return EFI_INVALID_PARAMETER;
    }
 
    h = malloc(len + 1);

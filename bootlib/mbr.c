@@ -16,6 +16,13 @@
 #define MBR_SIGNATURE_OFFSET    0x1fe
 #define MBR_SIGNATURE           0xaa55
 
+/*
+ * Upper bound on logical partitions we will follow in an extended
+ * partition's EBR chain. Protects against circular/corrupt chains.
+ * (Linux's MBR parser uses a similar guard of 100.)
+ */
+#define MBR_MAX_LOGICAL_PARTS 256
+
 #define PART_IS_EXTENDED(_part_)                         \
    ((_part_)->type == PART_TYPE_EXTENDED ||              \
     (_part_)->type == PART_TYPE_WIN_EXTENDED ||          \
@@ -90,6 +97,8 @@ static int mbr_get_logical_info(disk_t *disk, mbr_part_t *extended, int part_id,
    mbr_part_t *part;
    uint32_t next_ebr_lba;
    int partnum, status;
+   int count;
+   uint32_t seen[MBR_MAX_LOGICAL_PARTS];
 
    ebr = malloc(disk->bytes_per_sector);
    if (ebr == NULL) {
@@ -99,9 +108,35 @@ static int mbr_get_logical_info(disk_t *disk, mbr_part_t *extended, int part_id,
    next_ebr_lba = 0;
    partnum = 5;
    status = ERR_NOT_FOUND;
+   count = 0;
 
    do {
+      bool loop = false;
+
+      if (count >= MBR_MAX_LOGICAL_PARTS) {
+         status = ERR_VOLUME_CORRUPTED;
+         break;
+      }
+
       next_ebr_lba += extended->start_lba;
+      /* catches overflow */
+      if (next_ebr_lba < extended->start_lba ||
+          next_ebr_lba - extended->start_lba >= extended->sectors_num) {
+         status = ERR_VOLUME_CORRUPTED;
+         break;
+      }
+      /* infinite loop detection */
+      for (int k = 0; k < count; k++) {
+         if (seen[k] == next_ebr_lba) {
+            loop = true;
+            break;
+         }
+      }
+      if (loop) {
+         status = ERR_VOLUME_CORRUPTED;
+         break;
+      }
+      seen[count++] = next_ebr_lba;
 
       status = disk_read(disk, ebr, next_ebr_lba, 1);
       if (status != ERR_SUCCESS) {
@@ -203,6 +238,8 @@ int mbr_get_max_part(disk_t *disk, char *mbr, int *max)
     * Look for an extended partition.  (Only one is supported.)
     */
    for (i = 1; i < 5; i++) {
+      int count = 0;
+      uint32_t seen[MBR_MAX_LOGICAL_PARTS];
       extended = MBR_PART_ENTRY(mbr, i);
 
       if (PART_IS_EXTENDED(extended)) {
@@ -213,11 +250,36 @@ int mbr_get_max_part(disk_t *disk, char *mbr, int *max)
          if (ebr == NULL) {
             return ERR_OUT_OF_RESOURCES;
          }
-
          next_ebr_lba = 0;
 
          do {
+            bool loop = false;
+
+
+            if (count >= MBR_MAX_LOGICAL_PARTS) {
+               status = ERR_VOLUME_CORRUPTED;
+               break;
+            }
+
             next_ebr_lba += extended->start_lba;
+            /* catches overflow */
+            if (next_ebr_lba < extended->start_lba ||
+                next_ebr_lba - extended->start_lba >= extended->sectors_num) {
+               status = ERR_VOLUME_CORRUPTED;
+               break;
+            }
+            /* infinite loop detection */
+            for (int k = 0; k < count; k++) {
+               if (seen[k] == next_ebr_lba) {
+                  loop = true;
+                  break;
+               }
+            }
+            if (loop) {
+               status = ERR_VOLUME_CORRUPTED;
+               break;
+            }
+            seen[count++] = next_ebr_lba;
 
             status = disk_read(disk, ebr, next_ebr_lba, 1);
             if (status != ERR_SUCCESS) {

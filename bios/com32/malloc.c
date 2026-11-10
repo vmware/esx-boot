@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2018-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2018-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -71,6 +71,7 @@ struct free_arena_header {
 #define ARENA_TYPE_HEAD  2
 
 #define ARENA_SIZE_MASK  (~(uintptr_t)(sizeof(struct arena_header)-1))
+#define ARENA_SIZE_MAX   (SIZE_MAX - 4 * sizeof(struct arena_header) + 1)
 
 #define ARENA_ALIGN_UP(p)  \
    (((uintptr_t)(p) + ~ARENA_SIZE_MASK) & ARENA_SIZE_MASK)
@@ -219,7 +220,7 @@ void *malloc(size_t size)
    struct free_arena_header *fp;
    struct stack_frame *frame;
 
-   if (size == 0) {
+   if (size == 0 || size > ARENA_SIZE_MAX) {
       return NULL;
    }
 
@@ -280,6 +281,9 @@ void *realloc(void *ptr, size_t size)
 
    if (size == 0) {
       free(ptr);
+      return NULL;
+   }
+   if (size > ARENA_SIZE_MAX) {
       return NULL;
    }
 

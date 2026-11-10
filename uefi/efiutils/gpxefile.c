@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * Copyright (c) 2008-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -11,6 +11,8 @@
 #include <string.h>
 #include "efi_private.h"
 #include "protocol/gpxe_download.h"
+
+#define UINTN_MAX (~(UINTN)0)
 
 typedef struct {
    char *buffer;
@@ -58,6 +60,10 @@ static EFI_STATUS EFIAPI gpxe_download_data(VOID *Context, VOID *Buffer,
 {
    GpxeCallbackContext *context;
    int error;
+
+   if (FileOffset > UINTN_MAX - BufferLength) {
+      return EFI_INVALID_PARAMETER;
+   }
 
    efi_set_watchdog_timer(WATCHDOG_DEFAULT_TIMEOUT);
 

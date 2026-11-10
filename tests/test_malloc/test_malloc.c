@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 Broadcom. All Rights Reserved.
+ * Copyright (c) 2022-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -13,6 +13,9 @@
 #include <compat.h>
 
 #define MiB 0x100000
+#if !arch_is_64
+#define MALLOC_INVALID_SIZE 0xffffffc1
+#endif
 
 /*-- main ----------------------------------------------------------------------
  *
@@ -21,7 +24,8 @@
  *      Allocates memory in 1 MiB chunks until malloc returns NULL.
  *      Records a failure if malloc never allocates memory above 4GB
  *      on a 64-bit system.  Cleans up by freeing the memory before
- *      exiting.
+ *      exiting. Records a failure if malloc succeeds with a size
+ *      greater than 0xffffffe0 (PR# 3716058) on a 32-bit system.
  *
  * Parameters
  *      IN argc: number of command line arguments
@@ -78,6 +82,18 @@ int main(UNUSED_PARAM(int argc), UNUSED_PARAM(char **argv))
       free(last);
       last = next;
    }
+
+#if !arch_is_64
+   Log(LOG_INFO, "Checking malloc size limits");
+   last = malloc(MALLOC_INVALID_SIZE); // PR# 3716058
+   if (last != NULL) {
+      Log(LOG_ERR, "FAILURE: 32-bit system and allocate of %u bytes succeeded",
+          MALLOC_INVALID_SIZE);
+      res = ERR_TEST_FAILURE;
+      free(last);
+      last = NULL;
+   }
+#endif
 
    Log(LOG_INFO, "Done: %s", res == ERR_SUCCESS ? "Success" : "Failure");
    return res;

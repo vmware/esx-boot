@@ -157,7 +157,7 @@ static int gzip_get_info(const void *buffer, size_t filesize, size_t hdrsize,
     * CRC and output filesize are at the end of gzipped buffer. filesize is
     * the last 4 bytes and CRC is the 4 bytes prior to filesize.
     */
-   if ((filesize - (hdrsize + 8)) <= 0) {
+   if (hdrsize > hdrsize + 8 || filesize <= hdrsize + 8) {
       return ERR_INCONSISTENT_DATA;
    }
 
@@ -253,6 +253,13 @@ int gzip_extract(const void *ibuffer, size_t isize,
           status, error_str[status]);
       return status;
    }
+
+   /*
+    * Preconditions guaranteed by gzip_get_info():
+    * 1) header_len < header_len + 8  (No overflow risk)
+    * 2) isize > header_len + 8       (Valid payload size)
+    */
+
    if (size == 0) {
       size_t actual_isize = isize - (header_len + 8);
       if (actual_isize > 256) {

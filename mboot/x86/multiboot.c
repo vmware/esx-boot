@@ -199,11 +199,10 @@ int check_multiboot_kernel(void *kbuf, size_t ksize)
    }
 
    status = elf_check_headers(kbuf, ksize, NULL);
-   if (IS_WARNING(status)) {
-      Log(LOG_WARNING, "Funny-looking ELF.\n");
-   } else if (status != ERR_SUCCESS) {
-      Log(LOG_ERR, "Invalid ELF binary.\n");
-      return ERR_BAD_TYPE;
+   if (status != ERR_SUCCESS) {
+      Log(LOG_ERR, "Invalid ELF binary: %d (%s).\n",
+          status, error_str[status]);
+      return status;
    }
 
    boot.efi_info.rts_size = 0;

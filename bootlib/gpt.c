@@ -50,7 +50,7 @@ typedef struct {
    uint32_t numberOfEntries;
    uint32_t sizeOfEntry;
    uint32_t entryArrayCrc32;
-} gpt_header;
+} __attribute__((packed)) gpt_header;
 
 typedef struct {
    GUID type;
@@ -59,11 +59,14 @@ typedef struct {
    uint64_t end_lba;
    uint64_t attributes;
    uint16_t name[36];
-} gpt_entry;
+} __attribute__((packed)) gpt_entry;
 
 static const GUID unused_partition_guid = GPT_UNUSED_PARTITION_GUID;
 static const GUID basic_data_partition_guid = GPT_BASIC_DATA_PARTITION_GUID;
 static const GUID efi_system_partition_guid = GPT_EFI_SYSTEM_PARTITION_GUID;
+
+static const uint32_t max_gpt_entries = 4096;
+static const uint64_t max_gpt_ptable_size = 1 << 20; // 1MB
 
 /*-- gpt_to_partinfo -----------------------------------------------------------
  *
@@ -119,6 +122,11 @@ static int gpt_read_header(disk_t *disk, gpt_header **gpt_out)
 
    *gpt_out = NULL;
 
+   /* The GPT header must fit within a single disk sector. */
+   if (disk->bytes_per_sector < sizeof(gpt_header)) {
+      return ERR_DEVICE_ERROR;
+   }
+
    gpt = malloc(disk->bytes_per_sector);
    if (gpt == NULL) {
       return ERR_OUT_OF_RESOURCES;
@@ -128,6 +136,12 @@ static int gpt_read_header(disk_t *disk, gpt_header **gpt_out)
    if (status != ERR_SUCCESS) {
       free(gpt);
       return status;
+   }
+
+   if (gpt->headerSize < sizeof(gpt_header) ||
+       gpt->headerSize > disk->bytes_per_sector) {
+      free(gpt);
+      return ERR_BAD_HEADER;
    }
 
    if (gpt->signature != GPT_SIGNATURE || gpt->myLba != 1) {
@@ -161,7 +175,8 @@ static int gpt_read_header(disk_t *disk, gpt_header **gpt_out)
  *----------------------------------------------------------------------------*/
 int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
 {
-   uint32_t checksum, entry_size, ptable_size, ptable_size_in_sectors;
+   uint32_t checksum, entry_size;
+   uint64_t ptable_size, ptable_size_in_sectors;
    gpt_header *gpt;
    uint8_t *ptable;
    int status;
@@ -171,13 +186,39 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
       return status;
    }
 
+   /*
+    * Each entry describes a partition and a GPT disk usually doesn't have more
+    * than 128 partitions. Allow up to max_gpt_entries (4096) partitions in the
+    * code.
+    */
+   if (gpt->numberOfEntries > max_gpt_entries) {
+      free(gpt);
+      return ERR_UNSUPPORTED;
+   }
+
    if ((uint32_t)part_id > gpt->numberOfEntries) {
       free(gpt);
       return ERR_NOT_FOUND;
    }
 
    entry_size = gpt->sizeOfEntry;
-   ptable_size = gpt->numberOfEntries * entry_size;
+   if (entry_size < sizeof(gpt_entry)) {
+      free(gpt);
+      return ERR_BAD_HEADER;
+   }
+
+   ptable_size = (uint64_t)gpt->numberOfEntries * entry_size;
+   /*
+    * A typical GPT partition table is 16KB, calculated from 128 entries at 128
+    * bytes each. Although an entry is allowed to be larger than 128 bytes, the
+    * table size is not expected to surpass 1MB in the foreseeable future, which
+    * can accommodate 4096 entries at 256 bytes per entry.
+    */
+   if (ptable_size > max_gpt_ptable_size) {
+      free(gpt);
+      return ERR_UNSUPPORTED;
+   }
+
    ptable_size_in_sectors = ceil(ptable_size, disk->bytes_per_sector);
 
    ptable = malloc(ptable_size_in_sectors * disk->bytes_per_sector);
@@ -198,6 +239,19 @@ int gpt_get_part_info(disk_t *disk, int part_id, partition_t *partition)
       free(gpt);
       free(ptable);
       return ERR_NOT_FOUND;
+   }
+
+   /*
+    * The sole callsite is get_volume_info(), which validates part_id >= 1.
+    * Thus the resulting index (part_id - 1) is always non-negative and less
+    * than gpt->numberOfEntries.
+    *
+    * However, do an extra check here to ensure part_id != 0.
+    */
+   if (part_id == 0) {
+      free(gpt);
+      free(ptable);
+      return ERR_INVALID_PARAMETER;
    }
 
    gpt_to_partinfo((gpt_entry *)&ptable[(part_id - 1) * entry_size],

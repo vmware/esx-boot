@@ -166,6 +166,15 @@ static int e820_sanity_check(e820_range_t *mmap, size_t count)
    const char *msg;
    size_t i;
 
+   /*
+    * Firmware should never return an empty E820 map.
+    * zero descriptors indicates a corrupted memory map.
+    */
+   if (count == 0) {
+      Log(LOG_ERR, "Invalid E820 map: firmware returned zero descriptors.\n");
+      return ERR_INVALID_PARAMETER;
+   }
+
    error = false;
    overlap = false;
    max_base = 0;

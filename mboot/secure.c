@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015-2021 Broadcom. All Rights Reserved.
+ * Copyright (c) 2015-2026 Broadcom. All Rights Reserved.
  * The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: GPL-2.0
  ******************************************************************************/
@@ -167,6 +167,13 @@ static int secure_boot_parse_module(void *addr,           //IN
 {
    uint8_t *p;
    uint32_t magic, sigLen, schema;
+   const size_t fixedLen = sizeof(magic) + sizeof(sigLen) + sizeof(schema);
+   const size_t variableLen = len - fixedLen;
+
+   // Check if the buffer is at least big enough for the fixed-size elements.
+   if (len < fixedLen) {
+      return ERR_NOT_FOUND;
+   }
 
    p = (uint8_t *)addr + len;
    p -= sizeof(magic);
@@ -183,6 +190,11 @@ static int secure_boot_parse_module(void *addr,           //IN
       return ERR_SYNTAX;
    }
    memcpy(&sigLen, p, sizeof(sigLen));
+
+   // Check the variable length against the remaining space.
+   if (sigLen > variableLen) {
+      return ERR_NOT_FOUND;
+   }
 
    p -= sigLen;
    if (p < (uint8_t *)addr) {
@@ -291,6 +303,11 @@ static bool secure_boot_check_sig(uint32_t schema,
     * so the schema parameter is unused.
     */
    (void)schema;
+
+   if (sigLen < V1_KEYID_LEN) {
+      Log(LOG_WARNING, "Signature too short: %zu", sigLen);
+      return false;
+   }
 
    memcpy(keyid, sig, V1_KEYID_LEN);
    keyid[V1_KEYID_LEN] = '\0';

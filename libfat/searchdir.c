@@ -32,6 +32,7 @@ int32_t libfat_searchdir(struct libfat_filesystem *fs, int32_t dirclust,
 {
     struct fat_dirent *dep;
     uint32_t nent;
+    libfat_sector_t sector_count = 0;
 
     libfat_sector_t s = libfat_clustertosector(fs, dirclust);
 
@@ -40,6 +41,8 @@ int32_t libfat_searchdir(struct libfat_filesystem *fs, int32_t dirclust,
 	    return -2;		/* Not found */
 	else if (s == (libfat_sector_t) - 1)
 	    return -1;		/* Error */
+        else if (sector_count++ > fs->end)
+	    return -1;		/* Error (Cycle detected) */
 
 	dep = libfat_get_sector(fs, s);
 	if (!dep)
